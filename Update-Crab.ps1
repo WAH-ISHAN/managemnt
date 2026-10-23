@@ -1,3 +1,4 @@
+param([string]$ApiBase = 'https://api.github.com/repos')
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $lock = $null
@@ -9,7 +10,7 @@ try {
     $repository = [string]$config.repository
     if ($repository -notmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') { throw 'Invalid repository configuration.' }
     $headers = @{ 'User-Agent' = 'Crab-Updater'; 'Accept' = 'application/vnd.github+json' }
-    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/releases/latest" -Headers $headers -TimeoutSec 30
+    $release = Invoke-RestMethod -Uri "$ApiBase/$repository/releases/latest" -Headers $headers -TimeoutSec 30
     $version = [string]$release.tag_name
     if ($version -notmatch '^v([0-9]+)-[a-f0-9]{7}$') { throw 'Unexpected release version.' }
     $newBuild = [int64]$Matches[1]
@@ -49,8 +50,10 @@ try {
     if (-not (Test-Path -LiteralPath $target)) { Move-Item -LiteralPath $extract -Destination $target }
     $pointer = Join-Path $root 'current.txt'
     $temporaryPointer = Join-Path $root ('current-' + [guid]::NewGuid().ToString('N') + '.txt')
+    $backupPointer = Join-Path $root ('current-backup-' + [guid]::NewGuid().ToString('N') + '.txt')
     [System.IO.File]::WriteAllText($temporaryPointer, $version, [System.Text.Encoding]::ASCII)
-    [System.IO.File]::Replace($temporaryPointer, $pointer, $null)
+    [System.IO.File]::Replace($temporaryPointer, $pointer, $backupPointer)
+    Remove-Item -LiteralPath $backupPointer -Force
 } catch [System.IO.IOException] {
     # Another updater already holds the lock, or a file is temporarily busy.
     Add-Content -LiteralPath (Join-Path $root 'update.log') -Value "$(Get-Date -Format o) $($_.Exception.Message)"
