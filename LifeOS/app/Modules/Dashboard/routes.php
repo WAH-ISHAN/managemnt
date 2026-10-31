@@ -27,6 +27,7 @@ return function (Router $r) {
             'hasMoneyRecords'=>$salary && (Db::one('SELECT 1 FROM income LIMIT 1') || Db::one('SELECT 1 FROM expenses LIMIT 1')),
             'hasAssetRecords'=>$invest && (bool)Db::one('SELECT 1 FROM asset_transactions LIMIT 1'),
             'personalGoals'=>class_exists('GrowthService') ? GrowthService::goals() : [],
+            'pinnedNotes'=>class_exists('KnowledgeService') ? Db::all('SELECT id,title,notebook FROM knowledge_notes WHERE pinned=1 AND archived=0 AND deleted_at IS NULL ORDER BY updated_at DESC,id DESC LIMIT 3') : [],
             'appointments'=>class_exists('PlannerService') ? PlannerService::upcoming(2) : [],
             'focus'=>class_exists('FocusService') ? FocusService::active() : null,
             'lifeSummary'=>class_exists('InsightsService') ? InsightsService::monthly(date('Y-m')) : null

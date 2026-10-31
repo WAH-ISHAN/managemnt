@@ -4,6 +4,8 @@
 
 Reusable QA workflow: [English playbook](qa/README.md), [Sinhala guide](qa/README-si.md), and [AI agent prompt](qa/AGENT-PROMPT.md). Run the local checks with `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Invoke-QA.ps1`.
 
+**Knowledge Hub:** 20 new local note capabilities, from notebooks, tags and daily notes to links, backlinks, templates and Markdown import/export. See the [feature list and research references](qa/knowledge-hub.md).
+
 LifeOS is a personal life management application for Windows 10/11 x64. It brings study, personal finances, goals, time for yourself and reflection into one workspace. Its purpose is to help you build more choices beyond your working day. PHP 8.3 + SQLite + a C# WebView2 desktop shell keep application data on the laptop, with browser libraries bundled locally. This project is independent of the existing Crab app in the parent directory.
 
 Fresh installations start with onboarding and empty personal records. No demo salary, transactions, investment returns, goals or achievements are included. Default account names, categories and editable allocation rules are configuration; their balances and budgets start at zero. Screens show empty states until you enter your own information.
