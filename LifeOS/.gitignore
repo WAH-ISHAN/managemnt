@@ -8,3 +8,6 @@
 /tests/.tmp/
 __pycache__/
 /vendor/
+
+/tests/update-release/bin/
+/tests/update-release/obj/

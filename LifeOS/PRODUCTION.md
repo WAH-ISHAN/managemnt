@@ -23,3 +23,12 @@ The Windows app and installer remain unsigned until a code-signing certificate
 is configured. Validate installation and upgrading on clean Windows 10/11
 before distributing broadly. A successful CI release is required; local source
 changes alone do not publish an installer or deliver an update.
+
+The Orean website's `/lifeos` page reads the latest published manifest and exposes
+its installer only when the matching download is reachable. It automatically
+tracks subsequent stable releases. No executable is checked into the website repo.
+
+Release packaging includes the updater, its PHP backup helper, the Windows
+startup helper and (when stamped by CI) the installed release identity. Run
+`pwsh -File tests/update_package.ps1` for a portable fixture check. Full Windows
+installer delivery still requires the release workflow to complete successfully.

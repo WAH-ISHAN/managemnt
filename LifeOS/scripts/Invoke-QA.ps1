@@ -67,7 +67,11 @@ function Invoke-QaStage([string]$Name,[scriptblock]$Action) {
     $tail=@(Get-Content -LiteralPath $script:activeLog -Encoding UTF8 -Tail 8 | ForEach-Object { $_.ToString() })
     $stages.Add([ordered]@{name=$Name;status=$status;seconds=[Math]::Round($timer.Elapsed.TotalSeconds,2);log='logs/'+$Name+'.log';failure=$failure;outputTail=$tail})
     Write-Host ('['+$status.ToUpperInvariant()+'] '+$Name)
-    if ($failure) { Write-Host $failure }
+    if ($failure) {
+        Write-Host $failure
+        # Keep the actual traceback visible even when artifact upload is unavailable.
+        Get-Content -LiteralPath $script:activeLog -Encoding UTF8 -Tail 60 | ForEach-Object { Write-Host $_ }
+    }
 }
 function Get-SourceSnapshot {
     $files=@(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'app'),(Join-Path $projectRoot 'public') -Recurse -File)

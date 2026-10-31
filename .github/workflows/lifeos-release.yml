@@ -57,7 +57,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lifeos-qa-${{ github.run_id }}
-          path: LifeOS/tests/.tmp/qa-*/
+          path: ${{ github.workspace }}/LifeOS/tests/.tmp/qa-*/
+          include-hidden-files: true
           retention-days: 7
 
   release:
