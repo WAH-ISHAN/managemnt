@@ -19,7 +19,7 @@ New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
 $metadata=[ordered]@{schemaVersion=1;product='LifeOS';repository=$Repository;channel='stable';version=$Version;buildNumber=$BuildNumber;commit=$Commit}
 $utf8=New-Object Text.UTF8Encoding($false)
 [IO.File]::WriteAllText((Join-Path $distributionPath 'lifeos-release.json'),($metadata|ConvertTo-Json -Compress),$utf8)
-foreach($required in @('LifeOS.exe','app','public','php/php.exe','scripts/Apply-LifeOSUpdate.ps1')) {
+foreach($required in @('LifeOS.exe','app','public','php/php.exe','scripts/Apply-LifeOSUpdate.ps1','scripts/update-backup.php')) {
     if(-not(Test-Path -LiteralPath (Join-Path $distributionPath $required))){throw "Missing release payload: $required"}
 }
 $package=Join-Path $outputPath 'LifeOS-update.zip'
