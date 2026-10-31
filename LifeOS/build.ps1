@@ -28,7 +28,7 @@ New-Item -ItemType Directory -Path $distribution -Force | Out-Null
 & $Dotnet publish (Join-Path $projectRoot 'launcher/LifeOS.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $distribution
 if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed.' }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'app'),(Join-Path $projectRoot 'public') -Destination $distribution -Recurse
-New-Item -ItemType Directory -Path (Join-Path $distribution 'php/ext'),(Join-Path $distribution 'prerequisites') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $distribution 'php/ext'),(Join-Path $distribution 'prerequisites'),(Join-Path $distribution 'scripts') -Force | Out-Null
 Copy-Item -LiteralPath $phpExe,(Join-Path $PhpDirectory 'license.txt') -Destination (Join-Path $distribution 'php')
 Get-ChildItem -LiteralPath $PhpDirectory -Filter '*.dll' | Copy-Item -Destination (Join-Path $distribution 'php')
 foreach ($extension in @('php_pdo_sqlite.dll','php_sqlite3.dll','php_mbstring.dll','php_openssl.dll','php_zip.dll','php_fileinfo.dll','php_curl.dll','php_opcache.dll')) { $extPath = Join-Path $PhpDirectory "ext/$extension"; if (Test-Path -LiteralPath $extPath) { Copy-Item -LiteralPath $extPath -Destination (Join-Path $distribution 'php/ext') } }
@@ -36,6 +36,7 @@ if(Test-Path -LiteralPath (Join-Path $projectRoot 'integrations')) { Copy-Item -
 # App-local Microsoft VC runtime for PHP on clean Windows installations.
 foreach ($dll in @('vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll')) { Copy-Item -LiteralPath (Join-Path $env:WINDIR "System32/$dll") -Destination (Join-Path $distribution 'php') }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'php.ini') -Destination (Join-Path $distribution 'php/php.ini')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'scripts/Apply-LifeOSUpdate.ps1'),(Join-Path $projectRoot 'scripts/update-backup.php') -Destination (Join-Path $distribution 'scripts')
 Copy-Item -LiteralPath $WebViewInstaller -Destination (Join-Path $distribution 'prerequisites/MicrosoftEdgeWebView2RuntimeInstallerX64.exe')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md'),(Join-Path $projectRoot 'README-si.md'),(Join-Path $projectRoot 'THIRD-PARTY.md') -Destination $distribution
 if(Test-Path -LiteralPath (Join-Path $projectRoot 'qa')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'qa') -Destination $distribution -Recurse }
