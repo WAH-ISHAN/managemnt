@@ -96,3 +96,7 @@ try{$result=Run-Update $case;Check ($result.exitCode -ne 0) 'Locked payload forc
 Check-Unchanged $case 'rollback'
 Check ((Get-Content -LiteralPath (Join-Path $case.updates 'last-result.json') -Raw|ConvertFrom-Json).rollbackSucceeded -eq $true) 'Earlier moved files roll back successfully'
 Write-Host "$checks update delivery checks passed. Disposable evidence: $testRoot"
+# The last child updater run is expected to fail (rollback test). GitHub's
+# PowerShell runner inspects LASTEXITCODE after this script returns, so report
+# the successful test result explicitly instead of leaking that child status.
+exit 0
