@@ -1,0 +1,5 @@
+CREATE TABLE assets(id INTEGER PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, start_date TEXT, status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','closed')), notes TEXT);
+CREATE TABLE asset_transactions(id INTEGER PRIMARY KEY, asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE, date TEXT NOT NULL, type TEXT NOT NULL CHECK(type IN ('deposit','withdraw','valuation')), amount REAL NOT NULL CHECK(amount>=0), note TEXT, income_id INTEGER REFERENCES income(id) ON DELETE CASCADE);
+CREATE INDEX idx_asset_tx ON asset_transactions(asset_id,date,id);
+CREATE TABLE asset_metrics(id INTEGER PRIMARY KEY, asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE, month TEXT NOT NULL, revenue REAL NOT NULL DEFAULT 0 CHECK(revenue>=0), cost REAL NOT NULL DEFAULT 0 CHECK(cost>=0), UNIQUE(asset_id,month));
+CREATE TABLE goals(id INTEGER PRIMARY KEY, title TEXT NOT NULL, target_amount REAL NOT NULL CHECK(target_amount>0), due_date TEXT, asset_id INTEGER REFERENCES assets(id) ON DELETE SET NULL, status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','done')));

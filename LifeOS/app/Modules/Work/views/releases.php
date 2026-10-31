@@ -1,0 +1,9 @@
+<div class="section-heading"><div><h2>Releases &amp; versions</h2><p class="muted">Group work under a fix version, then track what is ready to ship.</p></div><span class="badge"><?= count($releases) ?> releases</span></div>
+<?php if(!$releases): ?><section class="card empty"><h3>Plan your first release.</h3><p>Create a version below, then assign work items using Fix version.</p></section><?php else: ?>
+<section class="card work-release-list"><div class="table-wrap"><table><thead><tr><th>Release</th><th>Status</th><th>Date</th><th>Completed</th><th></th></tr></thead><tbody>
+<?php foreach($releases as $release): ?><tr><td><strong><?= e($release['name']) ?></strong><?php if($release['description']!==''): ?><small><?= e(mb_strimwidth($release['description'],0,140,'…')) ?></small><?php endif; ?></td><td><span class="work-release-status status-<?= e($release['status']) ?>"><?= e(WorkReleaseService::STATUSES[$release['status']]) ?></span></td><td><?= e($release['release_on']??'Not scheduled') ?></td><td><?= (int)$release['completed'] ?> / <?= (int)$release['total'] ?></td><td><a href="<?= $workPath ?>?release=<?= e($release['id']) ?>">Open work items</a></td></tr><?php endforeach; ?>
+</tbody></table></div></section>
+<?php foreach($releases as $release): ?><details class="card work-release-edit"><summary><strong>Edit <?= e($release['name']) ?></strong><span class="badge">v<?= (int)$release['version'] ?></span></summary><?php $releaseEditing=$release;require __DIR__.'/release-form.php'; ?></details><?php endforeach; ?>
+<?php endif; ?>
+<?php if($project['status']!=='archived'): ?><section class="card"><h2>New release</h2><?php $releaseEditing=null;require __DIR__.'/release-form.php'; ?></section><?php endif; ?>
+<p class="footnote">Release status does not complete its work items. Archive a release to keep its history available.</p>

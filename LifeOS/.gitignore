@@ -1,0 +1,10 @@
+/data/
+/php/
+/dist/
+/Output/
+/.tools/
+/launcher/bin/
+/launcher/obj/
+/tests/.tmp/
+__pycache__/
+/vendor/

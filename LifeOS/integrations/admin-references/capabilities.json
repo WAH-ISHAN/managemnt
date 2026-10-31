@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "kind": "admin-source-reference-inventory",
+  "standalone_application": false,
+  "references": [
+    {
+      "id": "creativefx",
+      "title": "CreativeFX content management",
+      "stack": "React 19 / Vite / TypeScript / Express",
+      "source_root": "D:\\OFZ\\creative-_6",
+      "snapshot": "creativefx/source",
+      "manifest": "creativefx/manifest.json",
+      "adapter_status": "required",
+      "authentication": "Existing x-admin-token session; never copied from the source project",
+      "groups": [
+        {"id":"dashboard","label":"Dashboard","items":[{"id":"overview","label":"Dashboard","source":"src/admin/components/DashboardSection.tsx","api":["GET /api/health","GET /api/stats","GET /api/inquiries"]}]},
+        {"id":"homepage","label":"Homepage","items":[{"id":"homepage","label":"Homepage","source":"src/admin/components/HomepageSection.tsx","api":["GET /api/content","POST /api/content"],"features":["hero","introduction","featured projects and ordering","selected work grid","CTA","partner logos"]}]},
+        {"id":"projects","label":"Works / Projects","items":[{"id":"all-projects","label":"All Projects","source":"src/admin/components/WorksSection.tsx","api":["GET /api/content","POST /api/content"]},{"id":"add-project","label":"Add Project","source":"src/admin/components/WorksSection.tsx","api":["POST /api/content"]},{"id":"photography","label":"Photography","source":"src/admin/components/WorksSection.tsx","api":["GET /api/content","POST /api/content"]},{"id":"video","label":"Video","source":"src/admin/components/WorksSection.tsx","api":["GET /api/content","POST /api/content"]}]},
+        {"id":"weddings","label":"Weddings","items":[{"id":"stories","label":"Stories","source":"src/admin/components/WeddingsAdmin.tsx","api":["GET /api/content","POST /api/content"]},{"id":"timeline","label":"Timeline","source":"src/admin/components/WeddingsAdmin.tsx","api":["POST /api/content"]},{"id":"hero","label":"Hero","source":"src/admin/components/WeddingsAdmin.tsx","api":["POST /api/content"]},{"id":"approach","label":"Approach","source":"src/admin/components/WeddingsAdmin.tsx","api":["POST /api/content"]}]},
+        {"id":"services","label":"Services","items":[{"id":"services","label":"Services","source":"src/admin/components/ServicesAdmin.tsx","api":["GET /api/content","POST /api/content"]}]},
+        {"id":"about","label":"About","items":[{"id":"about","label":"About","source":"src/admin/components/AboutAdmin.tsx","api":["GET /api/content","POST /api/content"],"features":["studio story","team members","statistics"]}]},
+        {"id":"creative-pool","label":"Creative Pool","items":[{"id":"creative-pool","label":"Creative Pool","source":"src/admin/components/CreativePoolAdmin.tsx","api":["GET /api/content","POST /api/content"]}]},
+        {"id":"pages","label":"Pages","items":[{"id":"works-page","label":"Works","source":"src/admin/components/PagesSection.tsx","api":["GET /api/content","POST /api/content"]},{"id":"contact-page","label":"Contact","source":"src/admin/components/PagesSection.tsx","api":["GET /api/content","POST /api/content"]}]},
+        {"id":"media","label":"Media Library","items":[{"id":"images","label":"Images","source":"src/admin/components/MediaLibrarySection.tsx","api":["GET /api/content"]},{"id":"videos","label":"Videos","source":"src/admin/components/MediaLibrarySection.tsx","api":["GET /api/content"]},{"id":"uploaded-files","label":"Uploaded Files","source":"src/admin/components/MediaLibrarySection.tsx","api":["GET /api/uploads","DELETE /api/uploads/:name"]},{"id":"upload-replace","label":"Upload / Replace","source":"src/admin/components/MediaLibrarySection.tsx","api":["POST /api/upload","POST /api/import-drive","POST /api/import-url"]}]},
+        {"id":"navigation","label":"Navigation & Footer","items":[{"id":"navigation","label":"Navigation","source":"src/admin/components/WebsiteSection.tsx","api":["GET /api/content","POST /api/content"]},{"id":"footer","label":"Footer","source":"src/admin/components/WebsiteSection.tsx","api":["GET /api/content","POST /api/content"]},{"id":"visibility","label":"Page Visibility","source":"src/admin/components/WebsiteSection.tsx","api":["GET /api/content","POST /api/content"]}]},
+        {"id":"contact","label":"Contact / Inquiries","items":[{"id":"contact-inquiries","label":"Contact / Inquiries","source":"src/admin/components/ContactSection.tsx","api":["GET /api/inquiries","PATCH /api/inquiries/:id","DELETE /api/inquiries/:id","GET /api/google-reviews","POST /api/google-reviews/sync","POST /api/content"]}]},
+        {"id":"seo","label":"SEO","items":[{"id":"seo","label":"SEO","source":"src/admin/components/SEOSection.tsx","api":["GET /api/content","POST /api/content"],"features":["metadata","search verification IDs","backlink tracker","Open Graph"]}]},
+        {"id":"theme","label":"Theme / Branding","items":[{"id":"theme","label":"Theme / Branding","source":"src/admin/components/ThemeSection.tsx","api":["GET /api/content","POST /api/content"],"features":["accent colours","typography","section colours and text scaling","logos"]}]},
+        {"id":"analytics","label":"Analytics","items":[{"id":"analytics","label":"Analytics","source":"src/admin/components/AnalyticsSection.tsx","api":["GET /api/content","POST /api/content"]}]},
+        {"id":"settings","label":"Settings","items":[{"id":"settings","label":"Settings","source":"src/admin/components/SettingsSection.tsx","api":["GET /api/content","POST /api/content","POST /api/content/reset"],"features":["custom CSS/animation code","studio identity","JSON export/import","reset"]}]},
+        {"id":"admin-users","label":"Admin Users","items":[{"id":"admin-access","label":"Admin Users","source":"src/admin/components/AdminUsersSection.tsx","api":["GET /api/admin/session","POST /api/admin/password","POST /api/admin/logout"],"features":["current admin access","change password"]}]}
+      ],
+      "integration_blockers": [
+        "Existing API differs from lifeos-admin-v1: x-admin-token authentication and whole nested JSON writes.",
+        "Authorized session and an adapter preserving the complete site document are required.",
+        "Media uploads/imports, inquiry actions and password changes need separate endpoint mappings.",
+        "Snapshot excludes site content/default data and credentials and is not standalone."
+      ]
+    },
+    {
+      "id": "tenderhub",
+      "title": "TenderHub Admin Center",
+      "stack": "Next.js 16 / React 19 / PHP CodeIgniter / separate ingestion, marketing and SEO services",
+      "source_root": "D:\\OFZ\\tender",
+      "snapshot": "tenderhub/source",
+      "manifest": "tenderhub/manifest.json",
+      "adapter_status": "required",
+      "authentication": "Staff JWT with tenant, role and entitlement checks; privileged services require live owner/admin validation",
+      "groups": [
+        {"id":"overview","label":"Overview","items":[{"id":"health","label":"System health","route":"/console","source":"web/src/app/(portal)/console/page.tsx","api":["GET /api/v1/admin/reports/health","GET /api/v1/admin/reports/coverage","GET /api/v1/admin/security/events"]},{"id":"infrastructure","label":"Infrastructure","route":"/console/infrastructure","source":"web/src/app/(portal)/console/infrastructure/page.tsx","api":["GET /api/v1/admin/infrastructure/status","GET /api/v1/admin/infrastructure/maintenance","POST /api/v1/admin/infrastructure/maintenance/safe-cleanup"]},{"id":"automation","label":"Automation analysis","route":"/console/automation","source":"web/src/app/(portal)/console/automation/page.tsx","api":["GET /api/v1/admin/reports/automation"]}]},
+        {"id":"content","label":"Content & ingestion","items":[{"id":"ingestion","label":"Ingestion","route":"/console/ingestion","source":"web/src/app/(portal)/console/ingestion/page.tsx","api":["/api/v1/admin/ingest/sources","/api/v1/admin/ingest/schedule","/api/v1/admin/ingest/live-run","/api/v1/admin/ingest/telemetry","/api/v1/admin/ingest/runs"]},{"id":"quality","label":"Data quality","route":"/console/data-quality","source":"web/src/app/(portal)/console/data-quality/page.tsx","api":["GET /api/v1/admin/ingest/quality"]},{"id":"notices","label":"Notices","route":"/console/notices","source":"web/src/app/(portal)/console/notices/page.tsx","api":["/api/v1/admin/notices","/api/v1/admin/notices/:id/publish","/api/v1/admin/notices/:id/merge","/api/v1/admin/publishing"]},{"id":"blog","label":"Blog","route":"/console/blog","source":"web/src/app/(portal)/console/blog/page.tsx","api":["GET/POST /api/v1/admin/blog","GET/PUT/DELETE /api/v1/admin/blog/:id"]},{"id":"seo","label":"SEO engine","route":"/console/seo","source":"web/src/app/(portal)/console/seo/page.tsx","api":["/api/v1/admin/seo/status","/api/v1/admin/seo/audit","/api/v1/admin/seo/platforms/sync","/api/v1/admin/seo/recommendations","/api/v1/admin/seo/indexnow","/api/v1/admin/seo/backlinks"]}]},
+        {"id":"marketing","label":"Marketing","items":[{"id":"acquisition","label":"Acquisition analytics","route":"/console/acquisition","source":"web/src/app/(portal)/console/acquisition/page.tsx","api":["GET /api/v1/admin/acquisition"]},{"id":"social","label":"Social marketing","route":"/console/marketing","source":"web/src/app/(portal)/console/marketing/page.tsx","api":["/api/admin/marketing/*","/api/admin/social-oauth/*","GET /api/v1/admin/social/today-tenders"]},{"id":"campaigns","label":"Campaigns","route":"/console/campaigns","source":"web/src/app/(portal)/console/campaigns/page.tsx","api":["/api/admin/marketing/*"]},{"id":"email","label":"Email gateway","route":"/console/email","source":"web/src/app/(portal)/console/email/page.tsx","api":["/api/v1/admin/email/status","/api/v1/admin/email/toggle","/api/v1/admin/email/test","/api/v1/admin/email/settings","/api/v1/admin/email/retry-failed"]},{"id":"email-analytics","label":"Email analytics","route":"/console/email-analytics","source":"web/src/app/(portal)/console/email-analytics/page.tsx","api":["GET /api/v1/admin/email/analytics","GET /api/v1/admin/email/analytics/:id"]}]},
+        {"id":"customers","label":"Customers","items":[{"id":"organisations","label":"Organisations","route":"/console/organisations","source":"web/src/app/(portal)/console/organisations/page.tsx","api":["/api/v1/admin/organisations","/api/v1/admin/organisations/:id/verify","/api/v1/admin/organisations/:id/suspend"]},{"id":"organisation-portal","label":"Organisation Portal","route":"/console/organisation-portal","source":"web/src/app/(portal)/console/organisation-portal/page.tsx","api":["GET/POST /api/v1/admin/portals/organisation"]},{"id":"users","label":"Users","route":"/console/users","source":"web/src/app/(portal)/console/users/page.tsx","api":["/api/v1/admin/users","/api/v1/admin/users/:id","/api/v1/admin/users/export.csv","/api/v1/admin/users/export.xlsx","/api/v1/admin/users/export.pdf"]},{"id":"trials","label":"Trial monitoring","route":"/console/trials","source":"web/src/app/(portal)/console/trials/page.tsx","api":["GET /api/v1/admin/trials"]},{"id":"kyc","label":"Verification","route":"/console/kyc","source":"web/src/app/(portal)/console/kyc/page.tsx","api":["/api/v1/admin/kyc","/api/v1/admin/kyc/:id","/api/v1/admin/kyc/documents/:id","/api/v1/admin/kyc/:id/start-review","/api/v1/admin/kyc/:id/review"]},{"id":"support","label":"Support desk","route":"/console/support","source":"web/src/app/(portal)/console/support/page.tsx","api":["/api/v1/admin/support","/api/v1/admin/support/messages/:id","/api/v1/admin/support/mailboxes"]}]},
+        {"id":"billing","label":"Billing & integrations","items":[{"id":"payments","label":"Payments","route":"/console/payments","source":"web/src/app/(portal)/console/payments/page.tsx","api":["/api/v1/admin/payments","/api/v1/admin/payments/gateways","/api/v1/admin/payments/:id/receipt","/api/v1/admin/payments/:id/confirm","/api/v1/admin/payments/:id/reject"]},{"id":"worksuite","label":"WorkSuite integration","route":"/console/worksuite","source":"web/src/app/(portal)/console/worksuite/page.tsx","api":["GET/POST /api/v1/admin/integrations/worksuite"]}]},
+        {"id":"security","label":"Security & compliance","items":[{"id":"risk","label":"Risk signals","route":"/console/risk","source":"web/src/app/(portal)/console/risk/page.tsx","api":["GET /api/v1/admin/risk-signals"]},{"id":"security","label":"Security","route":"/console/security","source":"web/src/app/(portal)/console/security/page.tsx","api":["GET /api/v1/admin/security/events"]},{"id":"legal-holds","label":"Legal holds","route":"/console/legal-holds","source":"web/src/app/(portal)/console/legal-holds/page.tsx","api":["GET/POST /api/v1/admin/legal-holds","POST /api/v1/admin/legal-holds/:id/release"]}]}
+      ],
+      "additional_views": ["/console/blog/:id/preview", "/console/email-analytics/:id", "/console/seo/dashboard", "/console/seo/backlinks"],
+      "integration_blockers": [
+        "The native staff API and multiple service proxies do not implement lifeos-admin-v1 automatically.",
+        "An authorized scoped staff session, tenant mapping and role/entitlement checks are required.",
+        "Marketing/SEO, ingestion, payments and infrastructure actions depend on their real production subsystems.",
+        "The source snapshot excludes live databases, provider secrets and deployed configuration and is not standalone.",
+        "No original production routing or source project may be changed as part of reference cloning."
+      ]
+    }
+  ]
+}

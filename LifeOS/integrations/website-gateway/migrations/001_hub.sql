@@ -1,0 +1,13 @@
+CREATE TABLE hub_clients(id TEXT PRIMARY KEY,name TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE hub_sites(id TEXT PRIMARY KEY,client_id TEXT NOT NULL REFERENCES hub_clients(id),name TEXT NOT NULL,url TEXT NOT NULL,render_mode TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,secret TEXT NOT NULL,webhook_url TEXT NOT NULL DEFAULT '',deploy_hook_url TEXT NOT NULL DEFAULT '',domain_expires TEXT,manifest TEXT NOT NULL DEFAULT '{}',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE hub_pages(site_id TEXT NOT NULL REFERENCES hub_sites(id),slug TEXT NOT NULL,draft TEXT NOT NULL DEFAULT '{}',published TEXT,version INTEGER NOT NULL DEFAULT 0,published_version INTEGER,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(site_id,slug));
+CREATE TABLE hub_versions(id INTEGER PRIMARY KEY,site_id TEXT NOT NULL,page TEXT NOT NULL,version INTEGER NOT NULL,stage TEXT NOT NULL,fields TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(site_id,page,version,stage),FOREIGN KEY(site_id,page) REFERENCES hub_pages(site_id,slug));
+CREATE TABLE hub_deployments(id TEXT PRIMARY KEY,site_id TEXT NOT NULL,page TEXT NOT NULL,version INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'queued',delivery TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,next_attempt INTEGER NOT NULL DEFAULT 0,locked_until INTEGER NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(site_id,page) REFERENCES hub_pages(site_id,slug));
+CREATE TABLE hub_audit(id INTEGER PRIMARY KEY,site_id TEXT,actor TEXT NOT NULL,action TEXT NOT NULL,resource TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE hub_media(id TEXT PRIMARY KEY,site_id TEXT NOT NULL REFERENCES hub_sites(id),filename TEXT NOT NULL,mime TEXT NOT NULL,bytes INTEGER NOT NULL,sha256 TEXT NOT NULL,storage_name TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE hub_health(id INTEGER PRIMARY KEY,site_id TEXT NOT NULL REFERENCES hub_sites(id),http_status INTEGER,latency_ms INTEGER,ssl_expires TEXT,error TEXT NOT NULL DEFAULT '',checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE hub_replays(nonce TEXT PRIMARY KEY,expires INTEGER NOT NULL);
+CREATE TABLE hub_rate_limits(bucket TEXT PRIMARY KEY,n INTEGER NOT NULL,expires INTEGER NOT NULL);
+CREATE INDEX hub_health_site ON hub_health(site_id,id);
+CREATE INDEX hub_deployments_queue ON hub_deployments(status,next_attempt,locked_until);
+CREATE INDEX hub_audit_site ON hub_audit(site_id,id);

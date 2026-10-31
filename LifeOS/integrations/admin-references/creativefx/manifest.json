@@ -1,0 +1,248 @@
+{
+  "kind": "sanitized-source-reference",
+  "project": "creativefx",
+  "source_root": "D:\\OFZ\\creative-_6",
+  "standalone_application": false,
+  "source_modified": false,
+  "files": [
+    {
+      "path": "package.json",
+      "original_sha256": "15141872f0bd92bcca69dd469e2ed6ec04010387cc202fc14b7d7c9c46266e27",
+      "original_after_sha256": "15141872f0bd92bcca69dd469e2ed6ec04010387cc202fc14b7d7c9c46266e27",
+      "copied_sha256": "15141872f0bd92bcca69dd469e2ed6ec04010387cc202fc14b7d7c9c46266e27",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "server.cjs",
+      "original_sha256": "b150eb4599a4ccda80f48f08146780ba39793b9040d276933474bd055e927cb5",
+      "original_after_sha256": "b150eb4599a4ccda80f48f08146780ba39793b9040d276933474bd055e927cb5",
+      "copied_sha256": "383b63218cc16cc54d30db3692faa2b1a26e2cb1a5504f77fd66911d3306e77c",
+      "sanitized": true,
+      "redactions": [
+        {
+          "kind": "legacy-credential-definition-omitted",
+          "count": 1
+        },
+        {
+          "kind": "legacy-credential-definition-omitted",
+          "count": 1
+        },
+        {
+          "kind": "legacy-credential-definition-omitted",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "src/admin/AdminLogin.tsx",
+      "original_sha256": "09970c0dbffbd1b101799627aa915be48ff4a025489cb9435d29cf195a98e46c",
+      "original_after_sha256": "09970c0dbffbd1b101799627aa915be48ff4a025489cb9435d29cf195a98e46c",
+      "copied_sha256": "09970c0dbffbd1b101799627aa915be48ff4a025489cb9435d29cf195a98e46c",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/AdminPanel.tsx",
+      "original_sha256": "43456c42f16ac0ebd0d67bcc647482e04844d4bf2194946ab63fcfa8dbb91420",
+      "original_after_sha256": "43456c42f16ac0ebd0d67bcc647482e04844d4bf2194946ab63fcfa8dbb91420",
+      "copied_sha256": "43456c42f16ac0ebd0d67bcc647482e04844d4bf2194946ab63fcfa8dbb91420",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/AboutAdmin.tsx",
+      "original_sha256": "867f186e4aedefee3b5347fbacdfe2aaee7f42aa319105659b1d4ac92d7a9db8",
+      "original_after_sha256": "867f186e4aedefee3b5347fbacdfe2aaee7f42aa319105659b1d4ac92d7a9db8",
+      "copied_sha256": "867f186e4aedefee3b5347fbacdfe2aaee7f42aa319105659b1d4ac92d7a9db8",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/AdminFields.tsx",
+      "original_sha256": "3278cb9e256b08f0e640a44f97486cf92c3fce18b4f224dac61a4ec31b27566d",
+      "original_after_sha256": "3278cb9e256b08f0e640a44f97486cf92c3fce18b4f224dac61a4ec31b27566d",
+      "copied_sha256": "3278cb9e256b08f0e640a44f97486cf92c3fce18b4f224dac61a4ec31b27566d",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/AdminUsersSection.tsx",
+      "original_sha256": "26fe884ef55416c777a9faa34dcd068d6052921fc2705bbecf475d5512cddf93",
+      "original_after_sha256": "26fe884ef55416c777a9faa34dcd068d6052921fc2705bbecf475d5512cddf93",
+      "copied_sha256": "26fe884ef55416c777a9faa34dcd068d6052921fc2705bbecf475d5512cddf93",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/AnalyticsSection.tsx",
+      "original_sha256": "8fd40c6d9e32dd68b33623e933da00068583162cd9e7217b02e70ec9c3c033e3",
+      "original_after_sha256": "8fd40c6d9e32dd68b33623e933da00068583162cd9e7217b02e70ec9c3c033e3",
+      "copied_sha256": "8fd40c6d9e32dd68b33623e933da00068583162cd9e7217b02e70ec9c3c033e3",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/ContactSection.tsx",
+      "original_sha256": "7d1b5ebd7cc5cf00ee5ef5c6003b77fe09b6cbe2da99bf006623cd9faa13a0c1",
+      "original_after_sha256": "7d1b5ebd7cc5cf00ee5ef5c6003b77fe09b6cbe2da99bf006623cd9faa13a0c1",
+      "copied_sha256": "7d1b5ebd7cc5cf00ee5ef5c6003b77fe09b6cbe2da99bf006623cd9faa13a0c1",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/CreativePoolAdmin.tsx",
+      "original_sha256": "4b17a36fbb06ea87d558923daaf28f8b67c3817bd8818b445f291ce3528a4b1e",
+      "original_after_sha256": "4b17a36fbb06ea87d558923daaf28f8b67c3817bd8818b445f291ce3528a4b1e",
+      "copied_sha256": "4b17a36fbb06ea87d558923daaf28f8b67c3817bd8818b445f291ce3528a4b1e",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/DashboardSection.tsx",
+      "original_sha256": "4f4129e6a2ba3d981a1d65b971a3fe7c787a777d68564705f8f0b33e3917901f",
+      "original_after_sha256": "4f4129e6a2ba3d981a1d65b971a3fe7c787a777d68564705f8f0b33e3917901f",
+      "copied_sha256": "4f4129e6a2ba3d981a1d65b971a3fe7c787a777d68564705f8f0b33e3917901f",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/HomepageSection.tsx",
+      "original_sha256": "6e7c38ba454bc44abab3943f228cfe0d00899b63f847b22823c002aa44b2aeff",
+      "original_after_sha256": "6e7c38ba454bc44abab3943f228cfe0d00899b63f847b22823c002aa44b2aeff",
+      "copied_sha256": "6e7c38ba454bc44abab3943f228cfe0d00899b63f847b22823c002aa44b2aeff",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/MediaLibrarySection.tsx",
+      "original_sha256": "0f96ace66ce5866deeaef2f3881f213780c51ca6dcdad387d55d33f8ea8fdbb5",
+      "original_after_sha256": "0f96ace66ce5866deeaef2f3881f213780c51ca6dcdad387d55d33f8ea8fdbb5",
+      "copied_sha256": "0f96ace66ce5866deeaef2f3881f213780c51ca6dcdad387d55d33f8ea8fdbb5",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/PagesSection.tsx",
+      "original_sha256": "46bb4d537b61c59dfe6d673687a2fc6b354da6207b18402b9b3b950015952415",
+      "original_after_sha256": "46bb4d537b61c59dfe6d673687a2fc6b354da6207b18402b9b3b950015952415",
+      "copied_sha256": "46bb4d537b61c59dfe6d673687a2fc6b354da6207b18402b9b3b950015952415",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/PartnerLogosAdmin.tsx",
+      "original_sha256": "7152f81ad7dd30a8ebf4555ce98af6d13704ec8866c830624fefa56d9736eefa",
+      "original_after_sha256": "7152f81ad7dd30a8ebf4555ce98af6d13704ec8866c830624fefa56d9736eefa",
+      "copied_sha256": "7152f81ad7dd30a8ebf4555ce98af6d13704ec8866c830624fefa56d9736eefa",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/SEOSection.tsx",
+      "original_sha256": "5aaa8934e69855251746436955ed794abc068f14b7d1172acfef78271566c8a0",
+      "original_after_sha256": "5aaa8934e69855251746436955ed794abc068f14b7d1172acfef78271566c8a0",
+      "copied_sha256": "5aaa8934e69855251746436955ed794abc068f14b7d1172acfef78271566c8a0",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/ServicesAdmin.tsx",
+      "original_sha256": "55b44048081c2f180f6b1e22b9ddcbcad6a0f4d0f4cc320e46c17819fc9585d2",
+      "original_after_sha256": "55b44048081c2f180f6b1e22b9ddcbcad6a0f4d0f4cc320e46c17819fc9585d2",
+      "copied_sha256": "55b44048081c2f180f6b1e22b9ddcbcad6a0f4d0f4cc320e46c17819fc9585d2",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/SettingsSection.tsx",
+      "original_sha256": "aa1e89df011b2ba7f895627b7e06e0a4529298df966c60437031cd61475995c3",
+      "original_after_sha256": "aa1e89df011b2ba7f895627b7e06e0a4529298df966c60437031cd61475995c3",
+      "copied_sha256": "aa1e89df011b2ba7f895627b7e06e0a4529298df966c60437031cd61475995c3",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/ThemeSection.tsx",
+      "original_sha256": "9639063ea5d9d6a8cda6d20750c25505bc2ea4f44e78bc05567e1729a9fed0f7",
+      "original_after_sha256": "9639063ea5d9d6a8cda6d20750c25505bc2ea4f44e78bc05567e1729a9fed0f7",
+      "copied_sha256": "9639063ea5d9d6a8cda6d20750c25505bc2ea4f44e78bc05567e1729a9fed0f7",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/WebsiteSection.tsx",
+      "original_sha256": "0e4166c4cb5921c3b10826534ead4fb78b2c3ce0dfb740a39cfb11a9afa8df54",
+      "original_after_sha256": "0e4166c4cb5921c3b10826534ead4fb78b2c3ce0dfb740a39cfb11a9afa8df54",
+      "copied_sha256": "0e4166c4cb5921c3b10826534ead4fb78b2c3ce0dfb740a39cfb11a9afa8df54",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/WeddingsAdmin.tsx",
+      "original_sha256": "6fd5b2c9222bfdcaf00524e01af2429dab49acee7d60c349abd43b7bb816415f",
+      "original_after_sha256": "6fd5b2c9222bfdcaf00524e01af2429dab49acee7d60c349abd43b7bb816415f",
+      "copied_sha256": "6fd5b2c9222bfdcaf00524e01af2429dab49acee7d60c349abd43b7bb816415f",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/admin/components/WorksSection.tsx",
+      "original_sha256": "f6ac577ba880e348b8ec319fbbc4ba1195ee0fee152c6d7d04705ec3ea37e3d1",
+      "original_after_sha256": "f6ac577ba880e348b8ec319fbbc4ba1195ee0fee152c6d7d04705ec3ea37e3d1",
+      "copied_sha256": "f6ac577ba880e348b8ec319fbbc4ba1195ee0fee152c6d7d04705ec3ea37e3d1",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/context/ContentContext.tsx",
+      "original_sha256": "94aabb3aac9194750ab7125b15ca4c440b45f0722b6a357195b9d0bb8d8a841e",
+      "original_after_sha256": "94aabb3aac9194750ab7125b15ca4c440b45f0722b6a357195b9d0bb8d8a841e",
+      "copied_sha256": "889009976d6b59fbb1f8f06cc194eaf8ba0184bdb475dcb6795f127ec0f3a477",
+      "sanitized": true,
+      "redactions": [
+        {
+          "kind": "site-default-content-block-omitted",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "src/types.ts",
+      "original_sha256": "08b346e5a58443da50d1a405ec1e05e6245a2527cde1621158f53fd6da20e972",
+      "original_after_sha256": "08b346e5a58443da50d1a405ec1e05e6245a2527cde1621158f53fd6da20e972",
+      "copied_sha256": "08b346e5a58443da50d1a405ec1e05e6245a2527cde1621158f53fd6da20e972",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/utils/contentEngine.ts",
+      "original_sha256": "8cfc9425a1ea74feddc90efae8616f92ddab212202a695edf35de7a045ada7e4",
+      "original_after_sha256": "8cfc9425a1ea74feddc90efae8616f92ddab212202a695edf35de7a045ada7e4",
+      "copied_sha256": "8cfc9425a1ea74feddc90efae8616f92ddab212202a695edf35de7a045ada7e4",
+      "sanitized": false,
+      "redactions": []
+    },
+    {
+      "path": "src/utils/driveUtils.ts",
+      "original_sha256": "832277560ae8c739ce9d805d469d35f495a5086669566dfc79afaf6c04075046",
+      "original_after_sha256": "832277560ae8c739ce9d805d469d35f495a5086669566dfc79afaf6c04075046",
+      "copied_sha256": "832277560ae8c739ce9d805d469d35f495a5086669566dfc79afaf6c04075046",
+      "sanitized": false,
+      "redactions": []
+    }
+  ],
+  "excluded_imports": [
+    "data/content.json",
+    "src/data/projectsData.ts",
+    "src/data/weddingData.ts"
+  ],
+  "excluded_categories": [
+    "environment/config secrets",
+    "runtime/user records",
+    "uploads/media",
+    "dependencies",
+    "builds/caches/logs",
+    "site default content"
+  ]
+}

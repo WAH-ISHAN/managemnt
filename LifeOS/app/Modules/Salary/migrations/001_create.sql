@@ -1,0 +1,13 @@
+CREATE TABLE accounts(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, kind TEXT NOT NULL DEFAULT 'cash', balance REAL NOT NULL DEFAULT 0);
+CREATE TABLE income(id INTEGER PRIMARY KEY, date TEXT NOT NULL, source TEXT NOT NULL, amount REAL NOT NULL CHECK(amount>0), type TEXT NOT NULL DEFAULT 'salary');
+CREATE TABLE allocation_rules(id INTEGER PRIMARY KEY, name TEXT NOT NULL, percent REAL NOT NULL CHECK(percent>=0 AND percent<=100), target_type TEXT NOT NULL DEFAULT 'account', target_id INTEGER REFERENCES accounts(id), sort INTEGER DEFAULT 0, active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)));
+CREATE TABLE allocations(id INTEGER PRIMARY KEY, income_id INTEGER NOT NULL REFERENCES income(id) ON DELETE CASCADE, rule_id INTEGER REFERENCES allocation_rules(id) ON DELETE SET NULL, name TEXT NOT NULL, percent REAL NOT NULL, account_id INTEGER NOT NULL REFERENCES accounts(id), amount REAL NOT NULL CHECK(amount>=0));
+CREATE TABLE expense_categories(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, monthly_budget REAL NOT NULL DEFAULT 0 CHECK(monthly_budget>=0));
+CREATE TABLE expenses(id INTEGER PRIMARY KEY, date TEXT NOT NULL, category_id INTEGER NOT NULL REFERENCES expense_categories(id), account_id INTEGER NOT NULL REFERENCES accounts(id), amount REAL NOT NULL CHECK(amount>0), note TEXT);
+CREATE INDEX income_date ON income(date);
+CREATE INDEX expense_date ON expenses(date);
+CREATE INDEX allocation_income ON allocations(income_id);
+INSERT INTO accounts(id,name,kind) VALUES (1,'Needs','spending'),(2,'Savings','savings'),(3,'Business','business'),(4,'Fun','spending'),(5,'Unallocated','cash');
+INSERT INTO settings(key,value) VALUES ('unallocated_account','5');
+INSERT INTO allocation_rules(name,percent,target_id,sort) VALUES ('Needs',50,1,1),('Savings',20,2,2),('Business',20,3,3),('Fun',10,4,4);
+INSERT INTO expense_categories(name,monthly_budget) VALUES ('Food & groceries',0),('Transport',0),('University',0),('Bills',0),('Personal',0),('Other',0);

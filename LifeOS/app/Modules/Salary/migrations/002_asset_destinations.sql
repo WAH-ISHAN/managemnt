@@ -1,0 +1,2 @@
+ALTER TABLE allocation_rules ADD COLUMN asset_target_id INTEGER REFERENCES assets(id) ON DELETE SET NULL;
+ALTER TABLE allocations ADD COLUMN asset_id INTEGER REFERENCES assets(id) ON DELETE RESTRICT;

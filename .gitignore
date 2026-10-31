@@ -1,5 +1,0 @@
-.crab-local/
-.phpunit.result.cache
-*.log
-node_modules/
-dist/

@@ -1,0 +1,39 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test:analytics": "tsx scripts/test-google-analytics.mjs",
+    "test:security": "node scripts/security-smoke.mjs",
+    "test:seo": "tsx scripts/test-seo-indexability.mjs",
+    "test:pwa": "node scripts/test-pwa.mjs",
+    "test:today": "tsx scripts/test-today-count.ts",
+    "test:organisation-portal": "tsx scripts/test-organisation-portal.ts"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@headlessui/react": "^2.2.10",
+    "lucide-react": "^1.37.0",
+    "next": "16.4.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.2",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.13",
+    "typescript": "^5"
+  }
+}

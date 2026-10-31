@@ -1,0 +1,1 @@
+<header class="page-header"><div><p class="eyebrow">LIFEOS</p><h1><?= e($title) ?></h1></div></header><section class="card narrow"><p role="alert"><?= e($message) ?></p><a class="btn" href="<?= e($back ?? '/') ?>">Go back</a><p class="muted">Your entry was not saved. Return to the form and check the details.</p></section>

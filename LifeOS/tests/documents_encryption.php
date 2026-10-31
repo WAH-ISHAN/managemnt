@@ -1,0 +1,71 @@
+<?php
+declare(strict_types=1);
+define('ROOT',dirname(__DIR__));
+foreach (['Db','Migrator','Modules','Backup','helpers'] as $file) require ROOT.'/app/Core/'.$file.'.php';
+$modules=Modules::discover(ROOT.'/app/Modules');
+foreach ($modules as $module) foreach (glob($module['path'].'/src/*.php') ?: [] as $file) require_once $file;
+$checks=0;
+function doc_check(bool $ok,string $label): void { global $checks; if (!$ok) throw new RuntimeException($label); $checks++; }
+function doc_rejects(callable $fn,string $label): void { try { $fn(); } catch (InvalidArgumentException $e) { doc_check(true,$label); return; } throw new RuntimeException($label); }
+$dir=sys_get_temp_dir().'/lifeos-doc-tests-'.bin2hex(random_bytes(6)); mkdir($dir,0700);
+$dirs=array_merge([ROOT.'/app/Core/migrations'],array_map(fn($m)=>$m['path'].'/migrations',$modules));
+$pass='a long test backup passphrase';
+try {
+    Db::init($dir.'/lifeos.db'); Migrator::run($dirs);
+    $source=$dir.'/source.txt'; file_put_contents($source,"Student notes\n".bin2hex(random_bytes(2*1024*1024)));
+    doc_rejects(fn()=>DocumentService::store($source,'unsafe.exe','Bad','Other','',$dir),'Reject executable upload extension');
+    doc_rejects(fn()=>DocumentService::store($source,'mismatch.pdf','Bad','Other','',$dir),'Reject content/extension mismatch');
+    $id=DocumentService::store($source,'../../CV.txt','Study notes','University','Course reference',$dir);
+    $row=Db::one('SELECT * FROM documents WHERE id=?',[$id]); $originalStorage=$row['storage_name'];
+    doc_check($row['original_name']==='CV.txt' && preg_match('/^[a-f0-9]{32}\.txt$/D',$row['storage_name'])===1,'Random storage and safe download name');
+    doc_check(hash_file('sha256',DocumentService::path($row,$dir))===hash_file('sha256',$source),'Stored document matches upload');
+    DocumentService::update($id,'Updated title','Certificates','Real notes');
+    doc_check(Db::one('SELECT title FROM documents WHERE id=?',[$id])['title']==='Updated title','Rename document metadata');
+    DocumentService::trash($id); doc_check(Db::one('SELECT deleted_at FROM documents WHERE id=?',[$id])['deleted_at']!==null && is_file(DocumentService::path($row,$dir)),'Trash is recoverable without deleting the file');
+    DocumentService::trash($id,false); doc_check(Db::one('SELECT deleted_at FROM documents WHERE id=?',[$id])['deleted_at']===null,'Restore document from Trash');
+    Db::set('encrypted_test_marker','before');
+    $encrypted=EncryptedBackupService::create($dir,$pass);
+    doc_check(str_starts_with(file_get_contents($encrypted,false,null,0,10),"LIFEOS-E1\n"),'Versioned encrypted envelope');
+    doc_check(filesize($encrypted)>1048576,'Roundtrip exercises multiple authenticated chunks');
+    doc_check(!str_contains(file_get_contents($encrypted),'SQLite format 3'),'Snapshot is not exported as plaintext');
+    Db::set('encrypted_test_marker','after');
+    $late=$dir.'/later.txt'; file_put_contents($late,'Added after backup');
+    $lateId=DocumentService::store($late,'later.txt','Later','Other','',$dir);
+    $lateStorage=Db::one('SELECT storage_name FROM documents WHERE id=?',[$lateId])['storage_name'];
+    doc_rejects(fn()=>EncryptedBackupService::restore($encrypted,'the wrong long passphrase',$dir,$dirs),'Wrong passphrase rejected');
+    doc_check(Db::setting('encrypted_test_marker')==='after' && count(Db::all('SELECT id FROM documents'))===2 && is_file($dir.'/uploads/documents/'.$lateStorage),'Wrong passphrase leaves database and files unchanged');
+    $tampered=$dir.'/tampered.lifeosbk'; copy($encrypted,$tampered); $stream=fopen($tampered,'r+b'); fseek($stream,-1,SEEK_END); $byte=fread($stream,1); fseek($stream,-1,SEEK_END); fwrite($stream,chr(ord($byte)^1)); fclose($stream);
+    doc_rejects(fn()=>EncryptedBackupService::restore($tampered,$pass,$dir,$dirs),'Tampered final authentication tag rejected');
+    $truncated=$dir.'/truncated.lifeosbk'; copy($encrypted,$truncated); $stream=fopen($truncated,'c+b'); ftruncate($stream,filesize($truncated)-20); fclose($stream);
+    doc_rejects(fn()=>EncryptedBackupService::restore($truncated,$pass,$dir,$dirs),'Missing authenticated final frame rejected');
+    doc_check(Db::setting('encrypted_test_marker')==='after' && is_file($dir.'/uploads/documents/'.$lateStorage),'Damaged backup leaves all live data unchanged');
+    $unsafeZip=$dir.'/unsafe.zip'; $zip=new ZipArchive(); $zip->open($unsafeZip,ZipArchive::CREATE);
+    $zip->addFromString('manifest.json',json_encode(['version'=>1,'files'=>['database.db'=>['bytes'=>1,'sha256'=>hash('sha256','x')],'uploads/../../escape.txt'=>['bytes'=>1,'sha256'=>hash('sha256','x')]]]));
+    $zip->addFromString('database.db','x'); $zip->addFromString('uploads/../../escape.txt','x'); $zip->close();
+    $privateEncrypt=new ReflectionMethod(EncryptedBackupService::class,'encrypt');
+    $unsafe=$dir.'/unsafe.lifeosbk'; $privateEncrypt->invoke(null,$unsafeZip,$unsafe,$pass);
+    doc_rejects(fn()=>EncryptedBackupService::restore($unsafe,$pass,$dir,$dirs),'Authenticated archive with traversal rejected');
+    doc_check(Db::setting('encrypted_test_marker')==='after' && !is_file(dirname($dir).'/escape.txt'),'Traversal did not modify live data or escape staging');
+    $safety=EncryptedBackupService::restore($encrypted,$pass,$dir,$dirs);
+    doc_check(Db::setting('encrypted_test_marker')==='before' && count(Db::all('SELECT id FROM documents'))===1,'Encrypted restore replaces database');
+    doc_check(is_file($dir.'/uploads/documents/'.$originalStorage) && !is_file($dir.'/uploads/documents/'.$lateStorage),'Encrypted restore replaces uploaded files');
+    doc_check(hash_file('sha256',$dir.'/uploads/documents/'.$originalStorage)===hash_file('sha256',$source),'Restored document passes checksum');
+    $old=new PDO('sqlite:'.$dir.'/backups/'.$safety.'/database.db');
+    doc_check($old->query("SELECT value FROM settings WHERE key='encrypted_test_marker'")->fetchColumn()==='after' && is_file($dir.'/backups/'.$safety.'/uploads/documents/'.$lateStorage),'Complete pre-restore database and file safety copy retained'); unset($old);
+    doc_check(!is_file($dir.'/restore-journal.json'),'Successful restore commits and clears journal');
+    $stageName='.restore-stage-'.bin2hex(random_bytes(8)); mkdir($dir.'/'.$stageName);
+    $recovery='before-encrypted-restore-'.date('Y-m-d-His').'-'.bin2hex(random_bytes(4)); mkdir($dir.'/backups/'.$recovery);
+    Db::run('VACUUM INTO ?',[$dir.'/backups/'.$recovery.'/database.db']);
+    rename($dir.'/uploads',$dir.'/backups/'.$recovery.'/uploads'); mkdir($dir.'/uploads'); file_put_contents($dir.'/uploads/unfinished.txt','Partial new state');
+    Db::set('encrypted_test_marker','interrupted'); Db::close();
+    file_put_contents($dir.'/restore-journal.json',json_encode(['version'=>1,'stage'=>$stageName,'safety'=>$recovery]));
+    EncryptedBackupService::recoverPending($dir); Db::init($dir.'/lifeos.db');
+    doc_check(Db::setting('encrypted_test_marker')==='before' && is_file($dir.'/uploads/documents/'.$originalStorage) && !is_file($dir.'/uploads/unfinished.txt'),'Startup recovery rolls back interrupted database and file changes together');
+    doc_check(!is_file($dir.'/restore-journal.json') && !is_dir($dir.'/'.$stageName),'Recovery clears journal and staging');
+    echo "$checks document and encrypted-backup checks passed.\n";
+} finally {
+    Db::close(); $resolved=realpath($dir); $base=realpath(sys_get_temp_dir());
+    if (!$resolved || !$base || !str_starts_with(strtolower($resolved),strtolower($base.DIRECTORY_SEPARATOR.'lifeos-doc-tests-'))) throw new RuntimeException('Unsafe test cleanup path.');
+    $iterator=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir,FilesystemIterator::SKIP_DOTS),RecursiveIteratorIterator::CHILD_FIRST);
+    foreach ($iterator as $file) $file->isDir() && !$file->isLink() ? rmdir($file->getPathname()) : unlink($file->getPathname()); rmdir($dir);
+}

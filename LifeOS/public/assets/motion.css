@@ -1,0 +1,23 @@
+/* Small, composited transitions keep the workspace responsive. */
+:root{--motion-ease:cubic-bezier(.2,.7,.2,1);--motion-fast:140ms}
+#main.content{animation:workspace-enter 160ms var(--motion-ease) both}
+dialog[open]{animation:dialog-enter 140ms var(--motion-ease) both}
+dialog[open]::backdrop{animation:backdrop-enter 140ms ease-out both}
+.nav-link,.tabs a,.planner-week a,.dashboard-actions a,.quick-add-grid a,.command-results a{transition:background-color var(--motion-fast) var(--motion-ease),color var(--motion-fast) ease,border-color var(--motion-fast) ease,transform var(--motion-fast) var(--motion-ease)}
+input,select,textarea{transition:border-color var(--motion-fast) ease,box-shadow var(--motion-fast) ease}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+.tabs a:hover,.command-results a:hover{background:var(--accent-soft);text-decoration:none}
+.quick-add-grid a:active,.dashboard-actions a:active,.planner-week a:active{transform:translateY(1px)}
+form[data-submitting=true] button:not([type]),form[data-submitting=true] button[type=submit],form[data-submitting=true] input[type=submit],form[data-submitting=true] input[type=image]{pointer-events:none;opacity:.62;cursor:wait}
+.app-shell::before{content:"";position:fixed;z-index:100;top:0;left:0;width:36%;height:3px;background:var(--accent);border-radius:0 2px 2px 0;pointer-events:none;opacity:0;transform:translateX(-110%);transition:opacity 100ms ease}
+html[data-page-loading=true] .app-shell::before{opacity:1;animation:workspace-loading 1.15s ease-in-out infinite}
+@keyframes workspace-enter{from{opacity:.7;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes dialog-enter{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:none}}
+@keyframes backdrop-enter{from{opacity:0}to{opacity:1}}
+@keyframes workspace-loading{from{transform:translateX(-110%)}to{transform:translateX(300%)}}
+@media(prefers-reduced-motion:reduce){
+  #main.content,dialog[open],dialog[open]::backdrop,html[data-page-loading=true] .app-shell::before{animation:none!important}
+  html[data-page-loading=true] .app-shell::before{width:100%;transform:none}
+  .nav-link,.tabs a,.planner-week a,.dashboard-actions a,.quick-add-grid a,.command-results a,input,select,textarea,.app-shell::before{transition:none!important}
+}
+@media print{.app-shell::before{display:none}}

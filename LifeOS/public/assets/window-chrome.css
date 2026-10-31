@@ -1,0 +1,64 @@
+/* Desktop-only window controls. Browser pages keep their normal browser frame. */
+:root[data-desktop-chrome=true]{--window-chrome-height:48px;scroll-padding-top:156px}
+:root[data-desktop-chrome=true] body{padding-top:var(--window-chrome-height)}
+:root[data-desktop-chrome=true] .app-shell #main:focus{outline:none}
+/* Invisible hit areas preserve native resizing without a visible outer frame. */
+:root[data-desktop-chrome=true] .window-resize-grip{position:fixed;z-index:101;display:block;margin:0;padding:0;border:0;outline:0;background:transparent;box-shadow:none;touch-action:none;user-select:none;-webkit-user-select:none;forced-color-adjust:none}
+:root[data-desktop-chrome=true] .window-resize-grip[data-resize-edge=n]{inset:0 12px auto;height:6px;cursor:n-resize}
+:root[data-desktop-chrome=true] .window-resize-grip[data-resize-edge=s]{inset:auto 12px 0;height:6px;cursor:s-resize}
+:root[data-desktop-chrome=true] .window-resize-grip[data-resize-edge=e]{inset:12px 0 12px auto;width:6px;cursor:e-resize}
+:root[data-desktop-chrome=true] .window-resize-grip[data-resize-edge=w]{inset:12px auto 12px 0;width:6px;cursor:w-resize}
+:root[data-desktop-chrome=true] .window-resize-grip[data-resize-edge=ne]{inset:0 0 auto auto;width:12px;height:12px;cursor:ne-resize}
+:root[data-desktop-chrome=true] .window-resize-grip[data-resize-edge=nw]{inset:0 auto auto 0;width:12px;height:12px;cursor:nw-resize}
+:root[data-desktop-chrome=true] .window-resize-grip[data-resize-edge=se]{inset:auto 0 0 auto;width:12px;height:12px;cursor:se-resize}
+:root[data-desktop-chrome=true] .window-resize-grip[data-resize-edge=sw]{inset:auto auto 0 0;width:12px;height:12px;cursor:sw-resize}
+:root[data-desktop-chrome=true][data-window-maximized=true] .window-resize-grip{display:none}
+/* Fixed header stays relative to the viewport when hosted by a modal dialog. */
+:root[data-desktop-chrome=true] .app-shell #command-dialog[open],:root[data-desktop-chrome=true] .app-shell .action-dialog[open],:root[data-desktop-chrome=true] .app-shell .notifications-drawer[open]{backdrop-filter:none;-webkit-backdrop-filter:none;transform:none;animation:none}
+:root[data-desktop-chrome=true] .window-chrome{
+  position:fixed;inset:0 0 auto;height:var(--window-chrome-height);z-index:100;
+  display:flex;align-items:center;justify-content:space-between;padding:0 15px 0 12px;
+  background:var(--glass-toolbar,rgba(246,249,255,.72));color:var(--text);
+  border-bottom:1px solid transparent;box-shadow:0 5px 20px -16px rgba(20,45,88,.24);
+  backdrop-filter:blur(30px) saturate(155%);-webkit-backdrop-filter:blur(30px) saturate(155%);
+  user-select:none;-webkit-user-select:none;touch-action:none;
+}
+.window-controls{display:flex;align-items:center;gap:0;height:100%;position:relative;z-index:1}
+:root[data-desktop-chrome=true] .window-chrome .window-control{
+  appearance:none;-webkit-appearance:none;display:grid;place-items:center;
+  width:30px;height:34px;min-width:30px;min-height:34px;padding:0;margin:0;
+  border:0;border-radius:10px;background:transparent;color:#4c281f;box-shadow:none;
+  cursor:default;filter:none;transform:none;outline-offset:0;transition:background .12s ease;
+}
+:root[data-desktop-chrome=true] .window-chrome .window-control:hover{background:var(--selection,rgba(100,130,180,.08));box-shadow:none;filter:none;transform:none}
+:root[data-desktop-chrome=true] .window-chrome .window-control:active{background:var(--selection,rgba(100,130,180,.13));transform:none}
+:root[data-desktop-chrome=true] .window-chrome .window-control:focus-visible{outline:2px solid var(--accent);outline-offset:0}
+.window-control-dot{display:grid;place-items:center;width:14px;height:14px;border:1px solid rgba(0,0,0,.12);border-radius:50%;box-shadow:inset 0 1px 1px rgba(255,255,255,.36),0 1px 2px rgba(0,0,0,.10)}
+.window-close .window-control-dot{background:#ff625b}.window-minimize .window-control-dot{background:#febc2e}.window-maximize .window-control-dot{background:#2acb43}
+.window-control-dot svg{width:10px;height:10px;fill:none;stroke:rgba(57,34,20,.82);stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity .12s ease}
+.window-controls:hover .window-control-dot svg,.window-control:focus-visible .window-control-dot svg{opacity:1}
+.window-chrome-brand{position:absolute;inset:0 120px;display:flex;align-items:center;justify-content:center;gap:7px;pointer-events:none;font-size:12px;font-weight:600;letter-spacing:-.2px}
+.window-chrome-brand img{width:22px;height:22px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(15,50,108,.12))}
+.window-chrome-status{display:flex;align-items:center;gap:6px;pointer-events:none;color:var(--muted);font-size:10px;letter-spacing:.01em}
+.window-chrome-status>span{width:5px;height:5px;border-radius:50%;background:#5caa82;box-shadow:0 0 0 3px rgba(83,169,123,.08)}
+:root[data-desktop-chrome=true] .app-shell .sidebar{top:calc(var(--window-chrome-height) + 14px)}
+:root[data-desktop-chrome=true] .app-shell .app-toolbar{top:calc(var(--window-chrome-height) + 14px)}
+:root[data-desktop-chrome=true] .app-shell .card,:root[data-desktop-chrome=true] .app-shell [id^=new-],:root[data-desktop-chrome=true] .app-shell [id^=add-],:root[data-desktop-chrome=true] #personal-time{scroll-margin-top:150px}
+:root[data-desktop-chrome=true] .skip:focus{top:calc(var(--window-chrome-height) + 12px)}
+:root[data-desktop-chrome=true] .lock-body{padding:calc(var(--window-chrome-height) + 24px) 24px 24px;min-height:100dvh}
+:root[data-desktop-chrome=true] .welcome-body{padding-top:calc(var(--window-chrome-height) + 32px)}
+@media(max-width:900px){
+  :root[data-desktop-chrome=true] .app-shell .sidebar{top:calc(var(--window-chrome-height) + 10px);height:calc(100dvh - var(--window-chrome-height) - 20px)}
+  :root[data-desktop-chrome=true] .app-shell .app-toolbar{top:calc(var(--window-chrome-height) + 10px)}
+  :root[data-desktop-chrome=true] .app-shell .nav-backdrop:not([hidden]){top:var(--window-chrome-height);min-height:calc(100dvh - var(--window-chrome-height))}
+}
+@media(max-width:600px){
+  :root[data-desktop-chrome=true] .app-shell .app-toolbar{top:calc(var(--window-chrome-height) + 8px)}
+  .window-chrome-status{display:none}
+}
+@media(prefers-reduced-transparency:reduce){:root[data-desktop-chrome=true] .window-chrome{background:var(--glass-dialog,var(--bg));backdrop-filter:none;-webkit-backdrop-filter:none}}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){:root[data-desktop-chrome=true] .window-chrome{background:var(--glass-dialog,var(--bg))}}
+@media(prefers-contrast:more){:root[data-desktop-chrome=true] .window-chrome{background:var(--bg);border-bottom:1px solid currentColor;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}.window-control-dot svg{opacity:1}}
+@media(forced-colors:active){:root[data-desktop-chrome=true] .window-chrome{background:Canvas;color:CanvasText;border-bottom:1px solid CanvasText;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}.window-control-dot{background:ButtonFace!important;border-color:ButtonText}.window-control-dot svg{stroke:ButtonText;opacity:1}.window-chrome-status>span{background:CanvasText}}
+@media(prefers-reduced-motion:reduce){:root[data-desktop-chrome=true] .window-chrome *{transition:none!important}}
+@media print{:root[data-desktop-chrome=true] body{padding-top:0}.window-chrome,:root[data-desktop-chrome=true] .window-resize-grip{display:none!important}}

@@ -1,0 +1,2 @@
+CREATE TABLE documents(id INTEGER PRIMARY KEY, title TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'Other', notes TEXT, original_name TEXT NOT NULL, storage_name TEXT NOT NULL UNIQUE, mime TEXT NOT NULL, bytes INTEGER NOT NULL CHECK(bytes>0), sha256 TEXT NOT NULL, deleted_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX idx_documents_category ON documents(category,deleted_at);

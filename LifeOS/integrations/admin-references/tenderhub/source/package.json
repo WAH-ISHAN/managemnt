@@ -1,0 +1,26 @@
+{
+  "name": "tender-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "web"
+  ],
+  "overrides": {
+    "fast-glob": "file:tools/eslint-root-glob"
+  },
+  "devDependencies": {
+    "fast-glob": "file:tools/eslint-root-glob"
+  },
+  "scripts": {
+    "test:lint-deps": "node scripts/check-eslint-glob.cjs",
+    "dev": "node scripts/dev-runner.js",
+    "dev:web": "npm run dev --workspace=web",
+    "dev:all": "node scripts/dev-runner.js",
+    "build": "npm run build --workspace=web",
+    "start": "npm run start --workspace=web",
+    "hub:sync": "php apps/api/spark hub:sync",
+    "hub:api": "python sl-tender-hub/api.py",
+    "hub:scrape": "python sl-tender-hub/run_scraper.py",
+    "notices:purge-mock": "php apps/api/spark notices:purge-mock"
+  }
+}

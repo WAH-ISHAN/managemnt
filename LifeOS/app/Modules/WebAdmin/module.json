@@ -1,0 +1,1 @@
+{"name":"Admin Studio","icon":"grid","route":"/web-admin","order":79,"version":"1.0.0","autoload":{"WebsiteHubTransport":"HubTransport.php"}}

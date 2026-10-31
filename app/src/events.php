@@ -1,2 +1,0 @@
-<?php declare(strict_types=1); $events = array_values(array_filter($items, fn($item) => $item['kind'] === 'event')); ?>
-<section class="list-section"><div class="section-head"><h2>Your events</h2><span class="muted"><?= count($events) ?> total</span></div><div class="item-grid"><?php if (!$events): ?><p class="empty">No events yet. Add one above to see it here.</p><?php else: foreach ($events as $item) itemCard($item, 'calendar'); endif; ?></div></section>

@@ -1,0 +1,3 @@
+CREATE TABLE business_projects(id INTEGER PRIMARY KEY, name TEXT NOT NULL, client TEXT NOT NULL DEFAULT '', hourly_rate REAL NOT NULL DEFAULT 0 CHECK(hourly_rate>=0), status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','closed')), notes TEXT NOT NULL DEFAULT '');
+CREATE TABLE business_entries(id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES business_projects(id) ON DELETE CASCADE, date TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('time','income','cost')), quantity REAL NOT NULL CHECK(quantity>0), note TEXT NOT NULL DEFAULT '');
+CREATE INDEX business_entries_project_date ON business_entries(project_id,date);

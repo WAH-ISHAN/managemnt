@@ -1,0 +1,3 @@
+CREATE TABLE focus_sessions(id INTEGER PRIMARY KEY,subject TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('study','break')),target_minutes INTEGER NOT NULL CHECK(target_minutes BETWEEN 1 AND 120),status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running','paused','complete','cancelled')),elapsed_seconds INTEGER NOT NULL DEFAULT 0,segment_started INTEGER,started_at TEXT DEFAULT CURRENT_TIMESTAMP,completed_at TEXT,notes TEXT);
+CREATE UNIQUE INDEX focus_single_active ON focus_sessions((1)) WHERE status IN ('running','paused');
+CREATE INDEX focus_completed ON focus_sessions(completed_at,status);

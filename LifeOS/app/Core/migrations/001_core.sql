@@ -1,0 +1,2 @@
+CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE tasks(id INTEGER PRIMARY KEY, title TEXT NOT NULL, due TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','done')), source TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);

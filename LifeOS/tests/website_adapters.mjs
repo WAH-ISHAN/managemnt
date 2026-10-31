@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { createConnector, ConnectorError } from '../integrations/website-adapters/nextjs/connector.mjs';
+import { createGitHubStore } from '../integrations/website-adapters/nextjs/github-store.mjs';
+let checks=0;
+const check=(ok,label)=>{assert.ok(ok,label);checks++;};
+const token='test-only-'+ 'a'.repeat(64);
+const collections=[{id:'pages',label:'Pages',capabilities:['list','create','update','delete'],fields:[{name:'title',label:'Title',type:'text',required:true,max_length:200},{name:'published',label:'Published',type:'boolean',required:false}]}];
+let document={collections:{pages:[]}},revision=1;
+const store={async read(){return {document:structuredClone(document),revision};},async write(next,expected){if(expected!==revision)throw new ConnectorError(409,'Conflict');document=structuredClone(next);revision++;}};
+const handler=createConnector({siteName:'Isolated Next site',collections,store,token:()=>token});
+async function request(action,values={},auth=token,url='https://example.com/api/lifeos-admin'){
+ const response=await handler(new Request(url,{method:'POST',headers:{'Content-Type':'application/json',...(auth?{Authorization:'Bearer '+auth}:{})},body:JSON.stringify({protocol:'lifeos-admin-v1',action,...values})}));
+ return {status:response.status,body:await response.json(),headers:response.headers};
+}
+check((await request('manifest',{},null)).status===401,'Unauthenticated Next requests rejected');
+check((await request('manifest',{},'wrong')).status===401,'Wrong bearer rejected');
+check((await request('manifest',{},token,'http://example.com/api')).status===403,'Production HTTP rejected');
+let response=await request('manifest');
+check(response.status===200 && response.body.collections[0].id==='pages','Next manifest uses common protocol');
+check(response.headers.get('cache-control')==='no-store','Authentication and content responses are not cached');
+check((await request('manifest',{sql:'unsafe'})).status===422,'Unknown top-level fields rejected');
+check((await request('create',{collection:'pages',data:{title:'Test page',published:false,unknown:true}})).status===422,'Unknown fields rejected before writing');
+check((await request('create',{collection:'pages',data:{title:'Test page',published:1}})).status===422,'Boolean types are strict');
+response=await request('create',{collection:'pages',data:{title:'Test page',published:false}});
+check(response.status===200 && response.body.record.version===1,'Create writes the actual Next store');
+const record=response.body.record;
+response=await request('update',{collection:'pages',id:record.id,version:1,data:{title:'Updated page',published:true}});
+check(response.status===200 && response.body.record.version===2,'Update returns a monotonic version');
+check((await request('update',{collection:'pages',id:record.id,version:1,data:{title:'Stale',published:false}})).status===409,'Stale writes cannot overwrite current content');
+check(document.collections.pages[0].data.title==='Updated page','Rejected stale writes leave the store intact');
+response=await request('list',{collection:'pages',offset:0,limit:50});
+check(response.body.total===1 && response.body.records[0].version===2,'Lists expose real persisted content');
+check((await request('list',{collection:'pages',limit:51})).status===422,'Pagination is bounded');
+check((await request('delete',{collection:'pages',id:record.id,version:2})).body.deleted===true && document.collections.pages.length===0,'Delete removes only the chosen version');
+const readOnly=createConnector({siteName:'Read only',collections:[{...collections[0],capabilities:['list']}],store,token:()=>token});
+response=await readOnly(new Request('https://example.com/api',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({protocol:'lifeos-admin-v1',action:'create',collection:'pages',data:{title:'No'}})}));
+check(response.status===403,'Server capabilities enforce read-only collections');
+response=await handler(new Request('https://example.com/api',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:' '.repeat(262145)}));
+check(response.status===413,'Streaming body limit rejects oversized input');
+const unconfigured=createConnector({siteName:'Missing auth',collections,store,token:()=>undefined});
+check((await unconfigured(new Request('https://example.com/api',{method:'POST'}))).status===503,'Missing server secret fails closed');
+const calls=[];
+const github=createGitHubStore({owner:'test-owner',repo:'test-repo',path:'src/content/site-content.json',token:()=>token,fetchImpl:async(url,options)=>{
+ calls.push({url,options});
+ if(options.method==='PUT')return new Response('{}',{status:409});
+ return Response.json({encoding:'base64',sha:'test-revision',content:Buffer.from(JSON.stringify(document)).toString('base64')});
+}});
+const snapshot=await github.read();
+check(snapshot.revision==='test-revision' && snapshot.document.collections.pages.length===0,'GitHub store decodes versioned content');
+try{await github.write(document,snapshot.revision,'Test write');throw Error('Conflict missing');}catch(error){check(error.status===409,'GitHub conflicts are not retried or overwritten');}
+check(JSON.parse(calls[1].options.body).sha==='test-revision','Writes compare the expected GitHub file SHA');
+check(calls.every(call=>call.options.redirect==='error' && call.options.headers.Authorization==='Bearer '+token),'Secrets stay in authenticated requests to a fixed endpoint');
+check(calls[0].options.cache==='no-store','Content is loaded fresh across serverless instances');
+console.log(`${checks} Node/Next adapter checks passed.`);
