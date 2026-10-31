@@ -28,7 +28,8 @@ New-Item -ItemType Directory -Path $distribution -Force | Out-Null
 & $Dotnet publish (Join-Path $projectRoot 'launcher/LifeOS.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $distribution
 if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed.' }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'app'),(Join-Path $projectRoot 'public') -Destination $distribution -Recurse
-New-Item -ItemType Directory -Path (Join-Path $distribution 'php/ext'),(Join-Path $distribution 'prerequisites') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $distribution 'php/ext'),(Join-Path $distribution 'prerequisites'),(Join-Path $distribution 'scripts') -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $projectRoot 'scripts/Apply-LifeOSUpdate.ps1') -Destination (Join-Path $distribution 'scripts/Apply-LifeOSUpdate.ps1')
 Copy-Item -LiteralPath $phpExe,(Join-Path $PhpDirectory 'license.txt') -Destination (Join-Path $distribution 'php')
 Get-ChildItem -LiteralPath $PhpDirectory -Filter '*.dll' | Copy-Item -Destination (Join-Path $distribution 'php')
 foreach ($extension in @('php_pdo_sqlite.dll','php_sqlite3.dll','php_mbstring.dll','php_openssl.dll','php_zip.dll','php_fileinfo.dll','php_curl.dll','php_opcache.dll')) { $extPath = Join-Path $PhpDirectory "ext/$extension"; if (Test-Path -LiteralPath $extPath) { Copy-Item -LiteralPath $extPath -Destination (Join-Path $distribution 'php/ext') } }
