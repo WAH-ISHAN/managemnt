@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix='lifeos-panel-http-') as temporary:
             check(code==200 and all(key in initial for key in ['items','todos','notes','preferences']),'Schedule, to-do, note and preference data load')
             check(initial['preferences']['autoHide'] is True,'Auto-hide defaults on')
             check(request('/desktop/panel/add',{'title':'Blocked without token'})[0]==419,'Quick add requires CSRF')
-            today=datetime.date.today().isoformat()
+            today=datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=5, minutes=30))).date().isoformat()
             check(request('/desktop/panel/add',{'_csrf':csrf,'kind':'task','title':'Panel task','due':today})[0]==200,'Task can be added')
             check(request('/desktop/panel/add',{'_csrf':csrf,'kind':'todo','title':'Panel to-do','due':''})[0]==200,'To-do can be added')
             check(request('/desktop/panel/add',{'_csrf':csrf,'kind':'note','title':'Panel note','body':'Remember this','due':''})[0]==200,'Note can be added')

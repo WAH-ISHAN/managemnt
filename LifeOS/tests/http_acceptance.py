@@ -1,6 +1,6 @@
 """HTTP acceptance checks against an isolated, temporary SQLite database."""
 import http.cookiejar
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -17,6 +17,9 @@ import urllib.request
 
 root = Path(__file__).resolve().parents[1]
 checks = 0
+# Match PHP's explicit Asia/Colombo timezone, including on UTC Windows runners.
+# A fixed offset needs no optional Windows tzdata package; Colombo has no DST.
+APP_TIMEZONE = timezone(timedelta(hours=5, minutes=30))
 def check(ok, label):
     global checks
     assert ok, label
@@ -94,7 +97,7 @@ with tempfile.TemporaryDirectory(prefix="lifeos-http-") as data:
             check(code == 200 and b"Your day, in perspective." in page and b'No data yet' in page, "Empty dashboard after onboarding")
             check(b'/assets/comfort.css' in page and b'data-quick-add' in page and b'More tools' in page and b'Your daily progress' in page, 'Task-first dashboard and quick action navigation available')
             check(b'/assets/brand/lifeos-mark.png' in page and b'/assets/motion.css' in page and request('/assets/motion.css')[0] == 200, 'Branded application shell loads motion styles')
-            check(request('/?date=2026-02-30')[0] == 422 and request('/?date='+(datetime.now()+timedelta(days=1)).strftime('%Y-%m-%d'))[0] == 422, 'Daily review rejects invalid and invented future activity dates')
+            check(request('/?date=2026-02-30')[0] == 422 and request('/?date='+(datetime.now(APP_TIMEZONE)+timedelta(days=1)).strftime('%Y-%m-%d'))[0] == 422, 'Daily review rejects invalid and invented future activity dates')
             check(b'placeholder="e.g. CreativeFX"' not in request('/investments')[1], 'Example asset name removed from user-facing forms')
             check(request("/salary")[0] == 200 and request("/settings")[0] == 200, "Money and settings pages")
             csrf = token(request("/salary")[1])
@@ -106,7 +109,7 @@ with tempfile.TemporaryDirectory(prefix="lifeos-http-") as data:
             check(b"&lt;script&gt;" in page and b"<script>alert(1)" not in page, "Stored source escaped")
             db = sqlite3.connect(Path(data)/"lifeos.db")
             check(round(db.execute("select sum(amount) from allocations").fetchone()[0]*100) == 10001, "HTTP income allocation total")
-            cost_date=datetime.now().strftime('%Y-%m-%d')
+            cost_date=datetime.now(APP_TIMEZONE).strftime('%Y-%m-%d')
             code, cost_page, _, _ = request(f'/websites/{website_ids[0]}/costs', {'_csrf':csrf,'date':cost_date,'kind':'hosting','amount':'250.50','vendor':'QA hosting','notes':'<script>alert(1)</script>'})
             check(code == 200 and b'QA hosting' in cost_page and b'Website-only cost' in cost_page, 'Website costs can be added without a website API login')
             check(b'&lt;script&gt;alert(1)&lt;/script&gt;' in cost_page and b'<script>alert(1)</script>' not in cost_page, 'Website cost notes are escaped')
@@ -178,7 +181,7 @@ with tempfile.TemporaryDirectory(prefix="lifeos-http-") as data:
             check(request('/settings/report')[0] == 200 and b'Print / Save as PDF' in request('/settings/report')[1], 'Printable PDF report')
             check(request('/assets/chart.min.js')[0] == 200, 'Chart library available offline')
             # Exercise every added module through its real HTTP forms and redirects.
-            now = datetime.now()
+            now = datetime.now(APP_TIMEZONE)
             today = now.strftime('%Y-%m-%d')
             month = now.strftime('%Y-%m')
             for path in ['/freedom','/planner','/planner?view=tasks','/planner?view=habits','/planner?view=routines','/planner?view=appointments','/growth','/career','/career?view=courses','/career?view=applications','/focus','/insights','/documents','/documents?trash=1','/settings/encrypted','/salary/plan','/salary/calendar','/salary/recurring']:
