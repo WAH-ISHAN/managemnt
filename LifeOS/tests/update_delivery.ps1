@@ -17,6 +17,8 @@ foreach($entry in @('Apply-LifeOSUpdate.ps1','update-backup.php')){New-Item -Ite
 Write-Text (Join-Path $source 'data/private.txt') 'PRIVATE MUST NEVER SHIP'
 Write-Text (Join-Path $source 'prerequisites/installer.exe') 'exclude offline prerequisite from updates'
 & (Join-Path $project 'scripts/New-UpdatePackage.ps1') -Distribution $source -OutputDirectory $output -Version '1.8.0' -BuildNumber 7 -Commit ('a'*40)
+& dotnet run --project (Join-Path $project 'tests/update-release/UpdateRelease.Tests.csproj') -- (Join-Path $output 'lifeos-update.json')
+if($LASTEXITCODE -ne 0){throw 'Desktop update manifest contract checks failed.'}
 $zip=[IO.Compression.ZipFile]::OpenRead((Join-Path $output 'LifeOS-update.zip'))
 try{Check (@($zip.Entries|Where-Object {$_.FullName -match '(^|/)(data|prerequisites)(/|$)'}).Count -eq 0) 'Package excludes personal data and prerequisites'}finally{$zip.Dispose()}
 function New-Installation([string]$Name) {

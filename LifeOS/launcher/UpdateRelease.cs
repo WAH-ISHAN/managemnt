@@ -36,7 +36,7 @@ internal sealed record UpdateRelease(string Version,long BuildNumber,string Comm
         long size=package.GetProperty("size").GetInt64();
         if(!Uri.TryCreate(url,UriKind.Absolute,out var uri) || uri.Scheme!="https" || uri.Host!="github.com" || !uri.IsDefaultPort ||
            uri.UserInfo.Length!=0 || uri.Query.Length!=0 || uri.Fragment.Length!=0 ||
-           !Regex.IsMatch(uri.AbsolutePath,@"^/WAH-ISHAN/managemnt/releases/download/lifeos-[A-Za-z0-9._-]+/LifeOS-Update\.zip$"))
+           !Regex.IsMatch(uri.AbsolutePath,@"^/WAH-ISHAN/managemnt/releases/download/lifeos-[A-Za-z0-9._-]+/LifeOS-update\.zip$"))
             throw new InvalidDataException("Update download is outside the LifeOS release repository.");
         if(!Regex.IsMatch(hash,@"^[a-fA-F0-9]{64}$") || size<=0 || size>MaxPackageBytes)
             throw new InvalidDataException("Invalid update package integrity information.");
