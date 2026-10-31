@@ -98,6 +98,16 @@ function failure(result, code, label) {
   check(result.storage.get('accessToken') === updatedAccess && result.storage.get('refreshToken') === updatedRefresh, 'Refreshed tokens remain in the NIBM origin storage');
   check(![access, refresh, updatedAccess, updatedRefresh].some(value => JSON.stringify(result.messages).includes(value)), 'Neither old nor refreshed credentials cross the LifeOS bridge');
 
+  result = await run({ replies: [response({}, 401), response({ data: { accessToken: updatedAccess } }), lectures()] });
+  check(result.messages[0].ok && result.calls.length === 3, 'HTTP 401 refreshes and retries once');
+  check(result.storage.get('refreshToken') === refresh, 'Access-only refresh preserves the saved refresh credential');
+  result = await run({ tokens: { refreshToken: refresh }, replies: [response({ data: { accessToken: updatedAccess, refreshToken: updatedRefresh } }), lectures()] });
+  check(result.messages[0].ok && result.calls.length === 2, 'Restart with only a saved refresh token restores the session');
+  check(result.storage.get('refreshToken') === updatedRefresh, 'Rotated refresh credential is persisted');
+  result = await run({ replies: [response({}, 401), response({}, 503)] });
+  failure(result, 'network', 'Temporary refresh outage');
+  check(result.storage.get('refreshToken') === refresh, 'Network failure keeps the session for retry');
+
   result = await run({ replies: [response({}, 498), response({ data: { accessToken: updatedAccess, refreshToken: updatedRefresh } }), response({}, 498)] });
   failure(result, 'signin', 'Repeated expiry after refresh');
   check(result.calls.length === 3, 'Repeated expiry does not loop through additional refresh requests');
@@ -114,7 +124,7 @@ function failure(result, code, label) {
     failure(result, 'signin', 'Malformed or empty refresh credentials');
     check(result.calls.length === 2 && result.writes.length === 0, 'Invalid refreshed credentials are never saved or retried');
   }
-  for (const status of [401, 403]) {
+  for (const status of [403]) {
     result = await run({ replies: [response({}, status)] });
     failure(result, 'signin', 'Unauthorized lecture request ' + status);
   }

@@ -253,8 +253,20 @@ internal sealed class NibmCalendarWindow : Form
         core.NewWindowRequested += (_, e) => e.Handled = true;
         core.PermissionRequested += (_, e) => e.State = CoreWebView2PermissionState.Deny;
         core.DownloadStarting += (_, e) => e.Cancel = true;
-        core.SourceChanged += (_, _) => { if (IsPortal(core.Source)) PortalChanged?.Invoke(this, EventArgs.Empty); };
+        core.NavigationCompleted += (_, e) => { if (e.IsSuccess && IsPortal(core.Source)) PortalChanged?.Invoke(this, EventArgs.Empty); };
+        await core.AddScriptToExecuteOnDocumentCreatedAsync("""
+            (()=>{let last=localStorage.getItem('accessToken');setInterval(()=>{
+              if(document.hidden)return;
+              const token=localStorage.getItem('accessToken');
+              if(token!==last){last=token;window.chrome.webview.postMessage({type:'lifeos-nibm-session-changed'});}
+            },5000);})();
+            """);
         core.WebMessageReceived += (_, e) => {
+            if(IsPortal(e.Source) && e.WebMessageAsJson.Length<256) {
+                try { using var notice=JsonDocument.Parse(e.WebMessageAsJson);
+                    if(notice.RootElement.TryGetProperty("type",out var kind)&&kind.GetString()=="lifeos-nibm-session-changed") {PortalChanged?.Invoke(this,EventArgs.Empty);return;}
+                } catch(JsonException){} catch(InvalidOperationException){}
+            }
             if (!IsPortal(e.Source) || pending is null || e.WebMessageAsJson.Length > 4_000_000) return;
             try {
                 using var document = JsonDocument.Parse(e.WebMessageAsJson);
@@ -312,19 +324,23 @@ internal sealed class NibmCalendarWindow : Form
       try {
         const validToken = value => typeof value === 'string' && value.length > 0 && value.length <= 16384 && !/\s/.test(value);
         let token = localStorage.getItem('accessToken');
-        if(!validToken(token)) return send({ok:false,code:'signin'});
+        if(token !== null && !validToken(token)) return send({ok:false,code:'signin'});
+        const savedRefresh = localStorage.getItem('refreshToken');
+        if(!validToken(token) && !validToken(savedRefresh)) return send({ok:false,code:'signin'});
         const query = new URLSearchParams({batchId:p.batchId,startAt:p.startAt,endAt:p.endAt});
         const request = () => fetch(base+'/schedule-service/lectures?'+query,{headers:{Authorization:'Bearer '+token},credentials:'omit',redirect:'error',cache:'no-store',signal:controller.signal});
-        let response = await request();
-        if(response.status === 498) {
+        let response = validToken(token) ? await request() : null;
+        if(response === null || [401,498].includes(response.status)) {
           const refreshToken = localStorage.getItem('refreshToken');
           if(!validToken(refreshToken)) return send({ok:false,code:'signin'});
           const refreshed = await fetch(base+'/identity-service/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken}),credentials:'omit',redirect:'error',signal:controller.signal});
-          if(!refreshed.ok) return send({ok:false,code:'signin'});
+          if(!refreshed.ok) return send({ok:false,code:[400,401,403,498].includes(refreshed.status)?'signin':'network'});
           const data = (await refreshed.json())?.data;
-          if(!validToken(data?.accessToken) || !validToken(data?.refreshToken)) return send({ok:false,code:'signin'});
+          if(!validToken(data?.accessToken) || (data.refreshToken != null && !validToken(data.refreshToken))) return send({ok:false,code:'signin'});
+          // Some providers rotate only the access token. Keep the existing refresh
+          // credential when no replacement is returned, including after reboot.
+          if(data.refreshToken != null) localStorage.setItem('refreshToken',data.refreshToken);
           localStorage.setItem('accessToken',data.accessToken);
-          localStorage.setItem('refreshToken',data.refreshToken);
           token = data.accessToken;
           response = await request();
         }

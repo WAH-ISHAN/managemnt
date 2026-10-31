@@ -34,6 +34,14 @@ if ((Get-Item -LiteralPath $target).VersionInfo.ProductName -ne 'LifeOS') { thro
 if ([string]::IsNullOrWhiteSpace($StartupDirectory)) { throw 'The Windows Startup folder is unavailable.' }
 $startupRoot = [IO.Path]::GetFullPath($StartupDirectory)
 $shortcutPath = Join-Path $startupRoot 'LifeOS.lnk'
+# Older releases used Run instead of a shortcut. Migrate only this installation,
+# and never touch the real registry in isolated StartupDirectory test runs.
+$legacyPath='HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$legacyMatches=$false
+if([string]::Equals($startupRoot,[IO.Path]::GetFullPath([Environment]::GetFolderPath('Startup')),[StringComparison]::OrdinalIgnoreCase)) {
+    $legacy=(Get-ItemProperty -LiteralPath $legacyPath -Name LifeOS -ErrorAction SilentlyContinue).LifeOS
+    $legacyMatches=[string]::Equals($legacy,('"'+$target+'" --startup'),[StringComparison]::OrdinalIgnoreCase)
+}
 $shell = New-Object -ComObject WScript.Shell
 try {
     $exists = Test-Path -LiteralPath $shortcutPath -PathType Leaf
@@ -56,10 +64,11 @@ try {
     } elseif ($Mode -eq 'Disable' -and $exists) {
         Remove-Item -LiteralPath $shortcutPath
     }
+    if($legacyMatches -and $Mode -ne 'Status') {Remove-ItemProperty -LiteralPath $legacyPath -Name LifeOS;$legacyMatches=$false}
     $configured = Test-Path -LiteralPath $shortcutPath -PathType Leaf
     $actualTarget = if ($configured) { $shell.CreateShortcut($shortcutPath).TargetPath } else { $null }
     [pscustomobject]@{
-        Configured = $configured -and [string]::Equals($actualTarget, $target, [StringComparison]::OrdinalIgnoreCase)
+        Configured = $legacyMatches -or ($configured -and [string]::Equals($actualTarget, $target, [StringComparison]::OrdinalIgnoreCase))
         ShortcutPath = $shortcutPath
         TargetPath = $actualTarget
         InstallDirectory = $installRoot

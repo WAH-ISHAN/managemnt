@@ -53,8 +53,26 @@ with tempfile.TemporaryDirectory(prefix='lifeos-panel-http-') as temporary:
             updated=json.loads(request('/desktop/panel/data')[1])
             check(not any(item['kind']=='Task' for item in updated['items']),'Task category preference filters schedule')
             check(updated['preferences']['autoHide'] is False,'Auto-hide preference persists')
+            check(request('/desktop/panel/preferences',{'_csrf':csrf,'showTasks':'1','textSize':'18','theme':'dark'})[0]==200,'Appearance and large text save')
+            appearance=json.loads(request('/desktop/panel/data')[1])['preferences']
+            check(appearance['textSize']==18 and appearance['theme']=='dark','Appearance survives subsequent requests')
+            request('/desktop/panel/preferences',{'_csrf':csrf,'showNotes':'1','textSize':'999','theme':'untrusted'})
+            validated=json.loads(request('/desktop/panel/data')[1])['preferences']
+            check(validated['textSize']==18 and validated['theme']=='system','Unsupported appearance values are bounded')
+            check(b'data-panel-width' in page and b'data-resize' in page and b'data-drag-handle' in page,'Panel exposes sizing and drag controls')
             check(request(f'/desktop/panel/note/{note["id"]}/delete',{'_csrf':csrf})[0]==200,'Note can be deleted')
             check(all(item['id']!=note['id'] for item in json.loads(request('/desktop/panel/data')[1])['notes']),'Deleted note leaves the panel')
+            request('/desktop/panel/add',{'_csrf':csrf,'kind':'note','title':'Keep after restart','body':'Stored locally'})
+            server.terminate();server.wait(timeout=10)
+            server=subprocess.Popen([os.environ.get('LIFEOS_QA_PHP','php'),'-S',f'127.0.0.1:{port}','-t','public','public/index.php'],cwd=project,env=dict(os.environ,LIFEOS_DATA_DIR=temporary),stdout=log,stderr=log)
+            for _ in range(100):
+                try:
+                    if request('/health')[0]==200:break
+                except OSError:pass
+                time.sleep(.1)
+            restarted=json.loads(request('/desktop/panel/data')[1])
+            check(restarted['preferences']['textSize']==18,'Panel appearance persists after server restart')
+            check(any(n['title']=='Keep after restart' for n in restarted['notes']),'Panel notes persist after server restart')
             print(f'{checks} desktop panel HTTP checks passed.')
         finally:
             server.terminate();server.wait(timeout=10)

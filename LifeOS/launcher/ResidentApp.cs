@@ -17,6 +17,8 @@ internal sealed partial class LifeWindow
         trayMenu.Items.Add("Show / hide panel  (Win + \\)",null,(_,_)=>ToggleDesktopPanel());
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(new ToolStripMenuItem("LifeOS is running in the background"){Enabled=false});
+        trayMenu.Items.Add(new ToolStripSeparator());
+        trayMenu.Items.Add("Exit LifeOS",null,(_,_)=>{allowExitForMaintenance=true;Close();});
         reminders.ContextMenuStrip=trayMenu;
         reminders.DoubleClick+=(_,_)=>ShowMainWindow();
         reminders.Visible=true;
