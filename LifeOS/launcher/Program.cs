@@ -45,6 +45,7 @@ internal sealed partial class LifeWindow : Form
     private DesktopPanelWindow? desktopPanel;
     private readonly System.Windows.Forms.Timer todayPanelTimer=new(){Interval=60_000};
     private DateOnly lastAutoPanelDate=DateOnly.MinValue;
+    private bool todayPanelChecking;
     private readonly bool smoke = Environment.GetEnvironmentVariable("LIFEOS_SMOKE_TEST")=="1";
     private readonly bool profile = Environment.GetEnvironmentVariable("LIFEOS_PROFILE_TEST")=="1";
     private readonly NotifyIcon reminders = new();
@@ -111,6 +112,7 @@ internal sealed partial class LifeWindow : Form
             web.CoreWebView2.Settings.IsStatusBarEnabled = false;
             web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             web.CoreWebView2.NavigationStarting += (_, e) => {
+                todayPanelChecking=false;
                 if (!Uri.TryCreate(e.Uri,UriKind.Absolute,out var uri) || uri.GetLeftPart(UriPartial.Authority)!=home.GetLeftPart(UriPartial.Authority)) e.Cancel=true;
                 else if (uri.AbsolutePath is "/lock" or "/unlock") PauseNibmCalendar();
             };
@@ -131,6 +133,13 @@ internal sealed partial class LifeWindow : Form
                 try {
                     using var message=JsonDocument.Parse(e.WebMessageAsJson); var value=message.RootElement;
                     if (!value.TryGetProperty("type",out var kind) || kind.ValueKind!=JsonValueKind.String) return;
+                    if(kind.GetString()=="lifeos-today-panel") {
+                        todayPanelChecking=false;
+                        if(value.TryGetProperty("hasItems",out var hasItems)&&hasItems.ValueKind==JsonValueKind.True&&lastAutoPanelDate!=DateOnly.FromDateTime(DateTime.Today)) {
+                            lastAutoPanelDate=DateOnly.FromDateTime(DateTime.Today);ShowDesktopPanel();
+                        }
+                        return;
+                    }
                     if (kind.GetString()=="lifeos-nibm-local") { HandleNibmLocalResult(value); return; }
                     if (kind.GetString()=="lifeos-nibm") { _=HandleNibmMessageAsync(value.Clone()); return; }
                     if (kind.GetString()=="lifeos-window") { HandleWindowMessage(value); return; }
@@ -634,12 +643,21 @@ internal sealed partial class LifeWindow : Form
             if(await desktopPanel.EvaluateAsync("document.querySelector('h1')?.textContent==='Right now' && !!document.querySelector('[data-refresh]')")!="true")throw new InvalidOperationException("Desktop panel schedule controls did not render.");checks["desktop-panel-up-next"]=true;
             string screen=await desktopPanel.EvaluateAsync("JSON.stringify({width:innerWidth,height:innerHeight})");
             if(string.IsNullOrWhiteSpace(screen))throw new InvalidOperationException("Desktop side panel viewport was unavailable.");checks["desktop-panel-window-rendered"]=true;
-            if(await desktopPanel.EvaluateAsync("document.documentElement.scrollWidth<=innerWidth && getComputedStyle(document.querySelector('.event')).gridTemplateColumns.split(' ').length===3")!="true")throw new InvalidOperationException("Desktop panel rows overflowed the compact viewport.");checks["desktop-panel-table-layout"]=true;
+            if(await desktopPanel.EvaluateAsync("document.documentElement.scrollWidth<=innerWidth && getComputedStyle(document.querySelector('.event')).gridTemplateColumns.split(' ').length===2")!="true")throw new InvalidOperationException("Desktop panel rows overflowed the compact viewport.");checks["desktop-panel-table-layout"]=true;
             if(!desktopPanel.GlassResult.RoundedClipApplied)throw new InvalidOperationException("Desktop panel native rounded clipping was not applied.");checks["desktop-panel-native-rounding"]=true;
             await desktopPanel.EvaluateAsync("(()=>{document.querySelector('[data-section-add=todo]').click();const f=document.querySelector('[data-add-form]');f.elements.title.value='Review lecture notes';f.requestSubmit()})()");
             for(int i=0;i<50;i++){if(await desktopPanel.EvaluateAsync("document.querySelector('[data-todos]').textContent.includes('Review lecture notes')")=="true")break;await Task.Delay(100,lifetime.Token);}
             await desktopPanel.EvaluateAsync("(()=>{document.querySelector('[data-section-add=note]').click();const f=document.querySelector('[data-add-form]');f.elements.title.value='A little reminder';f.elements.body.value='Bring your notebook to the afternoon lecture.';f.requestSubmit()})()");
             for(int i=0;i<50;i++){if(await desktopPanel.EvaluateAsync("document.querySelector('[data-notes]').textContent.includes('A little reminder')")=="true")break;await Task.Delay(100,lifetime.Token);}
+            await desktopPanel.EvaluateAsync("(()=>{document.querySelector('[data-panel-width]').value=520;document.querySelector('[data-panel-height]').value=640;document.querySelector('[data-apply-size]').click()})()");
+            for(int i=0;i<50&&desktopPanel.Width!=520;i++)await Task.Delay(100,lifetime.Token);
+            var work=Screen.FromControl(desktopPanel).WorkingArea;
+            if(desktopPanel.Width!=Math.Min(520,work.Width)||desktopPanel.Height!=Math.Min(640,work.Height))throw new InvalidOperationException("Panel size customization failed.");
+            var customized=desktopPanel.Bounds;desktopPanel.Hide();desktopPanel.RepositionForCurrentScreen();desktopPanel.Show();
+            if(desktopPanel.Bounds!=customized)throw new InvalidOperationException("Panel layout was reset when reopening.");
+            checks["desktop-panel-size-persistence"]=true;
+            using(var restored=new DesktopPanelWindow(home,webEnvironment)) {if(restored.Bounds!=customized)throw new InvalidOperationException("Saved panel layout was not restored from disk.");}
+            checks["desktop-panel-layout-reload"]=true;
             desktopPanel.Activate();
             string screenshots=Path.Combine(Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR")!,"smoke-screenshots");
             await desktopPanel.CaptureAsync(screenshots,false);await desktopPanel.CaptureAsync(screenshots,true);
@@ -655,10 +673,11 @@ internal sealed partial class LifeWindow : Form
     private void ToggleDesktopPanel(){if(!appReady){pendingPanelToggle=!pendingPanelToggle;return;}if(desktopPanel?.Visible==true)desktopPanel.Hide();else ShowDesktopPanel();}
     private async Task CheckForTodayPanelAsync()
     {
-        if(home is null||web.CoreWebView2 is null||diagnostic||IsDisposed)return;
+        if(home is null||web.CoreWebView2 is null||diagnostic||IsDisposed||todayPanelChecking)return;
         var today=DateOnly.FromDateTime(DateTime.Today);if(lastAutoPanelDate==today)return;
-        try{string result=await web.CoreWebView2.ExecuteScriptAsync("fetch('/desktop/panel/data',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(x=>!!x&&x.items.length>0)");if(result=="true"){lastAutoPanelDate=today;ShowDesktopPanel();}}
-        catch(InvalidOperationException){}
+        todayPanelChecking=true;
+        try{await web.CoreWebView2.ExecuteScriptAsync("(async()=>{let hasItems=false;try{const r=await fetch('/desktop/panel/data',{cache:'no-store',signal:AbortSignal.timeout(10000)});if(r.ok){const data=await r.json();hasItems=Array.isArray(data.items)&&data.items.length>0;}}catch{}window.chrome.webview.postMessage({type:'lifeos-today-panel',hasItems});})()");}
+        catch(InvalidOperationException){todayPanelChecking=false;}
     }
     private void Cleanup()
     {

@@ -13,7 +13,7 @@
       if (!response.ok || !response.headers.get('Content-Type')?.includes('application/json')) return;
       config = await response.json();
       window.chrome.webview.postMessage({type:'lifeos-nibm',action:'configure',enabled:config.enabled,batchId:config.batchId});
-      document.querySelectorAll('[data-nibm-desktop-note]').forEach(el => { el.textContent='Sign in again if your NIBM session expires. Sync resumes when LifeOS is open and unlocked.'; });
+      document.querySelectorAll('[data-nibm-desktop-note]').forEach(el => { el.textContent='Your NIBM session is saved on this PC and refreshed automatically when possible. Saved lectures remain available offline. Sync resumes when LifeOS is open and unlocked.'; });
     } catch (_) {} finally { configuring = false; }
   }
   document.addEventListener('click', async event => {

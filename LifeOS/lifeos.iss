@@ -27,13 +27,15 @@ Source: "dist\prerequisites\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"; DestD
 [Dirs]
 Name: "{app}\data"; Flags: uninsneveruninstall
 
-[InstallDelete]
-Type: files; Name: "{userstartup}\LifeOS.lnk"
+[Tasks]
+Name: "startup"; Description: "Start LifeOS when I sign in to Windows"; GroupDescription: "Windows startup:"
 
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "LifeOS"; ValueData: """{app}\LifeOS.exe"" --startup"; Flags: uninsdeletevalue
+; Remove the legacy Run entry to prevent duplicate launches; use the startup shortcut.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "LifeOS"; Flags: deletevalue
 
 [Icons]
+Name: "{userstartup}\LifeOS"; Filename: "{app}\LifeOS.exe"; WorkingDir: "{app}"; Tasks: startup
 Name: "{autoprograms}\LifeOS"; Filename: "{app}\LifeOS.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\LifeOS"; Filename: "{app}\LifeOS.exe"; WorkingDir: "{app}"
 

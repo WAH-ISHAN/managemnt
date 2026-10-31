@@ -1,7 +1,7 @@
 (() => {
   const root=document.querySelector('main[data-csrf]'),itemsNode=document.querySelector('[data-items]'),dateNode=document.querySelector('[data-date]');
   const addForm=document.querySelector('[data-add-form]'),status=document.querySelector('[data-form-status]');
-  let csrf=root?.dataset.csrf||'',preferences={},currentDate='';
+  let csrf=root?.dataset.csrf||'',preferences={},currentDate='',refreshing=false;
   const text=(tag,className,value)=>{const node=document.createElement(tag);if(className)node.className=className;node.textContent=value;return node;};
   function timeLabel(value){
     const match=/^\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/.exec(value||'');
@@ -22,9 +22,10 @@
   }
   async function savePreferences(){
     const fields={};for(const input of document.querySelectorAll('[data-panel-pref]'))fields[input.dataset.panelPref]=input.checked?'1':'0';
+    for(const input of document.querySelectorAll('[data-display-pref]'))fields[input.name]=input.value;
     fields.autoHide=document.querySelector('[name=autoHide]').checked?'1':'0';
     try{const result=await post('/desktop/panel/preferences',fields);preferences=result.preferences;setAutoHide();await refresh();}
-    catch{status.textContent='Could not save panel settings.';}
+    catch{document.querySelector('[data-preference-status]').textContent='Could not save panel settings. Try again.';}
   }
   function renderTodos(todos){
     const target=document.querySelector('[data-todos]');target.replaceChildren();
@@ -49,10 +50,15 @@
     }
   }
   async function refresh(){
+    if(refreshing)return;
+    refreshing=true;
     try{
       const response=await fetch('/desktop/panel/data',{headers:{Accept:'application/json'},cache:'no-store'});
       if(!response.ok)throw Error('response');
       const data=await response.json();currentDate=data.today;preferences=data.preferences||preferences;setAutoHide();
+      document.documentElement.dataset.theme=preferences.theme||'system';
+      document.documentElement.style.setProperty('--text-size',(preferences.textSize||14)+'px');
+      for(const input of document.querySelectorAll('[data-display-pref]'))if(document.activeElement!==input)input.value=String(preferences[input.name]??(input.name==='theme'?'system':14));
       const date=new Date(data.today+'T12:00:00+05:30');dateNode.textContent=date.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
       itemsNode.replaceChildren();
       document.querySelector('[data-schedule-count]').textContent=String(data.items.length);
@@ -67,7 +73,8 @@
       document.querySelector('[name=autoHide]').checked=preferences.autoHide!==false;
       document.querySelector('[data-todo-section]').hidden=preferences.showTodos===false;
       document.querySelector('[data-notes-section]').hidden=preferences.showNotes===false;
-    }catch{itemsNode.replaceChildren(text('p','muted','Could not refresh today’s panel.'));}
+    }catch{if(!itemsNode.children.length)itemsNode.append(text('p','muted','Could not refresh today’s panel.'));}
+    finally{refreshing=false;}
   }
   document.querySelector('[data-close]').addEventListener('click',()=>window.chrome?.webview?.postMessage({type:'lifeos-panel-close'}));
   document.querySelector('[data-refresh]').addEventListener('click',refresh);
@@ -76,7 +83,7 @@
   document.querySelector('[data-open-planner]').addEventListener('click',event=>{if(!window.chrome?.webview)return;event.preventDefault();window.chrome.webview.postMessage({type:'lifeos-panel-open',route:'/planner'});});
   document.querySelectorAll('[data-section-add]').forEach(button=>button.addEventListener('click',()=>showAdd(button.dataset.sectionAdd)));
   document.querySelector('[data-cancel-add]').addEventListener('click',()=>{addForm.reset();addForm.hidden=true;status.textContent='';});
-  document.querySelectorAll('[data-panel-pref],[name=autoHide]').forEach(input=>input.addEventListener('change',savePreferences));
+  document.querySelectorAll('[data-panel-pref],[name=autoHide],[data-display-pref]').forEach(input=>input.addEventListener('change',savePreferences));
   addForm.elements.kind.addEventListener('change',()=>{const kind=addForm.elements.kind.value;addForm.querySelector('[data-note-body]').hidden=kind!=='note';addForm.querySelector('[data-due-field]').hidden=kind==='note';});
   addForm.addEventListener('submit',async event=>{
     event.preventDefault();status.textContent='';const fields={kind:addForm.elements.kind.value,title:addForm.elements.title.value,body:addForm.elements.body.value,due:addForm.elements.due.value};
@@ -86,5 +93,20 @@
     finally{save.disabled=false;}
   });
   window.addEventListener('keydown',event=>{if(event.key==='Escape'){if(!addForm.hidden){addForm.hidden=true;addForm.reset();}else window.chrome?.webview?.postMessage({type:'lifeos-panel-close'});}});
+  document.querySelector('[data-panel-width]').value=innerWidth;
+  document.querySelector('[data-panel-height]').value=innerHeight;
+  const native=message=>window.chrome?.webview?.postMessage(message);
+  document.querySelector('[data-drag-handle]').addEventListener('pointerdown',event=>{
+    if(event.button===0&&!event.target.closest('button,input,select,a')){event.preventDefault();native({type:'lifeos-panel-drag'});}
+  });
+  document.querySelector('[data-resize]').addEventListener('pointerdown',event=>{if(event.button===0){event.preventDefault();native({type:'lifeos-panel-resize'});}});
+  document.querySelector('[data-apply-size]').addEventListener('click',()=>native({type:'lifeos-panel-size',width:Number(document.querySelector('[data-panel-width]').value),height:Number(document.querySelector('[data-panel-height]').value)}));
+  document.querySelector('[data-reset-layout]').addEventListener('click',()=>native({type:'lifeos-panel-reset'}));
+  window.chrome?.webview?.addEventListener('message',event=>{
+    if(event.data?.type!=='lifeos-panel-layout')return;
+    document.querySelector('[data-panel-width]').value=event.data.width;
+    document.querySelector('[data-panel-height]').value=event.data.height;
+  });
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
   refresh();setInterval(()=>{if(!document.hidden)refresh();},60000);
 })();

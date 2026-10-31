@@ -1,0 +1,8 @@
+{
+  "scope": "Linux PHP 8.4 server only; disposable empty database, 60 sequential panel data requests; excludes Windows/WebView2",
+  "requests": 60,
+  "median_ms": 6.63,
+  "p95_ms": 9.3,
+  "server_rss_mib": 19.14,
+  "idle_cpu_percent_one_core_3s": 0.0
+}
