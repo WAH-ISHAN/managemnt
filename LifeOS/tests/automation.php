@@ -45,6 +45,9 @@ try {
     Db::exec('DROP TRIGGER automation_test_failure'); AutomationService::toggle($failed,false);
     foreach ([7,3,1,0,2] as $days) Db::run('INSERT INTO tasks(title,due) VALUES (?,?)',['Due '.$days,$now->modify('+'.$days.' days')->format('Y-m-d')]);
     $done=Db::run("INSERT INTO tasks(title,due,status,completed_at) VALUES ('Already done',?,'done',?)",[$now->format('Y-m-d'),'2026-11-02 03:00:00']);
+    $billAccount=(int)Db::one('SELECT id FROM accounts ORDER BY id LIMIT 1')['id'];
+    $billCategory=(int)Db::one('SELECT id FROM expense_categories ORDER BY id LIMIT 1')['id'];
+    Db::run('INSERT INTO financial_obligations(title,kind,amount,due_date,interval,anchor_day,account_id,category_id) VALUES (?,?,?,?,?,?,?,?)',['Internet bill','bill',99.50,$now->modify('+3 days')->format('Y-m-d'),'monthly',11,$billAccount,$billCategory]);
     $deadline=AutomationService::install('deadlines');
     AutomationService::save($deadline,'My early countdown','deadline',['time'=>'06:30'],[['type'=>'deadline_reminder']],false);
     automation_check(AutomationService::install('deadlines')===$deadline && AutomationService::install('deadlines')===$deadline && count(Db::all("SELECT * FROM automation_rules WHERE profile_id='default' AND template_key='deadlines'"))===1,'Repeated starter activation reuses one rule per template and profile');
@@ -53,8 +56,9 @@ try {
     automation_check(AutomationService::tick($now)['ran']===1,'Deadline template runs after explicit enable');
     $deadlineRun=Db::one('SELECT id FROM automation_runs WHERE rule_id=?',[$deadline])['id'];
     $messages=Db::all('SELECT * FROM automation_messages WHERE run_id=?',[$deadlineRun]);
-    automation_check(count($messages)===4 && !array_filter($messages,fn($m)=>str_contains($m['body'],'Already done') || str_contains($m['body'],'Due 2')),'Ladder sends only 7/3/1/0 day unfinished deadlines');
-    automation_check(AutomationService::install('deadlines')===$deadline && AutomationService::tick($now)['ran']===0 && count(Db::all('SELECT * FROM automation_messages WHERE run_id=?',[$deadlineRun]))===4,'Reactivating an already-run starter does not repeat its deadline notifications');
+    automation_check(count($messages)===5 && !array_filter($messages,fn($m)=>str_contains($m['body'],'Already done') || str_contains($m['body'],'Due 2')),'Ladder sends only 7/3/1/0 day unfinished deadlines');
+    automation_check(count(array_filter($messages,fn($m)=>str_contains($m['body'],'Internet bill') && $m['route']==='/salary/calendar'))===1,'Monthly bill obligation appears once in deadline automation run history');
+    automation_check(AutomationService::install('deadlines')===$deadline && AutomationService::tick($now)['ran']===0 && count(Db::all('SELECT * FROM automation_messages WHERE run_id=?',[$deadlineRun]))===5,'Reactivating an already-run starter does not repeat its deadline notifications');
     AutomationService::toggle($deadline,false);
     $weekly=AutomationService::save(null,'Review','weekly',['time'=>'18:00','weekdays'=>[7]],[['type'=>'weekly_report']],true);
     Db::run("INSERT INTO tasks(title,status,completed_at) VALUES ('Boundary inside','done','2026-10-25 18:30:00')");
