@@ -7,14 +7,24 @@ foreach (['Db','Migrator','Router','View','Modules','Auth','Backup','helpers'] a
 try {
     $host = $_SERVER['HTTP_HOST'] ?? '';
     if (!preg_match('/^127\.0\.0\.1(?::\d+)?$/',$host)) { http_response_code(403); exit('LifeOS is available on 127.0.0.1 only.'); }
+    $path = parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH) ?: '/';
+    $residentTick=$path==='/internal/automation/tick';
+    if ($residentTick) {
+        header('Content-Type: application/json'); header('Cache-Control: no-store');
+        if ($_SERVER['REQUEST_METHOD']!=='POST') { http_response_code(405); header('Allow: POST'); exit('{"error":"Method not allowed"}'); }
+        $key=getenv('LIFEOS_AUTOMATION_KEY') ?: ''; $provided=$_SERVER['HTTP_X_LIFEOS_AUTOMATION_KEY'] ?? '';
+        if (array_key_exists('HTTP_ORIGIN',$_SERVER) || !preg_match('/^[a-f0-9]{64}$/iD',$key) || !is_string($provided) || !hash_equals($key,$provided)) { http_response_code(403); exit('{"error":"Forbidden"}'); }
+    }
     foreach (['','/sessions','/backups','/uploads'] as $dir) if (!is_dir(DATA . $dir)) mkdir(DATA . $dir,0700,true);
     $encryptedService=ROOT.'/app/Modules/Settings/src/EncryptedBackupService.php';
     if (is_file(DATA.'/restore-journal.json') && is_file($encryptedService)) { require_once $encryptedService; EncryptedBackupService::recoverPending(DATA); }
     ini_set('display_errors','0'); ini_set('log_errors','1'); ini_set('error_log',DATA . '/php_error.log');
-    session_save_path(DATA . '/sessions'); session_name('lifeos');
-    ini_set('session.use_strict_mode','1');
-    session_set_cookie_params(['httponly'=>true,'samesite'=>'Strict','path'=>'/']); session_start();
-    $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
+    if (!$residentTick) {
+        session_save_path(DATA . '/sessions'); session_name('lifeos');
+        ini_set('session.use_strict_mode','1');
+        session_set_cookie_params(['httponly'=>true,'samesite'=>'Strict','path'=>'/']); session_start();
+        $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
+    }
     header('Cache-Control: no-store'); header('X-Content-Type-Options: nosniff'); header('X-Frame-Options: DENY'); header('Referrer-Policy: same-origin');
     header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     Db::init(DATA . '/lifeos.db'); $mods = Modules::discover(ROOT . '/app/Modules');
@@ -24,8 +34,21 @@ try {
     if ($path === '/health') { header('Content-Type: text/plain'); echo 'LifeOS:' . (getenv('LIFEOS_INSTANCE') ?: 'development'); exit; }
     try { Backup::daily(DATA . '/backups'); } catch (Throwable $e) { error_log('Backup: ' . $e); View::share('backupWarning','Daily backup failed. Check free disk space and folder permissions.'); }
     $router = new Router(); Auth::guard($router); Modules::register($mods,$router);
+    if ($residentTick) {
+        $result=class_exists('AutomationService') && module_enabled('Automation') ? AutomationService::tick() : ['ran'=>0,'skipped'=>1,'failed'=>0];
+        echo json_encode($result,JSON_THROW_ON_ERROR); exit;
+    }
+    if (class_exists('PersonaService')) {
+        View::share('menu',PersonaService::menu($mods));
+        $router->before(function (string $method,string $path) {
+            if (!PersonaService::routeEnabled($path)) {
+                http_response_code(403);
+                echo View::render(__DIR__.'/views/error.php',['title'=>'Module switched off','message'=>'Enable this module in Settings → Modules & language to use it.','back'=>'/settings/workspace']); exit;
+            }
+        });
+    }
     $router->before(function (string $method,string $path) {
-        if ($method!=='GET' || in_array($path,['/unlock','/salary/recurring'],true) || str_contains($path,'restore') || !class_exists('FinancePlanningService') || time()-(int)Db::setting('recurrence_last_scan','0')<60) return;
+        if ($method!=='GET' || in_array($path,['/unlock','/salary/recurring'],true) || str_contains($path,'restore') || !module_enabled('Salary') || !class_exists('FinancePlanningService') || time()-(int)Db::setting('recurrence_last_scan','0')<60) return;
         Db::set('recurrence_last_scan',(string)time());
         $result=FinancePlanningService::processDue(null,25);
         if (!empty($result['errors'])) View::share('backupWarning','A recurring entry needs your attention. Open Money â†’ Recurring to review it.');

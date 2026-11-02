@@ -2,8 +2,8 @@
 <header class="page-header dashboard-header">
     <div>
         <p class="dashboard-date"><?= e(date('l, j F Y')) ?><?= $name ? ' | '.e($name) : '' ?></p>
-        <h1>Your day, in perspective.</h1>
-        <p class="muted">Your tasks, study and money in one place.</p>
+        <h1><?= e(t('Today')) ?><?php if (!PersonaService::profile()): ?>: Your day, in perspective.<?php endif; ?></h1>
+        <p class="muted"><?= e(PersonaService::personas()[PersonaService::profile()['persona'] ?? '']['description'] ?? 'Your tasks, study and money in one place.') ?></p>
     </div>
     <a class="btn" href="/planner?view=tasks#new-task">+ Add a task</a>
 </header>
@@ -15,7 +15,7 @@
         <a href="/salary#add-income"><?= icon('wallet') ?><span>Add income</span></a>
         <a href="/salary/plan"><?= icon('calendar') ?><span>Plan your salary</span></a>
     <?php endif; ?>
-    <a href="/focus"><?= icon('clock') ?><span><?= $focus ? 'Return to focus' : 'Start study focus' ?></span></a>
+    <?php if ($hasFocus): ?><a href="/focus"><?= icon('clock') ?><span><?= $focus ? 'Return to focus' : 'Start study focus' ?></span></a><?php endif; ?>
 </nav>
 
 <?php require __DIR__.'/daily-progress.php'; ?>
@@ -38,7 +38,7 @@
         <?php if (!$appointments): ?><p class="muted dashboard-empty">No upcoming appointments recorded.</p><?php endif; ?>
     </section>
 
-    <section class="card dashboard-money">
+    <?php if ($hasSalary): ?><section class="card dashboard-money">
         <div class="section-heading"><h2>Money <span class="muted">&middot; <?= e(date('F')) ?></span></h2><a href="/salary">Open Money &rarr;</a></div>
         <?php if ($hasMoneyRecords || $hasAssetRecords): ?>
             <dl class="dashboard-money-metrics">
@@ -51,13 +51,14 @@
         <?php else: ?><p class="muted dashboard-empty">No data yet. Start with your salary plan, then record income and daily spending.</p><?php endif; ?>
         <div class="hero-actions"><a class="btn secondary" href="/salary/plan">Plan your salary</a><a href="/salary#add-expense">Add expense</a></div>
     </section>
+<?php endif; ?>
 </div>
 
 <details class="dashboard-details"><summary>Study, goals & reviews <span>Open your longer-term progress</span></summary><div class="two-col dashboard-secondary">
-    <section class="card">
-        <div class="section-heading"><h2>Study</h2><a href="/uni">Open University &rarr;</a></div>
+    <?php if ($hasUni || $hasFocus): ?><section class="card">
+        <div class="section-heading"><h2>Study</h2><?php if ($hasUni): ?><a href="/uni">Open University &rarr;</a><?php endif; ?></div>
         <dl class="dashboard-summary">
-            <div><dt>University GPA</dt><dd><?= $gpa===null ? '<span class="muted">No data yet</span>' : e(number_format($gpa,2)) ?></dd></div>
+            <?php if ($hasUni): ?><div><dt>University GPA</dt><dd><?= $gpa===null ? '<span class="muted">No data yet</span>' : e(number_format($gpa,2)) ?></dd></div><?php endif; ?>
             <div><dt>Focus this month</dt><dd><?= ($lifeSummary['focus_minutes'] ?? 0)>0 ? e($lifeSummary['focus_minutes']).' min' : '<span class="muted">No sessions yet</span>' ?></dd></div>
         </dl>
         <h3>Upcoming deadlines</h3>
@@ -67,22 +68,22 @@
         <?php foreach ($exams as $exam): ?>
             <div class="deadline"><strong>Exam &middot; <?= e($exam['module']) ?></strong><small><?= e($exam['date']) ?><?= $exam['venue']!=='' ? ' | '.e($exam['venue']) : '' ?></small></div>
         <?php endforeach; ?>
-        <?php if (!$due && !$exams): ?><p class="muted dashboard-empty">No upcoming deadlines. <a href="/uni?view=modules">Add your modules and dates.</a></p><?php endif; ?>
-    </section>
+        <?php if ($hasUni && !$due && !$exams): ?><p class="muted dashboard-empty">No upcoming deadlines. <a href="/uni?view=modules">Add your modules and dates.</a></p><?php endif; ?>
+    </section><?php endif; ?>
 
-    <section class="card">
-        <div class="section-heading"><h2>Goals</h2><a href="/growth">Open Goals &rarr;</a></div>
+    <?php if ($hasGrowth || $hasLessons): ?><section class="card">
+        <?php if ($hasGrowth): ?><div class="section-heading"><h2>Goals</h2><a href="/growth">Open Goals &rarr;</a></div>
         <?php if (!$personalGoals): ?><p class="muted dashboard-empty">Choose one thing you want to work toward. <a href="/growth">Add a goal.</a></p>
         <?php else: foreach (array_slice($personalGoals,0,3) as $goal): ?>
             <div class="budget-row"><div><a href="/growth/<?= e($goal['id']) ?>"><strong><?= e($goal['title']) ?></strong></a></div><?= progress_donut((float)GrowthService::progress($goal),'Goal progress','',true) ?><small><?= e($goal['done_count']) ?> of <?= e($goal['step_count']) ?> steps | <?= e($goal['status']) ?></small></div>
         <?php endforeach; endif; ?>
-        <h3>Weekly review</h3>
+        <?php endif; ?><?php if ($hasLessons): ?><h3>Weekly review</h3>
         <?php if ($review): ?>
             <p><strong><?= e($review['score']) ?>/10</strong> <span class="muted">| <?= e($review['week']) ?></span></p>
             <?php if ($review['focus']!==''): ?><p><?= e($review['focus']) ?></p><?php endif; ?>
         <?php else: ?><p class="muted dashboard-empty">Record what went well and what to change next week.</p><?php endif; ?>
-        <div class="hero-actions"><a href="/review">Weekly review &rarr;</a><a href="/insights">Monthly review</a></div>
-    </section>
+        <div class="hero-actions"><a href="/review">Weekly review &rarr;</a><a href="/insights">Monthly review</a></div><?php endif; ?>
+    </section><?php endif; ?>
 </div>
 
 </details>

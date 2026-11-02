@@ -5,7 +5,8 @@
   const status = message => document.querySelectorAll('[data-nibm-status]').forEach(el => { el.textContent = message; });
   async function configure(force = false) {
     if (!desktop || configuring) return;
-    if (!document.querySelector('.app-shell')) { config = null; window.chrome.webview.postMessage({type:'lifeos-nibm',action:'configure',enabled:false,batchId:''}); return; }
+    const shell = document.querySelector('.app-shell');
+    if (!shell || shell.dataset?.uniEnabled === '0') { config = null; window.chrome.webview.postMessage({type:'lifeos-nibm',action:'configure',enabled:false,batchId:''}); return; }
     if (config && !force) return;
     configuring = true;
     try {

@@ -2,7 +2,7 @@
 return function (Router $r) {
     if (is_file(__DIR__.'/encrypted-routes.php')) (require __DIR__.'/encrypted-routes.php')($r);
     $r->get('/settings',fn()=>View::render(__DIR__.'/views/index.php',['title'=>'Settings','assets'=>class_exists('InvestmentService') ? Db::all("SELECT * FROM assets WHERE status='active' ORDER BY name") : [],'accounts'=>Db::all('SELECT * FROM accounts ORDER BY id'),'rules'=>Db::all('SELECT * FROM allocation_rules ORDER BY sort,id'),'categories'=>Db::all('SELECT * FROM expense_categories ORDER BY name'),'pinSet'=>Db::setting('pin_hash')!=='','backups'=>array_reverse(glob(DATA.'/backups/lifeos-*.db') ?: []),'exportTables'=>SettingsService::tables()]));
-    $r->post('/settings/name',function () { Db::set('name',text_input('name',100)); return redirect('/settings','Profile saved.'); });
+    $r->post('/settings/name',function () { $name=text_input('name',100); Db::tx(function () use ($name) { Db::set('name',$name); Db::run('UPDATE local_profiles SET name=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',[$name,PersonaService::profileId()]); }); return redirect('/settings','Profile saved.'); });
     $r->post('/settings/grades',function () { if (!class_exists('UniService')) throw new InvalidArgumentException('University module is unavailable.'); UniService::savePoints(text_input('grade_points',5000)); return redirect('/settings','Grade points saved.'); });
     $r->get('/settings/export/{table}',fn($p)=>SettingsService::csv($p['table']));
     $r->get('/settings/backup/{file}',function ($p) {

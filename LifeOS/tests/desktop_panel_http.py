@@ -1,5 +1,5 @@
 """Desktop panel schedule, customization, quick add and note flows."""
-import datetime, http.cookiejar, json, os, re, shutil, socket, subprocess, tempfile, time, urllib.error, urllib.parse, urllib.request
+import datetime, http.cookiejar, json, os, re, shutil, socket, sqlite3, subprocess, tempfile, time, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
 
 root=Path(__file__).resolve().parents[1]
@@ -38,6 +38,14 @@ with tempfile.TemporaryDirectory(prefix='lifeos-panel-http-') as temporary:
             check(initial['preferences']['autoHide'] is True,'Auto-hide defaults on')
             check(request('/desktop/panel/add',{'title':'Blocked without token'})[0]==419,'Quick add requires CSRF')
             today=datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=5, minutes=30))).date().isoformat()
+            database=sqlite3.connect(data/'lifeos.db')
+            try:
+                appointment=database.execute('INSERT INTO planner_appointments(title,starts_at,ends_at) VALUES (?,?,?)',('Calendar lecture',today+' 10:00',today+' 11:00')).lastrowid
+                database.execute('INSERT INTO uni_calendar_events(batch_id,remote_id,appointment_id,title,starts_at,ends_at,remote_status,synced_at) VALUES (?,?,?,?,?,?,?,?)',('test-batch','test-lecture',appointment,'Calendar lecture',today+' 10:00',today+' 11:00','APPROVED',today+' 09:00'))
+                database.commit()
+            finally:
+                database.close()
+            check(any(item['title']=='Calendar lecture' and item['kind']=='Lecture' for item in json.loads(request('/desktop/panel/data')[1])['items']),'Connected lecture appears in today panel')
             check(request('/desktop/panel/add',{'_csrf':csrf,'kind':'task','title':'Panel task','due':today})[0]==200,'Task can be added')
             check(request('/desktop/panel/add',{'_csrf':csrf,'kind':'todo','title':'Panel to-do','due':''})[0]==200,'To-do can be added')
             check(request('/desktop/panel/add',{'_csrf':csrf,'kind':'note','title':'Panel note','body':'Remember this','due':''})[0]==200,'Note can be added')

@@ -332,7 +332,7 @@ with tempfile.TemporaryDirectory(prefix="lifeos-http-") as data:
             uni = project/'app/Modules/Uni'
             disabled = project/'app/Modules/Uni.disabled'
             uni.rename(disabled)
-            check(request('/')[0] == 200 and b'University GPA' in request('/')[1], 'Dashboard survives disabled Uni module')
+            check(request('/')[0] == 200 and b'University GPA' not in request('/')[1], 'Dashboard survives disabled Uni module and hides its card')
             disabled.rename(uni)
             code, exported, _, _ = request("/settings/export", {"_csrf":csrf})
             check(code == 200 and exported.startswith(b"SQLite format 3"), "Consistent database export")

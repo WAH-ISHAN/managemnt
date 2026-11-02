@@ -11,12 +11,13 @@ final class Migrator {
             $files = glob($dir . '/*.sql') ?: []; sort($files);
             foreach ($files as $file) {
                 $key = basename(dirname($dir)) . '/' . basename($file);
-                $hash = hash_file('sha256', $file);
+                $content = str_replace("\r\n", "\n", file_get_contents($file));
+                $hash = hash('sha256', $content);
                 if (isset($appliedMap[$key])) {
                     if ($appliedMap[$key] !== $hash) throw new RuntimeException('An applied migration was changed: ' . $key);
                     continue;
                 }
-                Db::tx(function () use ($file, $key, $hash) { Db::exec(file_get_contents($file)); Db::run('INSERT INTO migrations(file,checksum) VALUES (?,?)', [$key,$hash]); });
+                Db::tx(function () use ($content, $key, $hash) { Db::exec($content); Db::run('INSERT INTO migrations(file,checksum) VALUES (?,?)', [$key,$hash]); });
                 $appliedMap[$key] = $hash;
             }
         }

@@ -41,6 +41,7 @@ Copy-Item -LiteralPath (Join-Path $projectRoot 'php.ini') -Destination (Join-Pat
 Copy-Item -LiteralPath $WebViewInstaller -Destination (Join-Path $distribution 'prerequisites/MicrosoftEdgeWebView2RuntimeInstallerX64.exe')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md'),(Join-Path $projectRoot 'README-si.md'),(Join-Path $projectRoot 'THIRD-PARTY.md') -Destination $distribution
 if(Test-Path -LiteralPath (Join-Path $projectRoot 'qa')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'qa') -Destination $distribution -Recurse }
+if(Test-Path -LiteralPath (Join-Path $projectRoot 'docs')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $distribution -Recurse }
 if (Test-Path -LiteralPath (Join-Path $projectRoot 'VERIFICATION.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'VERIFICATION.md') -Destination $distribution }
 if (Test-Path -LiteralPath (Join-Path $projectRoot 'PERFORMANCE.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'PERFORMANCE.md') -Destination $distribution }
 & $InnoCompiler (Join-Path $projectRoot 'lifeos.iss')

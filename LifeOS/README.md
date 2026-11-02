@@ -1,5 +1,7 @@
 # LifeOS — Your Life, Your Freedom
 
+Version 1.8.2 adds a persona-based foundation: six-persona onboarding, saved module switches/sidebar order, an English/Sinhala/Tamil interface shell and opt-in local automations with a resident scheduler. Open **Settings → Modules & language** to configure an existing workspace, then **Automations** to enable routines. See the [complete 100-feature roadmap](docs/PERSONA-UPDATE-ROADMAP.md) and [verified scope and remaining work](qa/persona-automation-foundation.md).
+
 සිංහලෙන් සම්පූර්ණ පරිශීලක මාර්ගෝපදේශය: [README-si.md](README-si.md).
 
 Reusable QA workflow: [English playbook](qa/README.md), [Sinhala guide](qa/README-si.md), and [AI agent prompt](qa/AGENT-PROMPT.md). Run the local checks with `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Invoke-QA.ps1`.

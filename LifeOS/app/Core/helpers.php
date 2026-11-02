@@ -1,5 +1,7 @@
 <?php
 declare(strict_types=1);
+function module_enabled(string $id): bool { return !class_exists('PersonaService') || PersonaService::enabled($id); }
+function t(string $text): string { return class_exists('LocaleService') ? LocaleService::translate($text) : $text; }
 function e(mixed $value): string { return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function money(mixed $value): string { return 'Rs. ' . number_format((float)$value,2); }
 function csrf_field(): string { return '<input type="hidden" name="_csrf" value="' . e($_SESSION['csrf']) . '">'; }

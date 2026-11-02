@@ -38,6 +38,7 @@ internal sealed partial class LifeWindow : Form
     private Process? php;
     private readonly ProcessJob job = new();
     private readonly CancellationTokenSource lifetime = new();
+    private ResidentAutomationRunner? automationRunner;
     private readonly string root = AppContext.BaseDirectory;
     private readonly bool diagnostic=Environment.GetEnvironmentVariable("LIFEOS_SMOKE_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_PROFILE_TEST")=="1";
     private Uri? home;
@@ -87,9 +88,11 @@ internal sealed partial class LifeWindow : Form
             listener.Start(); int port = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop();
             home = new Uri($"http://127.0.0.1:{port}/");
             string instance = Guid.NewGuid().ToString("N");
+            string automationKey = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
             var start = new ProcessStartInfo(Path.Combine(root,"php","php.exe")) { WorkingDirectory=root, UseShellExecute=false, CreateNoWindow=true };
-            foreach (string value in new[] { "-c",Path.Combine(root,"php","php.ini"),"-d","extension_dir="+Path.Combine(root,"php","ext"),"-S",$"127.0.0.1:{port}","-t",Path.Combine(root,"public"),Path.Combine(root,"public","index.php") }) start.ArgumentList.Add(value);
+            foreach (string value in new[] { "-c",Path.Combine(root,"php","php.ini"),"-d","extension_dir='"+Path.Combine(root,"php","ext")+"'","-S",$"127.0.0.1:{port}","-t",Path.Combine(root,"public"),Path.Combine(root,"public","index.php") }) start.ArgumentList.Add(value);
             start.Environment["LIFEOS_INSTANCE"] = instance; start.Environment["LIFEOS_DATA_DIR"] = data;
+            start.Environment["LIFEOS_AUTOMATION_KEY"] = automationKey;
             start.Environment["LIFEOS_WEBSITE_KEY"] = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
             php = Process.Start(start) ?? throw new InvalidOperationException("PHP could not start.");
             job.Attach(php);
@@ -103,6 +106,7 @@ internal sealed partial class LifeWindow : Form
                 await Task.Delay(100,lifetime.Token);
             }
             if (!ready) throw new InvalidOperationException("LifeOS did not start in time. Check disk permissions and data/php_error.log.");
+            if (!diagnostic) automationRunner = new ResidentAutomationRunner(home, automationKey, lifetime.Token);
             var env = await CoreWebView2Environment.CreateAsync(null,Path.Combine(data,"webview"));
             webEnvironment=env;
             if (lifetime.IsCancellationRequested) return;
@@ -329,13 +333,20 @@ internal sealed partial class LifeWindow : Form
             await Check("onboarding-form","!!document.querySelector('form[action=\"/welcome\"] input[name=name]')");
             await Check("onboarding-brand","document.querySelector('.lifeos-logo img')?.complete && document.querySelector('.lifeos-logo img').naturalWidth===256");
             await Capture("onboarding");
-            await web.CoreWebView2.ExecuteScriptAsync("(()=>{const f=document.querySelector('form[action=\"/welcome\"]');f.elements.name.value='Windows smoke';f.elements.institution.value='Disposable test workspace';f.querySelector('[value=money]').checked=true;f.requestSubmit()})()");
-            if (!await WaitForHeading("Your salary, with room to live.")) throw new InvalidOperationException("Onboarding did not open the salary planner.");
+            await web.CoreWebView2.ExecuteScriptAsync("(()=>{const f=document.querySelector('form[action=\"/welcome\"]');f.querySelector('input[name=persona][value=employee]').checked=true;f.querySelector('[data-wizard-next]').click();f.elements.name.value='Windows smoke';f.elements.institution.value='Disposable test workspace';f.querySelector('[data-wizard-next]').click();f.elements.locale.value='en';f.requestSubmit()})()");
+            if (!await WaitForHeading("Today")) throw new InvalidOperationException("Persona onboarding did not open the dashboard.");
+            await Check("onboarding-persona-defaults","location.pathname==='/' && !!document.querySelector('.sidebar a[href=\"/automation\"]') && !document.querySelector('.sidebar a[href=\"/uni\"]')");
             checks["onboarding-submit"]=true;
         }
         await Check("application-shell","!!document.querySelector('.sidebar') && !!window.htmx && !!window.LifeOS");
         await Check("application-ready","document.readyState==='complete'");
         await Check("application-brand","document.querySelector('.sidebar .lifeos-logo img')?.complete && document.querySelector('.sidebar .lifeos-logo img').naturalWidth===256");
+        await Act("document.querySelector('.sidebar-bottom a[href=\"/settings/workspace\"]')?.click()");
+        if (!await WaitForHeading("Your workspace")) throw new InvalidOperationException("Workspace module settings did not open.");
+        await Check("workspace-settings-route","location.pathname==='/settings/workspace' && !!document.querySelector('form[action=\"/settings/workspace/modules\"]')");
+        await Act("(()=>{const f=document.querySelector('form[action=\"/settings/workspace/modules\"]');for(const input of f.querySelectorAll('input[name=\"enabled[]\"]'))input.checked=true;f.requestSubmit()})()");
+        await Changed("workspace-module-controls-enable-full-smoke-surface","document.querySelector('#main h1')?.textContent==='Your workspace' && !!document.querySelector('.sidebar a[href=\"/uni\"]') && !!document.querySelector('.sidebar a[href=\"/automation\"]')");
+        await Navigate("/");
         await Navigate("/websites");
         await Check("website-manager","[...document.forms].some(f=>f.action.endsWith('/websites/profile') && f.elements.base_url) && document.querySelector('#main h1')?.textContent.includes('websites')");
         await Capture("website-manager");
@@ -496,7 +507,7 @@ internal sealed partial class LifeWindow : Form
         await Changed("review-today","document.getElementById('progress-date').value===document.querySelector('meta[name=lifeos-today]').content");
         await Capture("dashboard");
         await CaptureComfort("dashboard");
-        string links=await web.CoreWebView2.ExecuteScriptAsync("[...document.querySelectorAll('.sidebar .nav-link')].map(a=>a.getAttribute('href'))");
+        string links=await web.CoreWebView2.ExecuteScriptAsync("[...document.querySelectorAll('.sidebar nav .nav-link')].map(a=>a.getAttribute('href'))");
         foreach (string path in JsonSerializer.Deserialize<string[]>(links) ?? [])
         {
             if (path=="/") continue;
@@ -683,6 +694,7 @@ internal sealed partial class LifeWindow : Form
     {
         if(cleanupDone)return;cleanupDone=true;
         lifetime.Cancel();
+        automationRunner?.Dispose(); automationRunner=null;
         panelHotkeys?.Dispose();panelHotkeys=null;
         todayPanelTimer.Stop();todayPanelTimer.Dispose();desktopPanel?.Dispose();desktopPanel=null;
         DisposeNibmCalendar();
