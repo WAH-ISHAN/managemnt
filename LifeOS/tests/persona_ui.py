@@ -180,6 +180,14 @@ with tempfile.TemporaryDirectory(prefix='lifeos-persona-ui-') as temporary:
                 check(True, 'Expense keyword rule previews a reviewable category in the browser')
                 snapshot('expense-rules-desktop')
                 snapshot('expense-rules-narrow', 390)
+                page.goto(base + '/salary/alert-import')
+                page.locator('form[action="/salary/alert-import/preview"] textarea[name=alert]').fill(
+                    'Your card was debited LKR 1,250.00 on 02/11/2026 at Market. Available balance LKR 9,999.00')
+                page.get_by_role('button', name='Preview alert').click()
+                expect(page.locator('form[action="/salary/alert-import/post"] input[name=amount]')).to_have_value('1250.00')
+                expect(page.locator('form[action="/salary/alert-import/post"] input[name=date]')).to_have_value('2026-11-02')
+                check(True, 'Pasted debit alert displays an editable review form without posting')
+                snapshot('alert-import-narrow', 390)
                 check(not errors, 'No uncaught browser JavaScript errors')
                 application_errors = data / 'php_error.log'
                 check(not application_errors.exists() or not application_errors.read_text(encoding='utf-8').strip(),

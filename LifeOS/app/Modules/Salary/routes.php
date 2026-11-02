@@ -42,5 +42,30 @@ return function (Router $r) {
             'preview'=>['description'=>$description,'suggestion'=>ExpenseCategoryRules::suggest($description)],
         ]);
     });
+    $alertPage=function (string $alert='',?array $preview=null,string $error=''): string {
+        return View::render(__DIR__.'/views/alert-import.php',[
+            'title'=>'Review a bank alert','alert'=>$alert,'preview'=>$preview,'error'=>$error,
+            'categories'=>Db::all('SELECT id,name FROM expense_categories ORDER BY name'),
+            'accounts'=>Db::all('SELECT id,name FROM accounts ORDER BY id'),
+        ]);
+    };
+    $r->get('/salary/alert-import',fn()=> $alertPage());
+    $r->post('/salary/alert-import/preview',function () use ($alertPage): string {
+        $alert=text_input('alert',3000);
+        try { return $alertPage($alert,ExpenseAlertImport::preview($alert)); }
+        catch (InvalidArgumentException $error) { http_response_code(422); return $alertPage($alert,null,$error->getMessage()); }
+    });
+    $r->post('/salary/alert-import/post',function () use ($alertPage): string {
+        $alert=text_input('alert',3000);
+        try {
+            ExpenseAlertImport::post($alert,text_input('date'),$_POST['amount'] ?? '',record_id($_POST['category'] ?? ''),record_id($_POST['account'] ?? ''),text_input('note',1000,false));
+            return redirect('/salary','Reviewed bank alert recorded as one expense.');
+        } catch (InvalidArgumentException $error) {
+            http_response_code(422);
+            try { $preview=ExpenseAlertImport::preview($alert); }
+            catch (InvalidArgumentException) { $preview=null; }
+            return $alertPage($alert,$preview,$error->getMessage());
+        }
+    });
     (require __DIR__.'/planning-routes.php')($r);
 };

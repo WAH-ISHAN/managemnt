@@ -69,6 +69,16 @@ with tempfile.TemporaryDirectory(prefix='lifeos-expense-rules-http-') as tempora
             code,_,url=request('/expenses',{'_csrf':csrf,'date':today,'amount':'12.50','category':categories['Food & groceries'],'account':account,'note':'Paid BUS fare today'})
             check(code==200 and url.endswith('/salary'),'User override posts through the existing expense route')
             check(read('SELECT category_id,amount FROM expenses')==[(categories['Food & groceries'],12.5)] and read('SELECT balance FROM accounts WHERE id=?',(account,))[0][0]==-12.5,'Posted expense uses the reviewed category and debits once')
+            alert='Your card was debited LKR 1,250.00 on 02/11/2026 at Market. Available balance LKR 9,999.00'
+            code,page,_=request('/salary/alert-import/preview',{'_csrf':csrf,'alert':alert})
+            check(code==200 and b'generic-debit-v1' in page and b'1250.00' in page and b'Confirm and save expense' in page,'Debit alert opens a review form with one parsed amount')
+            check(len(read('SELECT id FROM expenses'))==1,'Pasting an alert cannot create an expense')
+            fields={'_csrf':csrf,'alert':alert,'date':'2026-11-02','amount':'1250.00','category':categories['Transport'],'account':account,'note':'Market'}
+            code,_,url=request('/salary/alert-import/post',fields)
+            check(code==200 and url.endswith('/salary'),'Reviewed alert posts through the Money workflow')
+            check(len(read('SELECT id FROM expenses'))==2 and read('SELECT balance FROM accounts WHERE id=?',(account,))[0][0]==-1262.5,'Alert posting debits exactly once')
+            code,page,_=request('/salary/alert-import/post',fields)
+            check(code==422 and b'already imported' in page.lower() and len(read('SELECT id FROM expenses'))==2,'Duplicate alert is rejected without a second debit')
             print(f'{checks} expense rules HTTP checks passed.')
         finally:
             server.terminate()

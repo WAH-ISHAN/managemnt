@@ -1,7 +1,7 @@
 <div class="topline"><span>PERSONAL FINANCES</span><span>Every rupee, with a purpose.</span></div>
 <header class="page-header"><div><h1>Money, in perspective.</h1><p class="muted">Record what comes in. Know where it goes.</p></div><form method="get" action="/salary" class="inline"><label class="sr-only" for="month">Month</label><input id="month" name="month" type="month" value="<?= e($month) ?>" required><button class="secondary">View</button></form></header>
 <?php require ROOT.'/app/Core/views/notices.php'; ?>
-<nav class="tabs" aria-label="Money pages"><a class="selected" href="/salary">Transactions</a><a href="/salary/plan">Salary plan</a><a href="/salary/calendar">Financial calendar</a><a href="/salary/recurring">Recurring</a><a href="/salary/expense-rules">Category rules</a></nav>
+<nav class="tabs" aria-label="Money pages"><a class="selected" href="/salary">Transactions</a><a href="/salary/plan">Salary plan</a><a href="/salary/calendar">Financial calendar</a><a href="/salary/recurring">Recurring</a><a href="/salary/expense-rules">Category rules</a><a href="/salary/alert-import">Review bank alert</a></nav>
 <div class="hero-actions money-actions" role="group" aria-label="Money actions"><a class="btn" href="#add-expense">Add expense</a><a class="btn secondary" href="#add-income">Add income</a><a href="/salary/plan">Plan your salary &rarr;</a></div>
 <?php if (!$anyFinancialData): ?><div class="notice">No data yet. Start with your <a href="/salary/plan">salary plan</a>, then record income when it arrives. Your account balances and charts use only saved transactions.</div><?php endif; ?>
 <div class="two-col">
