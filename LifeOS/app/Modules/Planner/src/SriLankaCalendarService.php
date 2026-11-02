@@ -19,7 +19,10 @@ final class SriLankaCalendarService {
             } else {
                 $id=Db::run('INSERT INTO holiday_datasets(country,year,revision,source_title,source_url,published_on) VALUES (?,?,?,?,?,?)',['LK',2026,$data['revision'],$data['source_title'],$data['source_url'],$data['published_on']]);
             }
-            foreach ($data['rows'] as [$date,$title,$mercantile,$poya]) Db::run('INSERT INTO holidays(dataset_id,date,title_en,is_public,is_bank,is_mercantile,is_poya) VALUES (?,?,?,?,?,?,?)',[$id,$date,$title,1,1,$mercantile,$poya]);
+            foreach ($data['rows'] as $row) {
+                [$date,$title,$mercantile,$poya]=$row;
+                Db::run('INSERT INTO holidays(dataset_id,date,title_en,is_public,is_bank,is_mercantile,is_poya) VALUES (?,?,?,?,?,?,?)',[$id,$date,$title,$row[4] ?? 1,1,$mercantile,$poya]);
+            }
         });
     }
     public static function listing(int $year): array {
