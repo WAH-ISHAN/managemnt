@@ -141,7 +141,7 @@ Preserve the requested priority: **#1 → #9 → #10/#14/#15 → #17/#18 → #79
 
 | # | Feature | Status and scope |
 | --- | --- | --- |
-| 79 | Poya/public/bank/mercantile holiday calendar and school terms | **Planned.** Official/imported, versioned data with source, year and type; no generated lunar dates or assumed school terms presented as official. |
+| 79 | Poya/public/bank/mercantile holiday calendar and school terms | **2026 foundation in development.** Named 2026 holidays from the government desk calendar are stored with type, year, revision and source; school terms have a separate schema and an explicit unavailable state. Other years, official changes, and localized holiday labels still need coverage. |
 | 80 | Sinhala & Tamil New Year spending, gifts and travel planner | **Planned.** Link budgets, checklists, events and trips. |
 | 81 | Seettu savings-circle tracker | **Planned.** Contributions, rounds, recipients and arrears; do not treat the ledger as a guaranteed return. |
 | 82 | CEB/Water Board/SLT/Dialog utility bills and usage trends | **Extend.** Bill tracking exists; provider fields, readings and usage histories remain. |

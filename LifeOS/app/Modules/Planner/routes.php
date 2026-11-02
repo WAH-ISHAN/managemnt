@@ -1,5 +1,10 @@
 <?php
 return function (Router $r) {
+    $r->get('/planner/holidays',function () {
+        $year=SriLankaCalendarService::year($_GET['year'] ?? date('Y'));
+        SriLankaCalendarService::seed2026();
+        return View::render(__DIR__.'/views/holidays.php',['title'=>'Sri Lanka holidays','year'=>$year,'calendar'=>SriLankaCalendarService::listing($year)]);
+    });
     $r->get('/planner',function () {
         $date=PlannerService::dateInput($_GET['date'] ?? date('Y-m-d')); $tab=$_GET['view'] ?? 'today'; if (!in_array($tab,['today','tasks','habits','routines','appointments'],true)) throw new InvalidArgumentException('Choose a planner page.');
         $taskList=PlannerService::taskList($_GET['filter'] ?? 'all',$_GET['q'] ?? '',$date); $tasks=$taskList['rows'];
