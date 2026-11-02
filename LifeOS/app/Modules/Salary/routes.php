@@ -16,5 +16,31 @@ return function (Router $r) {
     $r->post('/salary/{id}/delete',function ($p) { SalaryService::deleteIncome(record_id($p['id'])); return redirect('/salary','Income removed and its allocations reversed.'); });
     $r->post('/expenses',function () { SalaryService::addExpense(text_input('date'),record_id($_POST['category'] ?? ''),record_id($_POST['account'] ?? ''),$_POST['amount'] ?? '',text_input('note',1000,false)); return redirect('/salary','Expense recorded.'); });
     $r->post('/expenses/{id}/delete',function ($p) { SalaryService::deleteExpense(record_id($p['id'])); return redirect('/salary','Expense removed and account balance restored.'); });
+    $r->get('/salary/expense-rules',function () {
+        return View::render(__DIR__.'/views/expense-rules.php',[
+            'title'=>'Expense category rules','rules'=>ExpenseCategoryRules::all(),
+            'editing'=>isset($_GET['edit']) ? ExpenseCategoryRules::rule(record_id($_GET['edit'])) : null,
+            'categories'=>Db::all('SELECT id,name FROM expense_categories ORDER BY name'),
+            'accounts'=>Db::all('SELECT id,name FROM accounts ORDER BY id'),
+            'preview'=>null,
+        ]);
+    });
+    $r->post('/salary/expense-rules',function () {
+        ExpenseCategoryRules::save(optional_id($_POST['id'] ?? ''),text_input('keyword',80),record_id($_POST['category'] ?? ''),int_range($_POST['priority'] ?? '',0,999),isset($_POST['enabled']));
+        return redirect('/salary/expense-rules','Category rule saved. Suggestions apply to future previews; existing expenses are unchanged.');
+    });
+    $r->post('/salary/expense-rules/{id}/delete',function ($p) {
+        ExpenseCategoryRules::remove(record_id($p['id']));
+        return redirect('/salary/expense-rules','Category rule removed. Existing expenses are unchanged.');
+    });
+    $r->post('/salary/expense-rules/preview',function () {
+        $description=text_input('description',1000);
+        return View::render(__DIR__.'/views/expense-rules.php',[
+            'title'=>'Expense category rules','rules'=>ExpenseCategoryRules::all(),'editing'=>null,
+            'categories'=>Db::all('SELECT id,name FROM expense_categories ORDER BY name'),
+            'accounts'=>Db::all('SELECT id,name FROM accounts ORDER BY id'),
+            'preview'=>['description'=>$description,'suggestion'=>ExpenseCategoryRules::suggest($description)],
+        ]);
+    });
     (require __DIR__.'/planning-routes.php')($r);
 };

@@ -118,13 +118,14 @@ try {
             Write-QaLog '13 JavaScript files passed syntax checks.'
         }
         Invoke-QaStage 'phpunit' { Invoke-CheckedNative $phpCommand @('vendor/bin/phpunit','--no-progress') }
-        foreach($suite in @('module_loading','fresh_workspace','services','finance_planning','planner_growth_career','planner_search','documents_encryption','freedom','daily_progress','modern_tools','websites','website_accounts','website_costs','website_gateway','admin_studio','work_management','cloud_hub','wordpress_adapter','uni_calendar','uni_calendar_upgrade','persona','automation')) {
+        foreach($suite in @('module_loading','fresh_workspace','services','finance_planning','planner_growth_career','planner_search','documents_encryption','freedom','daily_progress','modern_tools','websites','website_accounts','website_costs','website_gateway','admin_studio','work_management','cloud_hub','wordpress_adapter','uni_calendar','uni_calendar_upgrade','persona','automation','expense_category_rules')) {
             $suiteName=$suite
             Invoke-QaStage ('service-'+$suiteName) { Invoke-CheckedNative $phpCommand @('tests/'+$suiteName+'.php') }
         }
         Invoke-QaStage 'http-acceptance' { Invoke-CheckedNative $pythonCommand @('tests/http_acceptance.py') }
         Invoke-QaStage 'persona-http' { Invoke-CheckedNative $pythonCommand @('tests/persona_http.py') }
         Invoke-QaStage 'desktop-panel-http' { Invoke-CheckedNative $pythonCommand @('tests/desktop_panel_http.py') }
+        Invoke-QaStage 'expense-rules-http' { Invoke-CheckedNative $pythonCommand @('tests/expense_rules_http.py') }
         Invoke-QaStage 'persona-ui' { Invoke-CheckedNative $pythonCommand @('tests/persona_ui.py','--output',(Join-Path $evidence 'persona-ui')) }
         Invoke-QaStage 'uni-calendar-http' { Invoke-CheckedNative $pythonCommand @('tests/uni_calendar_http.py') }
         Invoke-QaStage 'admin-studio-http' { Invoke-CheckedNative $pythonCommand @('tests/admin_studio_http.py') }
