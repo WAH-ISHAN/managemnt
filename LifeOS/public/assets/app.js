@@ -77,8 +77,8 @@
       if (input.dataset.dateShortcuts || input.dataset.dateSuggestions==='off' || !input.closest('label')) return;
       input.dataset.dateShortcuts='ready';
       const future=/due|deadline|target/.test(input.name) || /\/uni\/exam/.test(input.form?.getAttribute('action') || '');
-      const choices=input.type==='month' ? [['This month',0],['Next month',1]] : (future ? [['Today',0],['Tomorrow',1],['In a week',7]] : [['Today',0],['Yesterday',-1]]);
-      const group=document.createElement('span'); group.className='date-shortcuts'; group.setAttribute('aria-label','Suggested dates');
+      const choices=input.type==='month' ? [[window.lifeosT('This month'),0],[window.lifeosT('Next month'),1]] : (future ? [[window.lifeosT('Today'),0],[window.lifeosT('Tomorrow'),1],[window.lifeosT('In a week'),7]] : [[window.lifeosT('Today'),0],[window.lifeosT('Yesterday'),-1]]);
+      const group=document.createElement('span'); group.className='date-shortcuts'; group.setAttribute('aria-label',window.lifeosT('Suggested dates'));
       for (const [label,offset] of choices) {
         const button=document.createElement('button'); button.type='button'; button.textContent=label;
         const day=new Date(today+'T12:00:00Z');
@@ -122,7 +122,7 @@
       if (active && a.closest('.nav-more')) a.closest('.nav-more').open=true;
     });
     const label=document.querySelector('.theme-name');
-    if (label) label.textContent=({system:'System',dark:'Dark',light:'Light'})[document.documentElement.dataset.theme || 'system'];
+    if (label) label.textContent=({system:window.lifeosT('System'),dark:window.lifeosT('Dark'),light:window.lifeosT('Light')})[document.documentElement.dataset.theme || 'system'];
     const toolbar=document.getElementById('toolbar-title');
     if (toolbar) toolbar.textContent=document.title.replace(' · LifeOS','').replace(/^Overview$/,'Today');
     updateRuleTotal();
@@ -231,10 +231,11 @@
       let visible=0;
       document.querySelectorAll('[data-command-result]').forEach(a=>{ a.hidden=!(a.textContent+' '+(a.dataset.search || '')).toLowerCase().includes(event.target.value.toLowerCase().trim()); if (!a.hidden) visible++; });
       const status=document.getElementById('command-search-status');
-      if (status) status.textContent=visible ? '' : 'No matching pages. Try a different search.';
+      if (status) status.textContent=visible ? '' : window.lifeosT('No matching pages. Try a different search.');
     }
   });
   document.addEventListener('keydown',event=>{
+    if (event.ctrlKey && event.shiftKey && event.code==='Space') { event.preventDefault(); window.location.assign('/planner/capture'); return; }
     if (narrowMenu.matches && document.documentElement.dataset.menuOpen==='true') {
       if (event.key==='Escape') { event.preventDefault(); menu(false,true); return; }
       if (event.key==='Tab') {
@@ -261,7 +262,7 @@
     const elapsed=Number(timer.dataset.elapsed)+(timer.dataset.status==='running' ? Math.max(0,Date.now()/1000-Number(timer.dataset.rendered)) : 0);
     const left=Math.max(0,Math.ceil(Number(timer.dataset.total)-elapsed));
     timer.textContent=String(Math.floor(left/60)).padStart(2,'0')+':'+String(left%60).padStart(2,'0');
-    if (left===0 && timer!==lastTimerAlert) { lastTimerAlert=timer; const state=document.querySelector('[data-focus-state]'); if(state) state.textContent='Block complete. Save your session, then take a break.'; pollAlerts(); }
+    if (left===0 && timer!==lastTimerAlert) { lastTimerAlert=timer; const state=document.querySelector('[data-focus-state]'); if(state) state.textContent=window.lifeosT('Block complete. Save your session, then take a break.'); pollAlerts(); }
   },1000);
   let alertsInFlight=false, alertsRefreshQueued=false;
   async function pollAlerts() {
@@ -304,7 +305,7 @@
     const main = document.getElementById('main');
     if (!main || main.querySelector('[data-connection-error]')) return;
     const notice = document.createElement('p'); notice.dataset.connectionError = ''; notice.className = 'notice warning'; notice.setAttribute('role','alert');
-    notice.textContent = 'LifeOS could not connect. Restart the app, then try again.'; main.prepend(notice);
+    notice.textContent = window.lifeosT('LifeOS could not connect. Restart the app, then try again.'); main.prepend(notice);
   });
   update();
   menu(false);
@@ -325,11 +326,11 @@
       const checkBtn = document.getElementById('app-update-check');
       const applyBtn = document.getElementById('app-update-apply');
       if (statusEl) {
-        statusEl.textContent = data.message || (data.ready ? 'Update ready to install.' : 'Up to date.');
+        statusEl.textContent = data.message || (data.ready ? window.lifeosT('Update ready to install.') : window.lifeosT('Up to date.'));
       }
       if (checkBtn) {
         checkBtn.disabled = !!data.busy;
-        checkBtn.textContent = data.busy ? 'Checking…' : 'Check for updates';
+        checkBtn.textContent = data.busy ? 'Checking…' : window.lifeosT('Check for updates');
       }
       if (applyBtn) {
         applyBtn.hidden = !data.ready;
@@ -341,7 +342,7 @@
           banner.id = 'lifeos-update-banner';
           banner.className = 'notification-toast update-toast';
           banner.setAttribute('role', 'alert');
-          banner.innerHTML = '<div><strong>Update Ready</strong><p>LifeOS ' + (data.availableVersion || 'new version') + ' is ready to install.</p><button type="button" class="btn" id="update-banner-apply" style="min-height:30px;padding:4px 12px;font-size:11px;margin-top:6px;">Restart &amp; Update</button></div><button type="button" class="quiet" id="update-banner-close" aria-label="Dismiss">×</button>';
+          banner.innerHTML = window.lifeosHTML('<div><strong>Update Ready</strong><p>LifeOS ') + (data.availableVersion || window.lifeosT('new version')) + window.lifeosHTML(' is ready to install.</p><button type="button" class="btn" id="update-banner-apply" style="min-height:30px;padding:4px 12px;font-size:11px;margin-top:6px;">Restart &amp; Update</button></div><button type="button" class="quiet" id="update-banner-close" aria-label="Dismiss">×</button>');
           document.body.appendChild(banner);
           document.getElementById('update-banner-apply')?.addEventListener('click', () => {
             bridge.postMessage({ type: 'lifeos-update', action: 'apply' });

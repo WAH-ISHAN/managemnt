@@ -8,6 +8,7 @@ internal sealed class DesktopPanelWindow : Form
     private readonly WebView2 browser = new() { Dock=DockStyle.Fill };
     private readonly Uri home;
     private readonly CoreWebView2Environment environment;
+    private readonly string profile;
     private readonly System.Windows.Forms.Timer autoHideTimer=new(){Interval=1000};
     private bool autoHideEnabled=true;
     private DateTime autoHideGraceUntil;
@@ -17,12 +18,13 @@ internal sealed class DesktopPanelWindow : Form
     private PanelGlassResult glassResult;
     internal event Action<string>? OpenRouteRequested;
     internal bool IsPanelVisible => Visible;
+    internal string ProfileName => browser.CoreWebView2?.Profile.ProfileName ?? "";
     internal PanelGlassResult GlassResult=>glassResult;
     internal async Task<string> EvaluateAsync(string script){if(browser.CoreWebView2 is null)return "";return await browser.CoreWebView2.ExecuteScriptAsync(script);}
 
-    internal DesktopPanelWindow(Uri home,CoreWebView2Environment environment)
+    internal DesktopPanelWindow(Uri home,CoreWebView2Environment environment,string profile="default")
     {
-        this.home=home; this.environment=environment;
+        this.home=home; this.environment=environment; this.profile=profile;
         FormBorderStyle=FormBorderStyle.None; MinimumSize=new Size(320,360); ShowInTaskbar=false; TopMost=true;
         Text="LifeOS desktop panel";
         BackColor=Color.Black; Width=420;
@@ -91,7 +93,7 @@ internal sealed class DesktopPanelWindow : Form
     {
         if(initialized||IsDisposed)return; initialized=true;
         try {
-            await browser.EnsureCoreWebView2Async(environment);
+            await browser.EnsureCoreWebView2Async(environment,LifeWindow.BrowserOptions(environment,profile));
             browser.DefaultBackgroundColor=Color.Transparent;
             browser.CoreWebView2.Settings.AreDevToolsEnabled=false;
             browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled=false;

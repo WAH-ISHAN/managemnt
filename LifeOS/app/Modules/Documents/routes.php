@@ -1,17 +1,17 @@
 <?php
 return function (Router $r) {
     $r->get('/documents',function () {
-        $search=$_GET['q'] ?? ''; if (!is_string($search)) throw new InvalidArgumentException('Enter a document search.'); $search=trim($search); if (mb_strlen($search)>200) throw new InvalidArgumentException('Use a shorter document search.');
-        $category=$_GET['category'] ?? ''; if (!is_string($category) || ($category!=='' && !in_array($category,DocumentService::CATEGORIES,true))) throw new InvalidArgumentException('Choose an existing document category.');
+        $search=$_GET['q'] ?? ''; if (!is_string($search)) throw new InvalidArgumentException(t('Enter a document search.')); $search=trim($search); if (mb_strlen($search)>200) throw new InvalidArgumentException(t('Use a shorter document search.'));
+        $category=$_GET['category'] ?? ''; if (!is_string($category) || ($category!=='' && !in_array($category,DocumentService::CATEGORIES,true))) throw new InvalidArgumentException(t('Choose an existing document category.'));
         $trash=($_GET['trash'] ?? '')==='1'; $sql='SELECT * FROM documents WHERE deleted_at IS '.($trash ? 'NOT NULL' : 'NULL'); $args=[];
         if ($search!=='') { $sql.=' AND (title LIKE ? ESCAPE \'!\' OR notes LIKE ? ESCAPE \'!\' OR original_name LIKE ? ESCAPE \'!\')'; $term='%'.str_replace(['!','%','_'],['!!','!%','!_'],$search).'%'; $args=[$term,$term,$term]; }
         if ($category!=='') { $sql.=' AND category=?'; $args[]=$category; }
         $sql.=' ORDER BY created_at DESC,id DESC';
-        return View::render(__DIR__.'/views/index.php',['title'=>'Personal documents','rows'=>Db::all($sql,$args),'search'=>$search,'category'=>$category,'trash'=>$trash]);
+        return View::render(__DIR__.'/views/index.php',['title'=>t('Personal documents'),'rows'=>Db::all($sql,$args),'search'=>$search,'category'=>$category,'trash'=>$trash]);
     });
     $r->post('/documents/upload',function () {
         $file=$_FILES['document'] ?? null;
-        if (!$file || $file['error']!==UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) throw new InvalidArgumentException('Choose a document up to 25 MiB and try again.');
+        if (!$file || $file['error']!==UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) throw new InvalidArgumentException(t('Choose a document up to 25 MiB and try again.'));
         DocumentService::store($file['tmp_name'],(string)$file['name'],text_input('title'),text_input('category'),text_input('notes',3000,false),DATA);
         return redirect('/documents','Document saved locally.');
     });

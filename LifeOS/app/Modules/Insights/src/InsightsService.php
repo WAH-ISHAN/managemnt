@@ -43,6 +43,15 @@ final class InsightsService {
         if ((module_enabled('LifeAdmin') && in_array('life_loans',$tables,true)) && in_array('life_loan_payments',$tables,true)) foreach (Db::all("SELECT l.*,ROUND(l.original_amount-COALESCE(SUM(p.amount),0),2) remaining FROM life_loans l LEFT JOIN life_loan_payments p ON p.loan_id=l.id WHERE l.due_on<=? GROUP BY l.id HAVING remaining>0 ORDER BY l.due_on LIMIT 12",[$soon]) as $item) {
             $add('personal-loan:'.$item['id'],$item['direction']==='lent' ? 'Lent money follow-up' : 'Borrowed money reminder',$item['person'].' · '.money($item['remaining']).' · '.$item['due_on'],'/life-admin#loans',$item['due_on']<$today ? 'overdue' : 'upcoming');
         }
+        if ((module_enabled('LifePlanning') && in_array('life_deposits',$tables,true))) foreach (Db::all("SELECT * FROM life_deposits WHERE maturity_on<=? AND id NOT IN(SELECT row_id FROM life_archives WHERE entity='deposits') ORDER BY maturity_on LIMIT 12",[$soon]) as $item) {
+            $add('deposit-maturity:'.$item['id'],'Deposit maturity',$item['name'].' · '.money($item['principal']).' · '.$item['maturity_on'],'/life?page=deposits',$item['maturity_on']<$today ? 'overdue' : 'upcoming');
+        }
+        if ((module_enabled('LifePlanning') && in_array('life_health_reminders',$tables,true))) foreach (Db::all("SELECT * FROM life_health_reminders WHERE status='active' AND next_on<=? AND id NOT IN(SELECT row_id FROM life_archives WHERE entity='reminders') ORDER BY next_on LIMIT 12",[$soon]) as $item) {
+            $add('health-reminder:'.$item['id'],'Health reminder',$item['title'].' · '.$item['next_on'],'/life?page=reminders',$item['next_on']<$today ? 'overdue' : 'upcoming');
+        }
+        if ((module_enabled('LifePlanning') && in_array('life_followups',$tables,true))) foreach (Db::all("SELECT f.*,c.name FROM life_followups f JOIN life_contacts c ON c.id=f.contact_id WHERE f.status='open' AND f.due_on<=? AND f.id NOT IN(SELECT row_id FROM life_archives WHERE entity='followups') ORDER BY f.due_on LIMIT 12",[$soon]) as $item) {
+            $add('life-followup:'.$item['id'],'People follow-up',$item['name'].' · '.$item['note'].' · '.$item['due_on'],'/life?page=followups',$item['due_on']<$today ? 'overdue' : 'upcoming');
+        }
         if ((module_enabled('Growth') && in_array('personal_goals',$tables,true))) foreach (Db::all("SELECT * FROM personal_goals WHERE status='active' AND due_date<? ORDER BY due_date LIMIT 8",[$today]) as $g) $add('goal:'.$g['id'],'Goal needs attention',$g['title'].' · '.$g['due_date'],'/growth','warning');
         if (in_array('planner_appointments',$tables,true)) {
             $appointmentSql="SELECT * FROM planner_appointments WHERE status='scheduled' AND ends_at>? AND datetime(starts_at,'-' || reminder_minutes || ' minutes')<=datetime(?)";
@@ -55,14 +64,16 @@ final class InsightsService {
         if ((module_enabled('Focus') && class_exists('FocusService')) && ($focus=FocusService::active()) && $focus['status']==='running' && FocusService::elapsed($focus)>=$focus['target_minutes']*60) $add('focus:'.$focus['id'],'Your focus block is complete',$focus['subject'].' · Save your session and take a break.','/focus');
         if ((module_enabled('Work') && class_exists('WorkPlanningService'))) foreach (WorkPlanningService::dueIssues(2) as $issue) $add('work-issue:'.$issue['id'],$issue['due_date']<$today?'Work item overdue':'Work item due soon',$issue['identifier'].'-'.$issue['sequence'].' ? '.$issue['title'].' ? '.$issue['due_date'],'/work/issue/'.$issue['id'],$issue['due_date']<$today?'overdue':'upcoming');
         if (module_enabled('Automation') && class_exists('AutomationService')) $items=[...$items,...AutomationService::alerts()];
+        if (module_enabled('School') && class_exists('SchoolService')) $items=[...$items,...SchoolService::alerts()];
+        foreach(['LifePlanning'=>LifePlanningReports::class,'Employee'=>EmployeeService::class,'StudyTools'=>StudyService::class]as $module=>$service)if(module_enabled($module)&&class_exists($service))$items=[...$items,...$service::alerts()];
         $dismissed=array_column(Db::all('SELECT key FROM notification_dismissals'),'key');
         $readKeys=in_array('notification_reads',$tables,true) ? array_column(Db::all('SELECT key FROM notification_reads'),'key') : [];
         foreach ($items as &$item) { $item['kind']='reminder'; $item['read']=in_array($item['id'],$dismissed,true)||in_array($item['id'],$readKeys,true); } unset($item);
         return [...$calendar,...array_values(array_filter($items,fn($a)=>!in_array($a['id'],$dismissed,true)))];
     }
     public static function markRead(string $id): void {
-        if (!preg_match('/^[a-f0-9]{64}$/D',$id)) throw new InvalidArgumentException('Invalid notification.');
-        $alerts=self::alerts(); if (!in_array($id,array_column($alerts,'id'),true)) throw new InvalidArgumentException('Notification not found.');
+        if (!preg_match('/^[a-f0-9]{64}$/D',$id)) throw new InvalidArgumentException(t('Invalid notification.'));
+        $alerts=self::alerts(); if (!in_array($id,array_column($alerts,'id'),true)) throw new InvalidArgumentException(t('Notification not found.'));
         Db::run('INSERT OR IGNORE INTO notification_reads(key) VALUES (?)',[$id]);
     }
     public static function markAllRead(): void {
@@ -70,7 +81,7 @@ final class InsightsService {
         Db::tx(function(){ foreach (self::alerts() as $alert) Db::run('INSERT OR IGNORE INTO notification_reads(key) VALUES (?)',[$alert['id']]); });
     }
     public static function review(string $month,string $wins,string $lessons,string $focus,int $score): void {
-        valid_month($month); if ($score<1 || $score>10) throw new InvalidArgumentException('Choose a score from 1 to 10.');
+        valid_month($month); if ($score<1 || $score>10) throw new InvalidArgumentException(t('Choose a score from 1 to 10.'));
         Db::run('INSERT INTO monthly_life_reviews(month,wins,lessons,focus,score) VALUES (?,?,?,?,?) ON CONFLICT(month) DO UPDATE SET wins=excluded.wins,lessons=excluded.lessons,focus=excluded.focus,score=excluded.score,updated_at=CURRENT_TIMESTAMP',[$month,$wins,$lessons,$focus,$score]);
     }
 }

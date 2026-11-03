@@ -1,0 +1,1 @@
+CREATE TABLE employee_money_links(record_id INTEGER PRIMARY KEY REFERENCES employee_records(id) ON DELETE RESTRICT,expense_id INTEGER UNIQUE REFERENCES expenses(id) ON DELETE SET NULL,income_id INTEGER UNIQUE REFERENCES income(id) ON DELETE SET NULL);

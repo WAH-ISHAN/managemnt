@@ -1,5 +1,7 @@
 ﻿# LifeOS 1.4.0 — සම්පූර්ණ පරිශීලක මාර්ගෝපදේශය
 
+**2026-11-03 — LifeOS 1.9.1:** startup සහ resize fixes, වෙනම native browser profiles, පුළුල් Sinhala/Tamil UI පරිවර්තන, Work Roles සහ online AI provider එකතු කර ඇත. පරණ දත්ත සුරැකේ. ලොකු AI model download එකක් අවශ්‍ය නැත. [පරීක්ෂණ සහ සීමා](qa/end-to-end-2026-11-03.md) · [Work Roles / AI මාර්ගෝපදේශය](docs/PART-3-WORK-ROLES-AI.md).
+
 **LifeOS** කියන්නේ Windows පරිගණකයකින් පෞද්ගලිකව භාවිතා කරන, දවසේ වැඩ, ඉගෙනීම, මුදල්, ඉලක්ක සහ තමන්ට වෙන් කරගන්නා කාලය එක තැනක සැලසුම් කරන්න හදපු app එකක්. 2026-10-28 release එක 1.4.0. දත්ත ඔබේ පරිගණකයේම SQLite database එකක සුරකිනවා; app එකට online account එකක් අවශ්‍ය නැහැ.
 
 ## 1. Windows app එක ආරම්භ කරන්න

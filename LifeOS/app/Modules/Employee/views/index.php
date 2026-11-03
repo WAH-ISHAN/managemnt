@@ -1,0 +1,1 @@
+<?php $service=EmployeeService::class;$base='/employee';$workspaceTitle='Employee workspace';$description='Work hours, salary, leave, achievements and side income.';$summaryView=__DIR__.'/summary.php';$detailView=__DIR__.'/detail.php';require ROOT.'/app/Core/views/record-workspace.php'; ?>

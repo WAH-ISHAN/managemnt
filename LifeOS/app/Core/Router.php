@@ -17,6 +17,6 @@ final class Router {
             }
             echo $handler($params); return;
         }
-        http_response_code(404); echo View::render(ROOT . '/app/Core/views/error.php', ['title'=>'Page not found','message'=>'Choose a page from the sidebar to continue.']);
+        http_response_code(404); echo View::render(ROOT . '/app/Core/views/error.php', ['title'=>t('Page not found'),'message'=>t('Choose a page from the sidebar to continue.')]);
     }
 }

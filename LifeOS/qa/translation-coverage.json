@@ -1,0 +1,11 @@
+{
+  "known_keys": 4473,
+  "wrapped": 0,
+  "untranslated_static_nodes": 3,
+  "unique_untranslated": 3,
+  "missing": [
+    "data/backups/",
+    "fixed_deposit",
+    "t_bill"
+  ]
+}

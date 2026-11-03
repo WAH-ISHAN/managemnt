@@ -17,3 +17,7 @@ License text for the vendored browser libraries and font is in `public/assets/li
 
 Kanboard (MIT) and Redmine (GPL-2.0-or-later) were cloned for source/documentation review alongside the user-supplied awesome-jira-alternatives list (MIT). Their clones retain their licenses under `.tools/jira-references` and are excluded from the LifeOS installer. The Work issue-type, release and WIP-limit features use original LifeOS implementation. See `qa/open-source-jira-references.md` for exact commits and source references.
 
+
+## Optional AI runtime
+
+LifeOS can invoke an already-installed OpenCode native runtime. It is not bundled or downloaded by this installer. OpenCode v1.19.0 is MIT licensed, Copyright (c) 2025 opencode. See https://github.com/anomalyco/opencode/blob/v1.19.0/LICENSE. LifeOS uses its CLI interface and does not embed its terminal UI.

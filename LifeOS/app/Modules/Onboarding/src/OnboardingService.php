@@ -8,9 +8,9 @@ final class OnboardingService {
         return true;
     }
     public static function finish(string $name,string $institution,array $areas,bool $notifications,?string $persona=null,string $locale='en',string $template=''): void {
-        $name=trim($name); if ($name==='' || mb_strlen($name)>100 || mb_strlen($institution)>150) throw new InvalidArgumentException('Enter your name and a valid institution.');
+        $name=trim($name); if ($name==='' || mb_strlen($name)>100 || mb_strlen($institution)>150) throw new InvalidArgumentException(t('Enter your name and a valid institution.'));
         $allowed=['study','money','habits','goals','career'];
-        if (array_filter($areas,fn($area)=>!is_string($area)) || array_diff($areas,$allowed)) throw new InvalidArgumentException('Choose a valid focus area.');
+        if (array_filter($areas,fn($area)=>!is_string($area)) || array_diff($areas,$allowed)) throw new InvalidArgumentException(t('Choose a valid focus area.'));
         Db::tx(function () use ($name,$institution,$areas,$notifications,$persona,$locale,$template) {
             Db::set('name',$name); Db::set('institution',trim($institution)); Db::set('focus_areas',json_encode(array_values($areas),JSON_THROW_ON_ERROR));
             Db::set('notifications_enabled',$notifications ? '1' : '0'); Db::set('onboarding_complete','1');

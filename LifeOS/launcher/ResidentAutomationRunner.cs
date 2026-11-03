@@ -24,7 +24,7 @@ internal sealed class ResidentAutomationRunner : IDisposable
         endpoint = new Uri(home, "/internal/automation/tick");
         client = new HttpClient(new HttpClientHandler { UseProxy = false, UseCookies = false, AllowAutoRedirect = false })
         {
-            Timeout = TimeSpan.FromSeconds(15)
+            Timeout = TimeSpan.FromSeconds(90)
         };
         stop = CancellationTokenSource.CreateLinkedTokenSource(lifetime);
         var token = stop.Token;
@@ -38,7 +38,7 @@ internal sealed class ResidentAutomationRunner : IDisposable
         {
             // A single awaited loop prevents overlapping requests, including
             // after resume from sleep or a slow/busy SQLite operation.
-            do
+            while (await timer.WaitForNextTickAsync(token).ConfigureAwait(false))
             {
                 token.ThrowIfCancellationRequested();
                 try
@@ -52,7 +52,6 @@ internal sealed class ResidentAutomationRunner : IDisposable
                 catch (HttpRequestException) { }
                 catch (OperationCanceledException) when (!token.IsCancellationRequested) { }
             }
-            while (await timer.WaitForNextTickAsync(token).ConfigureAwait(false));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (ObjectDisposedException) when (token.IsCancellationRequested) { }

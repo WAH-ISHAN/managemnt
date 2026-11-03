@@ -9,28 +9,28 @@ final class AutomationService {
     private static function table(string $table): bool { return (bool)Db::one("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",[$table]); }
     private static function local(?DateTimeImmutable $now=null): DateTimeImmutable { return ($now ?? new DateTimeImmutable())->setTimezone(new DateTimeZone('Asia/Colombo')); }
     private static function text(mixed $value,int $max,bool $required=true): string {
-        if (!is_string($value) || str_contains($value,"\0") || mb_strlen(trim($value))>$max || ($required && trim($value)==='')) throw new InvalidArgumentException('Enter valid automation text (up to '.$max.' characters).');
+        if (!is_string($value) || str_contains($value,"\0") || mb_strlen(trim($value))>$max || ($required && trim($value)==='')) throw new InvalidArgumentException(t('Enter valid automation text (up to ').$max.' characters).');
         return trim($value);
     }
     public static function validate(string $trigger,array $conditions,array $actions): array {
-        if (!in_array($trigger,['daily','weekly','monthly','deadline'],true)) throw new InvalidArgumentException('Choose a supported trigger.');
-        if (array_diff(array_keys($conditions),['time','weekdays','min_open_tasks'])) throw new InvalidArgumentException('Unsupported automation condition.');
+        if (!in_array($trigger,['daily','weekly','monthly','deadline'],true)) throw new InvalidArgumentException(t('Choose a supported trigger.'));
+        if (array_diff(array_keys($conditions),['time','weekdays','min_open_tasks'])) throw new InvalidArgumentException(t('Unsupported automation condition.'));
         $time=$conditions['time'] ?? '07:00';
-        if (!is_string($time) || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/D',$time)) throw new InvalidArgumentException('Choose a valid local time.');
+        if (!is_string($time) || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/D',$time)) throw new InvalidArgumentException(t('Choose a valid local time.'));
         $days=$conditions['weekdays'] ?? ($trigger==='weekly' ? [1] : [1,2,3,4,5,6,7]);
-        if (!is_array($days) || !$days || count($days)>7) throw new InvalidArgumentException('Choose at least one weekday.');
+        if (!is_array($days) || !$days || count($days)>7) throw new InvalidArgumentException(t('Choose at least one weekday.'));
         $days=array_values(array_unique(array_map(fn($day)=>int_range($day,1,7),$days))); sort($days);
         $minimum=int_range($conditions['min_open_tasks'] ?? 0,0,10000);
-        if (!$actions || count($actions)>5 || !array_is_list($actions)) throw new InvalidArgumentException('Choose between one and five actions.');
+        if (!$actions || count($actions)>5 || !array_is_list($actions)) throw new InvalidArgumentException(t('Choose between one and five actions.'));
         $clean=[];
         foreach ($actions as $action) {
-            if (!is_array($action) || array_diff(array_keys($action),['type','title','body'])) throw new InvalidArgumentException('Unsupported automation action.');
+            if (!is_array($action) || array_diff(array_keys($action),['type','title','body'])) throw new InvalidArgumentException(t('Unsupported automation action.'));
             $type=$action['type'] ?? '';
-            if (!is_string($type) || !isset(self::ACTIONS[$type])) throw new InvalidArgumentException('Choose a supported action.');
-            if (($trigger==='deadline')!==($type==='deadline_reminder')) throw new InvalidArgumentException('Use the deadline trigger with the deadline ladder action.');
-            if ($type==='weekly_report' && $trigger!=='weekly') throw new InvalidArgumentException('Weekly reports need a weekly trigger.');
-            if ($type==='monthly_summary' && $trigger!=='monthly') throw new InvalidArgumentException('Monthly summaries need a monthly trigger.');
-            if (in_array($type,array_column($clean,'type'),true)) throw new InvalidArgumentException('Choose each action only once.');
+            if (!is_string($type) || !isset(self::ACTIONS[$type])) throw new InvalidArgumentException(t('Choose a supported action.'));
+            if (($trigger==='deadline')!==($type==='deadline_reminder')) throw new InvalidArgumentException(t('Use the deadline trigger with the deadline ladder action.'));
+            if ($type==='weekly_report' && $trigger!=='weekly') throw new InvalidArgumentException(t('Weekly reports need a weekly trigger.'));
+            if ($type==='monthly_summary' && $trigger!=='monthly') throw new InvalidArgumentException(t('Monthly summaries need a monthly trigger.'));
+            if (in_array($type,array_column($clean,'type'),true)) throw new InvalidArgumentException(t('Choose each action only once.'));
             $clean[]=$type==='notify' ? ['type'=>$type,'title'=>self::text($action['title'] ?? '',150),'body'=>self::text($action['body'] ?? '',1000)] : ['type'=>$type];
         }
         return [['time'=>$time,'weekdays'=>$days,'min_open_tasks'=>$minimum],$clean];
@@ -47,7 +47,7 @@ final class AutomationService {
     }
     public static function rule(int $id): array {
         $row=Db::one('SELECT * FROM automation_rules WHERE id=? AND profile_id=?',[$id,self::profileId()]);
-        if (!$row) throw new InvalidArgumentException('Automation rule not found.'); return $row;
+        if (!$row) throw new InvalidArgumentException(t('Automation rule not found.')); return $row;
     }
     public static function toggle(int $id,bool $enabled): void { self::rule($id); Db::run('UPDATE automation_rules SET enabled=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',[$enabled ? 1 : 0,$id]); }
     public static function remove(int $id): void { self::rule($id); Db::run('DELETE FROM automation_rules WHERE id=?',[$id]); }
@@ -62,7 +62,7 @@ final class AutomationService {
     }
     public static function install(string $key): int {
         $template=self::templates()[$key] ?? null;
-        if (!$template) throw new InvalidArgumentException('Choose a starter automation.');
+        if (!$template) throw new InvalidArgumentException(t('Choose a starter automation.'));
         [$conditions,$actions]=self::validate($template['trigger'],$template['conditions'],$template['actions']);
         return Db::tx(function () use ($key,$template,$conditions,$actions): int {
             // The write claim is first, so concurrent clicks cannot create two starters.
@@ -121,6 +121,7 @@ final class AutomationService {
                 if (self::available('Planner') && self::table('planner_appointments')) foreach (Db::all("SELECT title,starts_at FROM planner_appointments WHERE status='scheduled' AND starts_at>=? AND starts_at<? ORDER BY starts_at LIMIT 8",[$day.' 00:00',$now->modify('+1 day')->format('Y-m-d').' 00:00']) as $event) $lines[]=$event['title'].' · '.substr($event['starts_at'],11,5);
                 if (self::available('Uni') && self::table('timetable')) foreach (Db::all('SELECT m.name,t.start_time FROM timetable t JOIN uni_modules m ON m.id=t.module_id WHERE t.day=? ORDER BY t.start_time LIMIT 8',[(int)$now->format('N')]) as $class) $lines[]=$class['name'].' · '.$class['start_time'];
                 if (self::available('Salary') && self::table('financial_obligations')) foreach (self::bills($day,$day) as $bill) $lines[]='Payment: '.$bill['title'].' · '.money($bill['amount']);
+                if (($weather=WeatherService::brief())!==null) $lines[]=$weather;
                 self::message($run,'Your morning brief · '.$day,implode("\n",$lines) ?: 'No saved events or due items today.','/planner'); break;
             case 'evening_review': self::message($run,'Time to close your day','Review what you finished, note any blockers, and choose tomorrow’s priorities.','/planner'); break;
             case 'deadline_reminder':
@@ -141,8 +142,10 @@ final class AutomationService {
             $due=$now->modify('+'.$days.' days')->format('Y-m-d'); $rows=[];
             if (self::available('Planner') && self::table('tasks')) foreach (Db::all("SELECT title FROM tasks WHERE status='open' AND due=? ORDER BY id LIMIT 50",[$due]) as $row) $rows[]=$row+['route'=>'/planner'];
             if (self::available('Uni') && self::table('assignments')) foreach (Db::all("SELECT title FROM assignments WHERE status<>'done' AND due_date=? ORDER BY id LIMIT 50",[$due]) as $row) $rows[]=$row+['route'=>'/uni'];
-            if (self::available('Uni') && self::table('exams')) foreach (Db::all('SELECT m.name title FROM exams e JOIN uni_modules m ON m.id=e.module_id WHERE e.date=? LIMIT 50',[$due]) as $row) $rows[]=['title'=>'Exam: '.$row['title'],'route'=>'/uni'];
+            if (self::available('Uni') && self::table('exams')) foreach (Db::all('SELECT m.name title FROM exams e JOIN uni_modules m ON m.id=e.module_id WHERE e.date=? LIMIT 50',[$due]) as $row) $rows[]=['title'=>t('Exam: ').$row['title'],'route'=>'/uni'];
             if (self::available('Salary') && self::table('financial_obligations')) foreach (self::bills($due,$due) as $row) $rows[]=['title'=>$row['title'],'route'=>'/salary/calendar'];
+            if(self::available('LifeAdmin')&&self::table('life_subscriptions'))foreach(Db::all("SELECT name title FROM life_subscriptions WHERE status='active' AND renews_on=?",[$due])as $row)$rows[]=$row+['route'=>'/life-admin#subscriptions'];
+            if(self::available('LifeAdmin')&&self::table('life_expiries'))foreach(Db::all("SELECT title FROM life_expiries WHERE status='active' AND expires_on=?",[$due])as $row)$rows[]=$row+['route'=>'/life-admin#expiries'];
             foreach ($rows as $row) $out[]=$row+['due'=>$due,'days'=>$days];
         }
         return array_slice($out,0,200);
@@ -167,7 +170,7 @@ final class AutomationService {
     }
     public static function reportById(int $id): array {
         $report=Db::one('SELECT * FROM automation_reports WHERE id=? AND profile_id=?',[$id,self::profileId()]);
-        if (!$report) throw new InvalidArgumentException('Report not found.');
+        if (!$report) throw new InvalidArgumentException(t('Report not found.'));
         $report['summary']=json_decode($report['summary'],true,32,JSON_THROW_ON_ERROR); return $report;
     }
 }

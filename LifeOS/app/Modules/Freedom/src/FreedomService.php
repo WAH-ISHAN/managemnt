@@ -6,23 +6,23 @@ final class FreedomService {
         $hours=$data['weekly_work_hours'] ?? '';
         if ($hours==='' || $hours===null) { Db::set('freedom_weekly_work_hours',''); return; }
         $value=cents($hours,true);
-        if ($value>16800) throw new InvalidArgumentException('Enter weekly work hours from 0 to 168, or leave the field empty.');
+        if ($value>16800) throw new InvalidArgumentException(t('Enter weekly work hours from 0 to 168, or leave the field empty.'));
         Db::set('freedom_weekly_work_hours',number_format($value/100,2,'.',''));
     }
     public static function record(int $id): array {
         $row=Db::one('SELECT * FROM freedom_time WHERE id=?',[$id]);
-        if (!$row) throw new InvalidArgumentException('Personal time entry not found.'); return $row;
+        if (!$row) throw new InvalidArgumentException(t('Personal time entry not found.')); return $row;
     }
     public static function saveTime(?int $id,array $data): int {
         if ($id) self::record($id);
-        $date=$data['date'] ?? ''; if (!is_string($date)) throw new InvalidArgumentException('Choose a valid date.'); valid_date($date);
-        if ($date>date('Y-m-d')) throw new InvalidArgumentException('Log personal time on today or an earlier date.');
-        $category=$data['category'] ?? ''; if (!is_string($category) || !isset(self::CATEGORIES[$category])) throw new InvalidArgumentException('Choose an existing personal time category.');
+        $date=$data['date'] ?? ''; if (!is_string($date)) throw new InvalidArgumentException(t('Choose a valid date.')); valid_date($date);
+        if ($date>date('Y-m-d')) throw new InvalidArgumentException(t('Log personal time on today or an earlier date.'));
+        $category=$data['category'] ?? ''; if (!is_string($category) || !isset(self::CATEGORIES[$category])) throw new InvalidArgumentException(t('Choose an existing personal time category.'));
         $minutes=int_range($data['minutes'] ?? '',1,1440); $note=$data['note'] ?? '';
-        if (!is_string($note) || mb_strlen($note)>2000 || str_contains($note,"\0")) throw new InvalidArgumentException('Use a note of up to 2,000 characters.');
+        if (!is_string($note) || mb_strlen($note)>2000 || str_contains($note,"\0")) throw new InvalidArgumentException(t('Use a note of up to 2,000 characters.'));
         return Db::tx(function () use ($id,$date,$category,$minutes,$note) {
             $logged=(int)Db::one('SELECT COALESCE(SUM(minutes),0) n FROM freedom_time WHERE date=? AND id<>?',[$date,$id ?? 0])['n'];
-            if ($logged+$minutes>1440) throw new InvalidArgumentException('Personal time entries for one day cannot exceed 24 hours.');
+            if ($logged+$minutes>1440) throw new InvalidArgumentException(t('Personal time entries for one day cannot exceed 24 hours.'));
             if ($id) { Db::run('UPDATE freedom_time SET date=?,category=?,minutes=?,note=? WHERE id=?',[$date,$category,$minutes,trim($note),$id]); return $id; }
             return Db::run('INSERT INTO freedom_time(date,category,minutes,note) VALUES (?,?,?,?)',[$date,$category,$minutes,trim($note)]);
         });

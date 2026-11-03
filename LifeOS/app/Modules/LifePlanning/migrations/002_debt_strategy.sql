@@ -1,0 +1,1 @@
+CREATE TABLE life_debts(id INTEGER PRIMARY KEY,name TEXT NOT NULL,balance REAL NOT NULL CHECK(balance>0),annual_rate REAL NOT NULL DEFAULT 0 CHECK(annual_rate>=0),minimum_payment REAL NOT NULL CHECK(minimum_payment>0),notes TEXT NOT NULL DEFAULT '');

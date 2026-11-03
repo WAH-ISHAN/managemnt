@@ -19,6 +19,8 @@
   const pack = form.querySelector('[data-persona-template]');
   form.addEventListener('change', event => {
     if (event.target.name !== 'persona') return;
+    const institution=form.querySelector('[data-persona-institution]');
+    if(institution)institution.textContent=event.target.value==='school'?window.lifeosT('School (optional)'):event.target.value==='uni'?window.lifeosT('University / institution (optional)'):window.lifeosT('Workplace / organization (optional)');
     [...pack.options].forEach(option => { option.hidden = !!option.dataset.persona && option.dataset.persona !== event.target.value; });
     if (pack.selectedOptions[0]?.hidden) pack.value = '';
   });

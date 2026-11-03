@@ -2,9 +2,9 @@
 declare(strict_types=1);
 final class DailyProgressService {
     public static function date(mixed $date): string {
-        if (!is_string($date)) throw new InvalidArgumentException('Choose a valid day.');
+        if (!is_string($date)) throw new InvalidArgumentException(t('Choose a valid day.'));
         valid_date($date);
-        if ($date>date('Y-m-d')) throw new InvalidArgumentException('Choose today or an earlier day to review actual activity.');
+        if ($date>date('Y-m-d')) throw new InvalidArgumentException(t('Choose today or an earlier day to review actual activity.'));
         return $date;
     }
     public static function day(string $date): array {

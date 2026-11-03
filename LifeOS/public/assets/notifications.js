@@ -9,8 +9,8 @@
   let data = null, filter = 'all', returnFocus = null, toastTimeout = null;
   const seen = new Set();
   const icons = {
-    calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M16 3v4M8 3v4M3 11h18m-13 5h3"/></svg>',
-    reminder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>'
+    calendar: window.lifeosHTML('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M16 3v4M8 3v4M3 11h18m-13 5h3"/></svg>'),
+    reminder: window.lifeosHTML('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>')
   };
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -35,7 +35,7 @@
       opener.setAttribute('aria-expanded', 'true');
       drawer.querySelector('[data-notifications-close]').focus();
     }
-    if (!data) message('Checking notifications…');
+    if (!data) message(window.lifeosT('Checking notifications…'));
     refresh();
   }
   function hideToast() { clearTimeout(toastTimeout); toastTimeout = null; if (toast) toast.hidden = true; }
@@ -65,10 +65,10 @@
     const unread = data.alerts.filter(alert => !alert.read).length;
     const count = document.getElementById('alert-count');
     if (count) { count.textContent = String(data.unreadCount); count.hidden = data.unreadCount === 0; }
-    opener.setAttribute('aria-label', data.unreadCount ? 'Notifications, ' + data.unreadCount + ' unread' : 'Notifications');
-    drawer.querySelector('#notifications-summary').textContent = data.alerts.length ? unread + ' unread · ' + data.alerts.length + ' notification' + (data.alerts.length === 1 ? '' : 's') : 'Your calendar and reminders, together.';
+    opener.setAttribute('aria-label', data.unreadCount ? window.lifeosT('Notifications, ') + data.unreadCount + ' unread' : window.lifeosT('Notifications'));
+    drawer.querySelector('#notifications-summary').textContent = data.alerts.length ? unread + ' unread · ' + data.alerts.length + ' notification' + (data.alerts.length === 1 ? '' : 's') : window.lifeosT('Your calendar and reminders, together.');
     drawer.querySelector('[data-notifications-unread]').textContent = String(unread);
-    drawer.querySelector('[data-notifications-preference]').textContent = data.enabled ? 'Windows popups are on' : 'Windows popups are off';
+    drawer.querySelector('[data-notifications-preference]').textContent = data.enabled ? window.lifeosT('Windows popups are on') : window.lifeosT('Windows popups are off');
     drawer.querySelector('[data-notifications-read-all]').disabled = unread === 0 || pending.size > 0;
     drawer.querySelectorAll('[data-notifications-filter]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.notificationsFilter === filter)));
     const rows = data.alerts.filter(alert => filter === 'all' || (filter === 'unread' ? !alert.read : alert.kind === 'calendar'));
@@ -77,8 +77,8 @@
     if (!rows.length) {
       const empty = element('div', 'notifications-empty');
       const icon = element('span'); icon.innerHTML = filter === 'calendar' ? icons.calendar : icons.reminder;
-      empty.append(icon, element('h3', '', filter === 'unread' ? 'You’re all caught up' : filter === 'calendar' ? 'No calendar updates yet' : 'Nothing needs your attention'));
-      empty.append(element('p', '', filter === 'calendar' ? 'New lectures, time changes and cancellations appear here after your NIBM calendar syncs.' : filter === 'unread' ? 'New updates will appear here as they arrive.' : 'Your calendar updates and upcoming reminders will appear here.'));
+      empty.append(icon, element('h3', '', filter === 'unread' ? window.lifeosT('You’re all caught up') : filter === 'calendar' ? window.lifeosT('No calendar updates yet') : window.lifeosT('Nothing needs your attention')));
+      empty.append(element('p', '', filter === 'calendar' ? window.lifeosT('New lectures, time changes and cancellations appear here after your NIBM calendar syncs.') : filter === 'unread' ? window.lifeosT('New updates will appear here as they arrive.') : window.lifeosT('Your calendar updates and upcoming reminders will appear here.')));
       list.append(empty);
     }
     for (const alert of rows) {
@@ -87,14 +87,14 @@
       const icon = element('span', 'notification-kind-icon'); icon.innerHTML = icons[alert.kind]; icon.setAttribute('aria-hidden', 'true');
       const content = element('div', 'notification-content');
       const meta = element('div', 'notification-topline');
-      if (!alert.read) { const dot = element('span', 'notification-unread-dot'); dot.setAttribute('aria-hidden', 'true'); meta.append(dot, element('span', 'sr-only', 'Unread. ')); }
-      meta.append(element('span', '', alert.kind === 'calendar' ? 'Calendar update' : 'Reminder'));
+      if (!alert.read) { const dot = element('span', 'notification-unread-dot'); dot.setAttribute('aria-hidden', 'true'); meta.append(dot, element('span', 'sr-only', window.lifeosT('Unread. '))); }
+      meta.append(element('span', '', alert.kind === 'calendar' ? window.lifeosT('Calendar update') : 'Reminder'));
       const stamp = dateLabel(alert.created_at);
-      if (stamp) { const time = element('time', '', stamp); time.title = 'Sri Lanka time'; meta.append(time); }
+      if (stamp) { const time = element('time', '', stamp); time.title = window.lifeosT('Sri Lanka time'); meta.append(time); }
       const link = element('a', 'notification-title', alert.title); link.href = safeRoute(alert.route); link.dataset.notificationsLink = '';
       const body = element('p', 'notification-body', alert.body);
       const actions = element('div', 'notification-actions');
-      for (const [action, label] of [...(!alert.read ? [['read','Mark as read']] : []), ['dismiss','Dismiss']]) {
+      for (const [action, label] of [...(!alert.read ? [['read',window.lifeosT('Mark as read')]] : []), ['dismiss','Dismiss']]) {
         const button = element('button', 'quiet', label); button.type = 'button'; button.dataset.notificationAction = action; button.disabled = pending.has(alert.id) || pending.has('all');
         button.setAttribute('aria-label', label + ': ' + alert.title);
         actions.append(button);
@@ -114,14 +114,14 @@
     try {
       const path = action === 'read-all' ? '/insights/alerts/read-all' : '/insights/alerts/' + id + '/' + action;
       const response = await fetch(path, {method:'POST', headers:{Accept:'application/json'}, body:new URLSearchParams({_csrf:data.csrf})});
-      if (!response.ok) throw new Error('notification update failed');
+      if (!response.ok) throw new Error(window.lifeosT('notification update failed'));
       if (action === 'dismiss') data.alerts = data.alerts.filter(alert => alert.id !== id);
       else data.alerts.forEach(alert => { if (!id || alert.id === id) alert.read = true; });
       data.unreadCount = data.alerts.filter(alert => !alert.read).length;
-      if (!silent) message(action === 'dismiss' ? 'Notification dismissed.' : action === 'read-all' ? 'All notifications marked as read.' : 'Notification marked as read.');
+      if (!silent) message(action === 'dismiss' ? window.lifeosT('Notification dismissed.') : action === 'read-all' ? window.lifeosT('All notifications marked as read.') : window.lifeosT('Notification marked as read.'));
       refresh();
     } catch {
-      if (!silent) message('Could not update notifications. Check the connection and try again.', true);
+      if (!silent) message(window.lifeosT('Could not update notifications. Check the connection and try again.'), true);
     } finally { pending.delete(key); render(); }
   }
   window.addEventListener('lifeos:alerts', event => {
@@ -132,7 +132,7 @@
     const fresh = data ? alerts.find(alert => alert.kind === 'calendar' && !alert.read && !seen.has(alert.id)) : null;
     for (const alert of alerts) seen.add(alert.id);
     data = {alerts, csrf:typeof payload.csrf === 'string' ? payload.csrf : '', enabled:payload.enabled === true, unreadCount:Number.isSafeInteger(payload.unreadCount) && payload.unreadCount >= 0 ? payload.unreadCount : alerts.filter(alert => !alert.read).length};
-    if (status.textContent === 'Checking notifications…') message('');
+    if (status.textContent === window.lifeosT('Checking notifications…')) message('');
     render();
     if (fresh) showToast(fresh);
   });

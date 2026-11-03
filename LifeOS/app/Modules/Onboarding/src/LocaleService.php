@@ -3,7 +3,10 @@ declare(strict_types=1);
 final class LocaleService {
     public static function language(): string { $locale=Db::setting('locale','en'); return in_array($locale,['en','si','ta'],true) ? $locale : 'en'; }
     public static function translate(string $text): string {
-        $dictionary=[
+        $locale=self::language();
+        if ($locale==='en') return $text;
+        static $dictionary=null;
+        if ($dictionary===null) { $dictionary=[
             'Today'=>['අද','இன்று'],'Planner'=>['දින සැලසුම','தினத் திட்டம்'],'Daily Planner'=>['දින සැලසුම','தினத் திட்டம்'],
             'Overview'=>['දළ විශ්ලේෂණය','கண்ணோட்டம்'],'Work management'=>['වැඩ කළමනාකරණය','பணி மேலாண்மை'],'Money'=>['මුදල්','பணம்'],
             'Investments'=>['ආයෝජන','முதலீடுகள்'],'University'=>['විශ්වවිද්‍යාලය','பல்கலைக்கழகம்'],'Goals'=>['ඉලක්ක','இலக்குகள்'],
@@ -25,7 +28,10 @@ final class LocaleService {
             'Save modules'=>['මොඩියුල සුරකින්න','தொகுதிகளைச் சேமி'],'Always on'=>['සැමවිටම සක්‍රියයි','எப்போதும் இயங்கும்'],
             'Welcome to LifeOS'=>['LifeOS වෙත සාදරයෙන් පිළිගනිමු','LifeOS இற்கு வரவேற்கிறோம்'],
         ];
-        $locale=self::language();
-        return $locale==='en' ? $text : ($dictionary[$text][$locale==='si' ? 0 : 1] ?? $text);
+        foreach (glob(dirname(__DIR__).'/locales/*.php') ?: [] as $file) $dictionary=array_replace($dictionary,require $file);
+        }
+        $translated=$dictionary[$text][$locale==='si' ? 0 : 1] ?? $text;
+        if($translated!==$text && trim($text)!==$text){preg_match('/^\s*/u',$text,$before);preg_match('/\s*$/u',$text,$after);return $before[0].trim($translated).$after[0];}
+        return $translated;
     }
 }

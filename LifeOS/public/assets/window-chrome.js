@@ -13,13 +13,13 @@
   const bar=document.createElement('header');
   bar.id='desktop-titlebar';
   bar.className='window-chrome';
-  bar.setAttribute('aria-label','LifeOS window');
-  bar.innerHTML='<div class="window-controls" role="group" aria-label="Window controls">'+
-    '<button type="button" class="window-control window-close" data-window-action="close" aria-label="Close LifeOS" title="Close LifeOS"><span class="window-control-dot"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m3 3 4 4m0-4L3 7"/></svg></span></button>'+
-    '<button type="button" class="window-control window-minimize" data-window-action="minimize" aria-label="Minimize LifeOS" title="Minimize LifeOS"><span class="window-control-dot"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 5h5"/></svg></span></button>'+
-    '<button type="button" class="window-control window-maximize" data-window-action="maximize" aria-label="Maximize LifeOS" title="Maximize LifeOS"><span class="window-control-dot"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 6.5v-4h4m1 1v4h-4"/></svg></span></button></div>'+
-    '<div class="window-chrome-brand" aria-hidden="true"><img src="/assets/brand/lifeos-mark.png" alt="" width="22" height="22" draggable="false"><span>LifeOS</span></div>'+
-    '<div class="window-chrome-status" aria-hidden="true"><span></span>Local workspace</div>';
+  bar.setAttribute('aria-label',window.lifeosT('LifeOS window'));
+  bar.innerHTML=window.lifeosHTML('<div class="window-controls" role="group" aria-label="Window controls">')+
+    window.lifeosHTML('<button type="button" class="window-control window-close" data-window-action="close" aria-label="Close LifeOS" title="Close LifeOS"><span class="window-control-dot"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="m3 3 4 4m0-4L3 7"/></svg></span></button>')+
+    window.lifeosHTML('<button type="button" class="window-control window-minimize" data-window-action="minimize" aria-label="Minimize LifeOS" title="Minimize LifeOS"><span class="window-control-dot"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 5h5"/></svg></span></button>')+
+    window.lifeosHTML('<button type="button" class="window-control window-maximize" data-window-action="maximize" aria-label="Maximize LifeOS" title="Maximize LifeOS"><span class="window-control-dot"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 6.5v-4h4m1 1v4h-4"/></svg></span></button></div>')+
+    window.lifeosHTML('<div class="window-chrome-brand" aria-hidden="true"><img src="/assets/brand/lifeos-mark.png" alt="" width="22" height="22" draggable="false"><span>LifeOS</span></div>')+
+    window.lifeosHTML('<div class="window-chrome-status" aria-hidden="true"><span></span>Local workspace</div>');
   document.body.prepend(bar);
   document.documentElement.dataset.desktopChrome='true';
   // Resize inside the WebView instead of exposing a painted native padding ring.
@@ -85,11 +85,11 @@
     if (state?.type!=='lifeos-window-state' || typeof state.maximized!=='boolean') return;
     document.documentElement.dataset.windowMaximized=String(state.maximized);
     const button=bar.querySelector('.window-maximize');
-    const label=state.maximized ? 'Restore LifeOS window' : 'Maximize LifeOS';
+    const label=state.maximized ? window.lifeosT('Restore LifeOS window') : window.lifeosT('Maximize LifeOS');
     button.setAttribute('aria-label',label);
     button.title=label;
     const close=bar.querySelector('.window-close');
-    const closeLabel=state.resident ? 'Hide LifeOS to system tray' : 'Close LifeOS';
+    const closeLabel=state.resident ? window.lifeosT('Hide LifeOS to system tray') : window.lifeosT('Close LifeOS');
     close.setAttribute('aria-label',closeLabel);close.title=closeLabel;
   });
   new MutationObserver(()=>send('state')).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});

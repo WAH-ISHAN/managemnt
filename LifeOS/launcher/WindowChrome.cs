@@ -124,7 +124,7 @@ internal sealed partial class LifeWindow
                     ReleaseCapture();
                     var cursor=Cursor.Position;
                     long position=((long)(ushort)cursor.Y<<16)|(ushort)cursor.X;
-                    SendMessage(Handle,0x00A1,(IntPtr)hit,(IntPtr)position);
+                    SendMessage(Handle,0x0112,(IntPtr)(0xF000+hit-9),(IntPtr)position);
                 }));
                 break;
             case "menu": BeginInvoke(new Action(ShowWindowMenu)); break;
@@ -230,7 +230,7 @@ internal sealed partial class LifeWindow
             });
             await Task.Delay(100,lifetime.Token);
             if (lastChromeResizeHit!=11 || Math.Abs(Width-(originalBounds.Width-32))>3 || Height!=originalBounds.Height)
-                throw new InvalidOperationException("The WebView edge did not perform a native resize: "+name);
+                throw new InvalidOperationException($"The WebView edge did not perform a native resize: {name}; hit={lastChromeResizeHit}; width={Width}; expected={originalBounds.Width-32}; height={Height}; expectedHeight={originalBounds.Height}");
             checks[name]=true;
         } finally { Bounds=originalBounds; Cursor.Position=originalCursor; }
     }

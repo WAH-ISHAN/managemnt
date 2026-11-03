@@ -1,5 +1,7 @@
 # LifeOS persona update roadmap
 
+**2026-11-03 source update:** the historical status rows below describe the foundation baseline. See [current extensions and remaining acceptance](../qa/core-personas-automation-extensions.md) for profiles, planning, integrations and local tools. Bank SMS/email parsing was removed by explicit user request and is no longer a delivery target.
+
 This is the product scope for the next LifeOS development cycle, recorded from the 100-feature proposal. Persona-based setup, local automation, Sinhala/Tamil/English access and Sri Lankan daily needs are the core direction. A persona selects useful modules and templates; the person can change those choices later.
 
 The complete list is a roadmap, not a claim that all 100 features ship together. The implemented foundation covers persona onboarding, saved module choices and sidebar ordering for the current `default` profile, an English/Sinhala/Tamil interface shell with English fallback, an allowlisted local automation builder and a resident runner. Targeted tests have passed; full release QA remains. See [foundation verification](../qa/persona-automation-foundation.md) for tested scope and limits. This work does not change the release version or build an installer.
@@ -104,7 +106,7 @@ Preserve the requested priority: **#1 → #9 → #10/#14/#15 → #17/#18 → #79
 | # | Feature | Status and scope |
 | --- | --- | --- |
 | 51 | Timetable clashes and module attendance percentage warnings | **Extend.** Weekly timetable and NIBM calendar exist; attendance records and clashes need explicit rules. |
-| 52 | Target GPA calculator: marks/grades needed for a goal | **Extend.** Credit-weighted GPA with editable grade points exists; hypothetical target calculations remain. |
+| 52 | Target GPA calculator: marks/grades needed for a goal | **Grade-point scenario in development.** Calculates the credit-weighted average needed on ungraded modules and a sufficient grade under the editable scale. Institution-specific marks-to-grade thresholds and per-module scenarios remain. |
 | 53 | Assignment backward planning and automatic subtasks | **Extend.** Assignment due dates/status/marks exist; effort estimates and breakdown planning remain. |
 | 54 | Exam study planner spreading topics before an exam | **Extend.** Exams exist; topic coverage, availability and revision scheduling remain. |
 | 55 | Spaced-repetition flashcards | **Planned.** Decks, review history and local scheduling. |

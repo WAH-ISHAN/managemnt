@@ -4,10 +4,17 @@ internal sealed partial class LifeWindow
 {
     private static readonly uint ActivateResidentMessage=RegisterWindowMessage("LifeOS.ShowMain.E89C8D98DC124820A52B1334E5D06A19");
     private static readonly uint ShutdownResidentMessage=RegisterWindowMessage("LifeOS.UpdateShutdown.E89C8D98DC124820A52B1334E5D06A19");
+    internal const string ActivationEventName=@"Local\LifeOS.Activate.E89C8D98DC124820A52B1334E5D06A19";
+    internal const string ShutdownEventName=@"Local\LifeOS.Shutdown.E89C8D98DC124820A52B1334E5D06A19";
     private bool allowExitForMaintenance,cleanupDone;
     private ContextMenuStrip? trayMenu;
 
-    internal static void NotifyExistingInstance(bool shutdown=false)=>PostMessage(new IntPtr(0xffff),shutdown?ShutdownResidentMessage:ActivateResidentMessage,IntPtr.Zero,IntPtr.Zero);
+    internal static void NotifyExistingInstance(bool shutdown=false,string? activationEventName=null)
+    {
+        try { using var signal=EventWaitHandle.OpenExisting(shutdown ? ShutdownEventName : activationEventName ?? ActivationEventName); signal.Set(); return; }
+        catch (WaitHandleCannotBeOpenedException) { }
+        PostMessage(new IntPtr(0xffff),shutdown?ShutdownResidentMessage:ActivateResidentMessage,IntPtr.Zero,IntPtr.Zero);
+    }
 
     private void InitializeResidency()
     {
@@ -30,7 +37,7 @@ internal sealed partial class LifeWindow
     private void ShowMainWindow()
     {
         if(IsDisposed)return;
-        ShowInTaskbar=true;Show();WindowState=FormWindowState.Normal;Activate();WriteResidentState();
+        ShowInTaskbar=true;Show();if(WindowState==FormWindowState.Minimized)WindowState=FormWindowState.Normal;Activate();WriteResidentState();
     }
     private void HideToTray()
     {

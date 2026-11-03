@@ -5,7 +5,7 @@ return function (Router $r) {
         $assets=(module_enabled('Investments') && class_exists('InvestmentService')) ? InvestmentService::allWithSummary() : [];
         $debt=(module_enabled('Salary') && class_exists('FinancePlanningService')) ? FinancePlanningService::outstandingDebt() : 0;
         $debts=(module_enabled('Salary') && class_exists('FinancePlanningService')) ? Db::all("SELECT id,title,outstanding,due_date FROM financial_obligations WHERE kind='loan' ORDER BY due_date,id") : [];
-        return View::render(__DIR__.'/views/net-worth.php',['title'=>'Why this net worth?','accounts'=>$accounts,'assets'=>$assets,'debt'=>$debt,'debts'=>$debts]);
+        return View::render(__DIR__.'/views/net-worth.php',['title'=>t('Why this net worth?'),'accounts'=>$accounts,'assets'=>$assets,'debt'=>$debt,'debts'=>$debts]);
     });
     $r->get('/',function () {
         if (class_exists('OnboardingService') && OnboardingService::needed()) return redirect('/welcome');
@@ -16,7 +16,7 @@ return function (Router $r) {
         $balance=array_sum(array_column($accounts,'balance')); $assets=$invest ? InvestmentService::allWithSummary() : [];
         usort($assets,fn($a,$b)=>$b['current']<=>$a['current']);
         return View::render(__DIR__.'/views/index.php',array_merge($summary,[
-            'hasFocus'=>module_enabled('Focus'),'hasGrowth'=>module_enabled('Growth'),'hasFreedom'=>module_enabled('Freedom'),'title'=>'Overview','hasSalary'=>$salary,'hasInvestments'=>$invest,'hasUni'=>$uni,'hasLessons'=>$lessons,
+            'hasFocus'=>module_enabled('Focus'),'hasGrowth'=>module_enabled('Growth'),'hasFreedom'=>module_enabled('Freedom'),'title'=>t('Overview'),'hasSalary'=>$salary,'hasInvestments'=>$invest,'hasUni'=>$uni,'hasLessons'=>$lessons,
             'selectedDay'=>$day,'dailyProgress'=>DailyProgressService::day($day),'dailyHistory'=>DailyProgressService::week($day),'suggestions'=>DailyProgressService::suggestions(),
             'name'=>Db::setting('name'),'accounts'=>$accounts,'balance'=>$balance,'netWorth'=>$balance+($invest ? InvestmentService::netWorth() : 0)-((module_enabled('Salary') && class_exists('FinancePlanningService')) ? FinancePlanningService::outstandingDebt() : 0),
             'series'=>$salary ? SalaryService::monthlySeries() : [],'assets'=>$assets,'goals'=>$invest ? InvestmentService::goals() : [],

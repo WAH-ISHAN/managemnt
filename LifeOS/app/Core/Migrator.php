@@ -14,7 +14,7 @@ final class Migrator {
                 $content = str_replace("\r\n", "\n", file_get_contents($file));
                 $hash = hash('sha256', $content);
                 if (isset($appliedMap[$key])) {
-                    if ($appliedMap[$key] !== $hash) throw new RuntimeException('An applied migration was changed: ' . $key);
+                    if ($appliedMap[$key] !== $hash) throw new RuntimeException(t('An applied migration was changed: ') . $key);
                     continue;
                 }
                 Db::tx(function () use ($content, $key, $hash) { Db::exec($content); Db::run('INSERT INTO migrations(file,checksum) VALUES (?,?)', [$key,$hash]); });

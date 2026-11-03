@@ -12,20 +12,26 @@ internal static class Program
     static void Main(string[] args)
     {
         if(args.Contains("--shutdown-for-update",StringComparer.OrdinalIgnoreCase)){LifeWindow.NotifyExistingInstance(true);return;}
-        bool diagnostic=Environment.GetEnvironmentVariable("LIFEOS_SMOKE_TEST")=="1" || Environment.GetEnvironmentVariable("LIFEOS_PROFILE_TEST")=="1";
+        bool activationTest=Environment.GetEnvironmentVariable("LIFEOS_ACTIVATION_TEST")=="1";
+        bool browserTest=Environment.GetEnvironmentVariable("LIFEOS_BROWSER_TEST")=="1";
+        bool diagnostic=Environment.GetEnvironmentVariable("LIFEOS_SMOKE_TEST")=="1" || Environment.GetEnvironmentVariable("LIFEOS_PROFILE_TEST")=="1" || activationTest || browserTest;
         if (diagnostic && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR"))) { Environment.ExitCode=2; return; }
         // Explicit diagnostic runs use their own data/profile and must not claim
         // the user's normal app instance. Ordinary launches remain single-instance.
         string mutexName=@"Local\LifeOS.SingleInstance";
+        string activationEventName=LifeWindow.ActivationEventName;
         if (diagnostic) {
             string diagnosticData=Path.GetFullPath(Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR")!);
             string identity=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(diagnosticData.ToUpperInvariant())));
             mutexName=@"Local\LifeOS.Diagnostic."+identity;
+            if (activationTest) activationEventName+="."+identity;
         }
         using var mutex = new Mutex(true, mutexName, out bool first);
-        if (!first) { if(!diagnostic)LifeWindow.NotifyExistingInstance(); return; }
+        if (!first) { if(!diagnostic || activationTest)LifeWindow.NotifyExistingInstance(false,activationEventName); return; }
         ApplicationConfiguration.Initialize();
-        try { Application.Run(new LifeWindow()); }
+        using var activationEvent = diagnostic && !activationTest ? null : new EventWaitHandle(false,EventResetMode.AutoReset,activationEventName);
+        using var shutdownEvent = diagnostic ? null : new EventWaitHandle(false,EventResetMode.AutoReset,LifeWindow.ShutdownEventName);
+        try { Application.Run(new LifeWindow(activationEvent,shutdownEvent)); }
         catch (Exception error) { MessageBox.Show(error.Message, "LifeOS", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
 }
@@ -34,13 +40,18 @@ internal sealed partial class LifeWindow : Form
 {
     private PanelHotkeyWindow? panelHotkeys;
     private bool appReady,pendingPanelToggle;
-    private readonly WebView2 web = new() { Dock = DockStyle.Fill };
+    private StartupWelcome? startupWelcome;
+    private bool startupPageReady;
+    private WebView2 web = new() { Dock = DockStyle.Fill };
     private Process? php;
     private readonly ProcessJob job = new();
     private readonly CancellationTokenSource lifetime = new();
+    private readonly EventWaitHandle? activationEvent;
+    private readonly EventWaitHandle? shutdownEvent;
     private ResidentAutomationRunner? automationRunner;
     private readonly string root = AppContext.BaseDirectory;
-    private readonly bool diagnostic=Environment.GetEnvironmentVariable("LIFEOS_SMOKE_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_PROFILE_TEST")=="1";
+    private readonly bool activationTest=Environment.GetEnvironmentVariable("LIFEOS_ACTIVATION_TEST")=="1";
+    private readonly bool diagnostic=Environment.GetEnvironmentVariable("LIFEOS_SMOKE_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_PROFILE_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_ACTIVATION_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_BROWSER_TEST")=="1";
     private Uri? home;
     private CoreWebView2Environment? webEnvironment;
     private DesktopPanelWindow? desktopPanel;
@@ -54,8 +65,10 @@ internal sealed partial class LifeWindow : Form
     private readonly HashSet<string> panelAlertIds = new();
     private DateTime lastReminder = DateTime.MinValue;
     private string reminderRoute = "/insights#alerts";
-    public LifeWindow()
+    public LifeWindow(EventWaitHandle? activationEvent=null,EventWaitHandle? shutdownEvent=null)
     {
+        this.activationEvent=activationEvent;
+        this.shutdownEvent=shutdownEvent;
         Text = "LifeOS — Student Life Management"; Width = 1320; Height = 880; MinimumSize = new Size(720, 600);
         StartPosition = FormStartPosition.CenterScreen; BackColor = Color.FromArgb(245,245,247);
         InitializeWindowChrome();
@@ -63,14 +76,37 @@ internal sealed partial class LifeWindow : Form
         reminders.Icon=Icon ?? SystemIcons.Application; reminders.Text="LifeOS · Student life reminders";
         reminders.BalloonTipClicked += (_, _) => { ShowMainWindow(); GoRoute(reminderRoute); };
         InitializeResidency();
+        InitializeSessionLifecycle();
+        if (activationEvent is not null) _=Task.Run(WatchResidentSignals);
         InitializeAppUpdates();
         Controls.Add(web); Load += Start;
-        FormClosed += (_, _) => Cleanup();
+        Shown += (_,_) => { if(!diagnostic) { startupWelcome=new StartupWelcome(root); startupWelcome.Show(this); if(startupPageReady)startupWelcome.Ready(); } };
+        FormClosed += (_, _) => { startupWelcome?.Dispose(); Cleanup(); };
         Application.ApplicationExit += (_, _) => Cleanup();
+    }
+    private void WatchResidentSignals()
+    {
+        try {
+            WaitHandle[] signals=shutdownEvent is null ? [activationEvent!] : [activationEvent!,shutdownEvent];
+            while (!lifetime.IsCancellationRequested) {
+                int signal=WaitHandle.WaitAny(signals,250);
+                if (signal!=WaitHandle.WaitTimeout && IsHandleCreated && !IsDisposed)
+                    BeginInvoke(new Action(() => {
+                        if (signal==1) { allowExitForMaintenance=true; Close(); return; }
+                        if (activationTest) {
+                            string data=Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR")!;
+                            File.WriteAllText(Path.Combine(data,"activation-received"),"ok");
+                            allowExitForMaintenance=true; Close();
+                        } else ShowMainWindow();
+                    }));
+            }
+        } catch (ObjectDisposedException) { }
+        catch (InvalidOperationException) { }
     }
     private async void Start(object? sender, EventArgs args)
     {
         string data = Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR") ?? Path.Combine(root, "data");
+        if (activationTest) { Directory.CreateDirectory(data); Hide(); File.WriteAllText(Path.Combine(data,"activation-ready"),"ok"); return; }
         if (!diagnostic && AppUpdateFiles.StartPending(root, data))
         {
             allowExitForMaintenance = true;
@@ -79,26 +115,32 @@ internal sealed partial class LifeWindow : Form
         }
         try
         {
+            LogStartup("Starting runtime");
             try { CoreWebView2Environment.GetAvailableBrowserVersionString(); }
             catch { throw new InvalidOperationException("WebView2 Runtime is missing. Run LifeOS-Setup.exe again to install the bundled runtime."); }
             Directory.CreateDirectory(Path.Combine(data,"sessions"));
-            if(!diagnostic){panelHotkeys=new PanelHotkeyWindow(ToggleDesktopPanel);File.WriteAllText(Path.Combine(data,"desktop-panel-hotkey.json"),JsonSerializer.Serialize(new{shortcut="Win+\\",registered=panelHotkeys.AnyWindowsRegistered,nativeError=panelHotkeys.WindowsError,primary=panelHotkeys.WindowsRegistered,iso=panelHotkeys.AlternateWindowsRegistered,fallback=panelHotkeys.FallbackRegistered,processId=Environment.ProcessId,owner="message-only-window"}));}
+            if(!diagnostic){panelHotkeys=new PanelHotkeyWindow(ToggleDesktopPanel,ShowQuickCapture);File.WriteAllText(Path.Combine(data,"desktop-panel-hotkey.json"),JsonSerializer.Serialize(new{shortcut="Win+\\",registered=panelHotkeys.AnyWindowsRegistered,nativeError=panelHotkeys.WindowsError,primary=panelHotkeys.WindowsRegistered,iso=panelHotkeys.AlternateWindowsRegistered,fallback=panelHotkeys.FallbackRegistered,captureShortcut="Ctrl+Shift+Space",captureRegistered=panelHotkeys.CaptureRegistered,captureError=panelHotkeys.CaptureError,processId=Environment.ProcessId,owner="message-only-window"}));}
             File.WriteAllText(Path.Combine(data,".write-check"), "ok"); File.Delete(Path.Combine(data,".write-check"));
             using var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start(); int port = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop();
             home = new Uri($"http://127.0.0.1:{port}/");
             string instance = Guid.NewGuid().ToString("N");
             string automationKey = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
-            var start = new ProcessStartInfo(Path.Combine(root,"php","php.exe")) { WorkingDirectory=root, UseShellExecute=false, CreateNoWindow=true };
+            var start = new ProcessStartInfo(Path.Combine(root,"php","php.exe")) { WorkingDirectory=root, UseShellExecute=false, CreateNoWindow=true, RedirectStandardError=true, RedirectStandardOutput=true };
             foreach (string value in new[] { "-c",Path.Combine(root,"php","php.ini"),"-d","extension_dir='"+Path.Combine(root,"php","ext")+"'","-S",$"127.0.0.1:{port}","-t",Path.Combine(root,"public"),Path.Combine(root,"public","index.php") }) start.ArgumentList.Add(value);
             start.Environment["LIFEOS_INSTANCE"] = instance; start.Environment["LIFEOS_DATA_DIR"] = data;
             start.Environment["LIFEOS_AUTOMATION_KEY"] = automationKey;
+            start.Environment["LIFEOS_HELLO_KEY"] = helloBridgeKey;
             start.Environment["LIFEOS_WEBSITE_KEY"] = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+            var webEnvironmentTask = CoreWebView2Environment.CreateAsync(null,Path.Combine(data,"webview"));
             php = Process.Start(start) ?? throw new InvalidOperationException("PHP could not start.");
+            php.ErrorDataReceived+=(_,e)=>{if(e.Data is {Length:>0} line && (line.Contains("Warning") || line.Contains("Error") || line.Contains("Fatal") || line.Contains("Failed")))LogStartup("PHP: "+line);};
+            php.BeginErrorReadLine(); php.BeginOutputReadLine();
             job.Attach(php);
             using var client = new HttpClient(new HttpClientHandler { UseProxy=false }) { Timeout=TimeSpan.FromSeconds(2) };
             bool ready = false;
-            for (int attempt=0; attempt<75 && !lifetime.IsCancellationRequested; attempt++)
+            var startupDeadline=Stopwatch.StartNew();
+            for (int attempt=0; startupDeadline.Elapsed<TimeSpan.FromSeconds(30) && !lifetime.IsCancellationRequested; attempt++)
             {
                 if (php.HasExited) throw new InvalidOperationException("PHP stopped during startup. Check data/php_error.log.");
                 try { if (await client.GetStringAsync(new Uri(home,"health"),lifetime.Token)=="LifeOS:"+instance) { ready=true; break; } }
@@ -107,29 +149,60 @@ internal sealed partial class LifeWindow : Form
             }
             if (!ready) throw new InvalidOperationException("LifeOS did not start in time. Check disk permissions and data/php_error.log.");
             if (!diagnostic) automationRunner = new ResidentAutomationRunner(home, automationKey, lifetime.Token);
-            var env = await CoreWebView2Environment.CreateAsync(null,Path.Combine(data,"webview"));
+            LogStartup("PHP ready");
+            var env = await webEnvironmentTask.WaitAsync(TimeSpan.FromSeconds(30),lifetime.Token);
+            LogStartup("Browser environment ready");
             webEnvironment=env;
             if (lifetime.IsCancellationRequested) return;
-            await web.EnsureCoreWebView2Async(env);
+            using (var request=new HttpRequestMessage(HttpMethod.Get,new Uri(home,"/internal/desktop/profile"))) {
+                request.Headers.Add("X-LifeOS-Automation-Key",automationKey);
+                using var response=await client.SendAsync(request,lifetime.Token);
+                response.EnsureSuccessStatusCode();
+                using var selected=JsonDocument.Parse(await response.Content.ReadAsStringAsync(lifetime.Token));
+                browserProfile=ValidBrowserProfile(selected.RootElement.GetProperty("profile").GetString());
+            }
             InitializeNibmCalendar(env);
+            if(!diagnostic){todayPanelTimer.Tick+=async(_,_)=>await CheckForTodayPanelAsync();todayPanelTimer.Start();}
+            await InitializeMainBrowserAsync(env);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception error) {
+            LogStartup("Startup failed",error);
+            if (smoke) { Directory.CreateDirectory(data); File.WriteAllText(Path.Combine(data,"launcher-smoke.json"),System.Text.Json.JsonSerializer.Serialize(new { success=false,error=error.Message })); }
+            else if (!IsDisposed) { startupWelcome?.Close(); MessageBox.Show(this,error.Message,"LifeOS could not open",MessageBoxButtons.OK,MessageBoxIcon.Error); }
+            allowExitForMaintenance=true;if (!IsDisposed) Close();
+        }
+    }
+    private async Task InitializeMainBrowserAsync(CoreWebView2Environment env, List<CoreWebView2Cookie>? transferCookies=null)
+    {
+        string data=Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR") ?? Path.Combine(root,"data");
+        int port=home!.Port;
+            await web.EnsureCoreWebView2Async(env, BrowserOptions(env, browserProfile));
+            nibmEnvironment=env;
             web.CoreWebView2.Settings.AreDevToolsEnabled = false;
             web.CoreWebView2.Settings.IsStatusBarEnabled = false;
             web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             web.CoreWebView2.NavigationStarting += (_, e) => {
                 todayPanelChecking=false;
+                if (Uri.TryCreate(e.Uri,UriKind.Absolute,out var switching) && switching.AbsolutePath=="/profiles/switch") { appReady=false; web.Visible=false; PauseNibmCalendar(); desktopPanel?.Hide(); }
                 if (!Uri.TryCreate(e.Uri,UriKind.Absolute,out var uri) || uri.GetLeftPart(UriPartial.Authority)!=home.GetLeftPart(UriPartial.Authority)) e.Cancel=true;
-                else if (uri.AbsolutePath is "/lock" or "/unlock") PauseNibmCalendar();
+                else if (uri.AbsolutePath is "/lock" or "/unlock" or "/idle-lock") ClosePrivateWindows();
             };
             web.CoreWebView2.NewWindowRequested += (_, e) => e.Handled=true;
             web.CoreWebView2.PermissionRequested += (_, e) => e.State=CoreWebView2PermissionState.Deny;
-            web.CoreWebView2.NavigationCompleted += async (_, _) => {
+            web.CoreWebView2.NavigationCompleted += async (sender, navigation) => {
+                if(IsDisposed || web.IsDisposed || !ReferenceEquals(sender,web.CoreWebView2))return;
+                if (navigation.IsSuccess && await SwitchBrowserIfNeededAsync()) return;
+                web.Visible=true;
+                if(navigation.IsSuccess) { startupPageReady=true; startupWelcome?.Ready(); }
                 if (IsDisposed) return;
                 try {
                     bool ready=await web.CoreWebView2.ExecuteScriptAsync("!!document.getElementById('desktop-titlebar')")=="true";
                     if (!IsDisposed) SetCustomChrome(ready);
-                    appReady=ready;if(ready&&pendingPanelToggle){pendingPanelToggle=false;ToggleDesktopPanel();}if(ready)WriteResidentState();
+                    appReady=ready;if(ready&&pendingQuickCapture)ShowQuickCapture();if(ready&&pendingPanelToggle){pendingPanelToggle=false;ToggleDesktopPanel();}if(ready)WriteResidentState();
                     if(ready&&!diagnostic)await CheckForTodayPanelAsync();
                     PublishUpdateState();
+                    if(ready && Environment.GetEnvironmentVariable("LIFEOS_BROWSER_TEST")=="1" && !browserTestStarted) { browserTestStarted=true; BeginInvoke(new Action(async()=>await RunBrowserProfileSmokeAsync())); }
                 } catch (InvalidOperationException) { if (!IsDisposed) SetCustomChrome(false); }
             };
             web.CoreWebView2.WebMessageReceived += (_, e) => {
@@ -137,6 +210,8 @@ internal sealed partial class LifeWindow : Form
                 try {
                     using var message=JsonDocument.Parse(e.WebMessageAsJson); var value=message.RootElement;
                     if (!value.TryGetProperty("type",out var kind) || kind.ValueKind!=JsonValueKind.String) return;
+                    if(kind.GetString()=="lifeos-ai-job" && source.AbsolutePath.StartsWith("/intelligence") && value.TryGetProperty("id",out var aiId) && aiId.ValueKind==JsonValueKind.String) { StartAiJob(aiId.GetString()??""); return; }
+                    if (kind.GetString()=="lifeos-hello" && source.AbsolutePath=="/unlock") { _=HandlePlatformHello(value.Clone()); return; }
                     if(kind.GetString()=="lifeos-today-panel") {
                         todayPanelChecking=false;
                         if(value.TryGetProperty("hasItems",out var hasItems)&&hasItems.ValueKind==JsonValueKind.True&&lastAutoPanelDate!=DateOnly.FromDateTime(DateTime.Today)) {
@@ -172,7 +247,7 @@ internal sealed partial class LifeWindow : Form
                     }
                 } catch (JsonException) { } catch (InvalidOperationException) { } catch (KeyNotFoundException) { }
             };
-            if(!diagnostic){todayPanelTimer.Tick+=async(_,_)=>await CheckForTodayPanelAsync();todayPanelTimer.Start();}
+
             web.KeyDown += (_, e) => {
                 if (!e.Control || e.Alt) return;
                 string? script=null;
@@ -255,14 +330,13 @@ internal sealed partial class LifeWindow : Form
                     File.AppendAllText(Path.Combine(data,"smoke-post-origins.jsonl"),JsonSerializer.Serialize(new { url=request.Request.Uri,origin })+Environment.NewLine);
                 };
             }
+            var manager=web.CoreWebView2.CookieManager;
+            RestoreExternalSessionCookies(manager);
+            if (transferCookies is not null) {
+                foreach (var cookie in transferCookies) manager.AddOrUpdateCookie(cookie);
+            }
+            manager.AddOrUpdateCookie(manager.CreateCookie("lifeos_profile",browserProfile,"127.0.0.1","/"));
             web.Source=home;
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception error) {
-            if (smoke) { Directory.CreateDirectory(data); File.WriteAllText(Path.Combine(data,"launcher-smoke.json"),System.Text.Json.JsonSerializer.Serialize(new { success=false,error=error.Message })); }
-            else if (!IsDisposed) MessageBox.Show(this,error.Message,"LifeOS could not open",MessageBoxButtons.OK,MessageBoxIcon.Error);
-            allowExitForMaintenance=true;if (!IsDisposed) Close();
-        }
     }
     private async Task RunSmoke(string data,bool navigationSucceeded)
     {
@@ -645,7 +719,7 @@ internal sealed partial class LifeWindow : Form
     private async Task VerifyDesktopPanelAsync(Dictionary<string,bool> checks)
     {
         if(home is null||webEnvironment is null)throw new InvalidOperationException("Desktop panel environment was not initialized.");
-        desktopPanel=new DesktopPanelWindow(home,webEnvironment);desktopPanel.Show();
+        desktopPanel=new DesktopPanelWindow(home,webEnvironment,browserProfile);desktopPanel.Show();
         try{
             bool ready=false;for(int i=0;i<100;i++){if(await desktopPanel.EvaluateAsync("Boolean(document.querySelector('[data-items]') && document.querySelector('[data-refresh]'))")=="true"){ready=true;break;}await Task.Delay(100,lifetime.Token);}
             if(!ready)throw new InvalidOperationException("Desktop side panel did not load.");checks["desktop-panel-native-window"]=true;
@@ -667,7 +741,7 @@ internal sealed partial class LifeWindow : Form
             var customized=desktopPanel.Bounds;desktopPanel.Hide();desktopPanel.RepositionForCurrentScreen();desktopPanel.Show();
             if(desktopPanel.Bounds!=customized)throw new InvalidOperationException("Panel layout was reset when reopening.");
             checks["desktop-panel-size-persistence"]=true;
-            using(var restored=new DesktopPanelWindow(home,webEnvironment)) {if(restored.Bounds!=customized)throw new InvalidOperationException("Saved panel layout was not restored from disk.");}
+            using(var restored=new DesktopPanelWindow(home,webEnvironment,browserProfile)) {if(restored.Bounds!=customized)throw new InvalidOperationException("Saved panel layout was not restored from disk.");}
             checks["desktop-panel-layout-reload"]=true;
             desktopPanel.Activate();
             string screenshots=Path.Combine(Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR")!,"smoke-screenshots");
@@ -677,8 +751,8 @@ internal sealed partial class LifeWindow : Form
     private void GoRoute(string path) { if (home is not null && path.StartsWith('/') && !path.StartsWith("//") && !IsDisposed) web.Source=new Uri(home,path); }
     private void ShowDesktopPanel()
     {
-        if(home is null||webEnvironment is null||diagnostic||IsDisposed)return;
-        try{if(desktopPanel is null){desktopPanel=new DesktopPanelWindow(home,webEnvironment);desktopPanel.OpenRouteRequested+=path=>{ShowMainWindow();GoRoute(path);};}if(!desktopPanel.Visible){desktopPanel.RepositionForCurrentScreen();desktopPanel.Show();}}
+        if(home is null||webEnvironment is null||(diagnostic&&!browserTestStarted)||IsDisposed)return;
+        try{if(desktopPanel is null){desktopPanel=new DesktopPanelWindow(home,webEnvironment,browserProfile);desktopPanel.OpenRouteRequested+=path=>{ShowMainWindow();GoRoute(path);};}if(!desktopPanel.Visible){desktopPanel.RepositionForCurrentScreen();desktopPanel.Show();}}
         catch(InvalidOperationException){}
     }
     private void ToggleDesktopPanel(){if(!appReady){pendingPanelToggle=!pendingPanelToggle;return;}if(desktopPanel?.Visible==true)desktopPanel.Hide();else ShowDesktopPanel();}
@@ -694,12 +768,14 @@ internal sealed partial class LifeWindow : Form
     {
         if(cleanupDone)return;cleanupDone=true;
         lifetime.Cancel();
+        DisposeSessionLifecycle();profileSessionCookies.Clear();
         automationRunner?.Dispose(); automationRunner=null;
         panelHotkeys?.Dispose();panelHotkeys=null;
         todayPanelTimer.Stop();todayPanelTimer.Dispose();desktopPanel?.Dispose();desktopPanel=null;
         DisposeNibmCalendar();
         try { if (php is { HasExited:false }) { php.Kill(true); php.WaitForExit(3000); } } catch { }
         php?.Dispose(); php=null; job.Dispose(); reminders.Visible=false; reminders.Dispose();trayMenu?.Dispose();
+        foreach(var worker in aiWorkers.Values)worker.Dispose();aiWorkers.Clear();
     }
 }
 

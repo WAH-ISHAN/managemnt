@@ -1,0 +1,70 @@
+<?php
+declare(strict_types=1);
+$root=sys_get_temp_dir().'/lifeos-connectivity-'.bin2hex(random_bytes(5)); mkdir($root,0700,true); define('DATA',$root.'/profile'); mkdir(DATA,0700,true); mkdir(DATA.'/backups'); mkdir(DATA.'/uploads');
+require __DIR__.'/bootstrap.php'; require ROOT.'/app/Core/Backup.php';
+$checks=0;
+function connection_check(bool $v,string $label): void { global $checks; if (!$v) throw new RuntimeException($label); $checks++; }
+function connection_reject(callable $fn,string $label): void { try { $fn(); } catch (InvalidArgumentException|RuntimeException $e) { connection_check(true,$label); return; } throw new LogicException($label); }
+function connection_clean(string $path): void { if (is_dir($path)) { foreach (new FilesystemIterator($path) as $file) connection_clean($file->getPathname()); rmdir($path); } else unlink($path); }
+try {
+    Db::init(DATA.'/lifeos.db'); $mods=Modules::discover(ROOT.'/app/Modules'); $dirs=array_merge([ROOT.'/app/Core/migrations'],array_map(fn($m)=>$m['path'].'/migrations',$mods)); Migrator::run($dirs); Migrator::run($dirs);
+    connection_check(!ConnectivityService::config()['mail_enabled'] && !ConnectivityService::config()['tracking_enabled'],'External adapters start disabled');
+    ConnectivitySecrets::save('mail_password','sensitive-local-password');
+    connection_check(ConnectivitySecrets::get('mail_password')==='sensitive-local-password','Machine-local authenticated credential encryption roundtrip');
+    connection_check(!str_contains(Db::setting('connection_secret_mail_password'),'sensitive'),'Secrets are not plaintext DB settings');
+    $encoded=Db::setting('connection_secret_mail_password'); Db::set('connection_secret_mail_password',substr($encoded,0,-4).'xxxx'); connection_reject(fn()=>ConnectivitySecrets::get('mail_password'),'Tampered secret rejected'); Db::set('connection_secret_mail_password',$encoded);
+    $token=ConnectivityService::token('Read only',['tasks.read'],1);
+    connection_check(!str_contains(json_encode(Db::all('SELECT * FROM connectivity_tokens')),$token),'API stores only token hashes');
+    $_SERVER['REMOTE_ADDR']='127.0.0.1'; $_SERVER['HTTP_AUTHORIZATION']='Bearer '.$token;
+    connection_check(ConnectivityService::api('GET','/api/v1/tasks')['tasks']===[],'Scoped read API uses disposable profile DB');
+    connection_reject(fn()=>ConnectivityService::api('POST','/api/v1/tasks',['title'=>'Denied']),'Read-only token cannot write');
+    $_SERVER['HTTP_ORIGIN']='http://127.0.0.1'; connection_reject(fn()=>ConnectivityService::authorizeApi(),'API rejects browser-origin requests'); unset($_SERVER['HTTP_ORIGIN']);
+    $_SERVER['REMOTE_ADDR']='192.168.1.1'; connection_reject(fn()=>ConnectivityService::authorizeApi(),'API refuses nonloopback access'); $_SERVER['REMOTE_ADDR']='127.0.0.1';
+    $write=ConnectivityService::token('Write',['tasks.write','time.write']); $_SERVER['HTTP_AUTHORIZATION']='Bearer '.$write;
+    $id=ConnectivityService::api('POST','/api/v1/tasks',['title'=>'CLI task','due'=>'2026-12-05'])['id'];
+    ConnectivityService::api('POST','/api/v1/tasks/'.$id.'/complete'); connection_check(PlannerService::task($id)['status']==='done','API creates and completes through task service');
+    connection_reject(fn()=>ConnectivityService::windowTime(['process'=>'Code','identity'=>'1','seconds'=>15]),'Tracking requires opt-in');
+    $c=ConnectivityService::config(); $c['tracking_enabled']=true; $c['tracking_exclusions']='KeePass'; ConnectivityService::saveConfig($c);
+    connection_check(ConnectivityService::windowTime(['process'=>'KeePassXC','identity'=>'private','seconds'=>15])['excluded'],'Excluded process never saved');
+    ConnectivityService::windowTime(['process'=>'Code','category'=>'Work','identity'=>'same-event','seconds'=>15]); ConnectivityService::windowTime(['process'=>'Code','category'=>'Work','identity'=>'same-event','seconds'=>15]);
+    connection_check((int)Db::one('SELECT SUM(seconds) n FROM connectivity_window_time')['n']===15,'Repeated time event deduplicated');
+    $ics="BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:test-one\r\nDTSTART:20261205T030000Z\r\nDTEND:20261205T040000Z\r\nSUMMARY:Family\\, meeting\r\nDESCRIPTION:Line one\\nLine two\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    $p=ConnectivityIcs::preview($ics); connection_check($p[0]['starts_at']==='2026-12-05 08:30' && $p[0]['title']==='Family, meeting','ICS timezone conversion and escaped text');
+    connection_check(Db::all('SELECT * FROM planner_appointments')===[],'ICS preview has no side effects');
+    ConnectivityIcs::import($ics); ConnectivityIcs::import($ics);
+    connection_check(count(Db::all('SELECT * FROM planner_appointments'))===1,'Repeated ICS import updates same UID');
+    connection_check(str_contains(ConnectivityIcs::export(),'SUMMARY:Family\\, meeting'),'ICS export escapes special characters');
+    connection_reject(fn()=>ConnectivityIcs::preview(str_replace('SUMMARY:','RRULE:FREQ=DAILY\r\nSUMMARY:',$ics)),'Recurring events explicitly rejected');
+    connection_reject(fn()=>ConnectivityIcs::preview(str_replace('20261205T030000Z','20261399T030000Z',$ics)),'Malformed ICS date rejected');
+    connection_reject(fn()=>ConnectivityIcs::preview(str_replace('20261205T030000Z','20261205',$ics)),'All-day events explicitly rejected');
+    $long=PlannerService::saveAppointment(null,['title'=>str_repeat('ප',90),'starts_at'=>'2026-12-10 10:00','ends_at'=>'2026-12-10 11:00']);
+    $export=ConnectivityIcs::export(); foreach (explode("\r\n",trim($export)) as $line) connection_check(strlen($line)<=75 && mb_check_encoding($line,'UTF-8'),'ICS folding retains valid UTF8 within 75 octets');
+    $email=Db::run("INSERT INTO connectivity_mail(identity,sender,subject,body,received_at) VALUES ('mail-1','test@example.org','[task] Prepare report','Source text','2026-11-03')");
+    $task=ConnectivityService::acceptMail($email); connection_check(ConnectivityService::acceptMail($email)===$task,'Email acceptance creates a single linked task');
+    $macro=ConnectivityService::saveMacro(['name'=>'Review','actions'=>'[{"type":"task","title":"Review day","due_days":0}]','enabled'=>1]);
+    ConnectivityService::runMacro($macro,true); ConnectivityService::runMacro($macro,true);
+    connection_check((int)Db::one("SELECT COUNT(*) n FROM tasks WHERE title='Review day'")['n']===1,'Scheduled macro runs once per day');
+    $script=$root.'/approved.php'; file_put_contents($script,'<?php file_put_contents(getenv("LIFEOS_DATA_DIR")."/macro-data-root.txt",getenv("LIFEOS_DATA_DIR")); echo "complete";');
+    connection_reject(fn()=>ConnectivityService::saveMacro(['name'=>'No trust','actions'=>json_encode([['type'=>'script','path'=>$script]])]),'Script requires explicit approval');
+    $trusted=ConnectivityService::saveMacro(['name'=>'Trusted','actions'=>json_encode([['type'=>'script','path'=>$script]]),'trust_scripts'=>1]);
+    ConnectivityService::runMacro($trusted); connection_check(Db::one('SELECT status FROM connectivity_script_runs WHERE macro_id=?',[$trusted])['status']==='complete','Approved script executes with shell bypass');
+    connection_check(is_file(DATA.'/macro-data-root.txt') && file_get_contents(DATA.'/macro-data-root.txt')===DATA,'Approved scripts inherit selected profile data directory');
+    file_put_contents($script,'<?php echo "changed";'); connection_reject(fn()=>ConnectivityService::runMacro($trusted),'Edited script requires renewed approval');
+    $event=['remote_id'=>'external-1','version'=>'v1','title'=>'Remote meeting','starts_at'=>'2026-12-05 12:00','ends_at'=>'2026-12-05 13:00','location'=>'Office','notes'=>'','cancelled'=>false];
+    $writer=fn()=>throw new RuntimeException('Unexpected remote write');
+    connection_check(ConnectivityCalendar::reconcile('test-provider',[$event],false,$writer)['imported']===1,'Calendar imports timed remote events');
+    connection_check(ConnectivityCalendar::reconcile('test-provider',[$event],false,$writer)['updated']===0,'Unchanged calendar sync has no repeat update');
+    $link=Db::one("SELECT * FROM connectivity_events WHERE provider='test-provider'"); Db::run("UPDATE planner_appointments SET title='Local edit' WHERE id=?",[$link['appointment_id']]); $event['version']='v2'; $event['title']='Remote edit';
+    connection_check(ConnectivityCalendar::reconcile('test-provider',[$event],false,$writer)['conflicts']===1,'Concurrent edits preserved as conflicts');
+    connection_check(Db::one('SELECT title FROM planner_appointments WHERE id=?',[$link['appointment_id']])['title']==='Local edit','Conflict never overwrites local change');
+    Db::run("UPDATE planner_appointments SET title='Remote meeting' WHERE id=?",[$link['appointment_id']]);
+    connection_check(ConnectivityCalendar::reconcile('test-provider',[$event],false,$writer)['updated']===1,'Remote-only change updates linked appointment');
+    $event['version']='v3'; $event['cancelled']=true; ConnectivityCalendar::reconcile('test-provider',[$event],false,$writer);
+    connection_check(Db::one('SELECT status FROM planner_appointments WHERE id=?',[$link['appointment_id']])['status']==='cancelled','Remote cancellation retained locally');
+    mkdir($root.'/external'); $c=ConnectivityService::config(); $c['backup_enabled']=true; $c['backup_destination']=$root.'/external'; $c['backup_passphrase']='recover this external backup'; ConnectivityService::saveConfig($c);
+    $backup=ConnectivityService::backup(); connection_check(is_file($backup) && str_starts_with(file_get_contents($backup,false,null,0,10),'LIFEOS-E1'),'Encrypted backup copied and verified externally');
+    $c['backup_destination']=DATA.'/backups'; connection_reject(fn()=>ConnectivityService::saveConfig($c),'External backup rejects same data folder');
+    Db::run('DELETE FROM connectivity_tokens WHERE hash=?',[hash('sha256',$write)]); connection_reject(fn()=>ConnectivityService::authorizeApi(),'Token revocation immediate');
+    connection_check(Db::all('PRAGMA foreign_key_check')===[] && Db::one('PRAGMA integrity_check')['integrity_check']==='ok','Database integrity preserved');
+    echo "Connectivity: $checks checks passed.\n";
+} finally { Db::close(); connection_clean($root); }

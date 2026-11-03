@@ -1,6 +1,6 @@
 # LifeOS — Your Life, Your Freedom
 
-Unreleased 1.9.0 development on the expense-automation branch adds reviewed keyword category rules and a generic pasted debit-alert preview with duplicate protection. Real bank-specific formats still need redacted sample alerts and acceptance checks; do not present this branch as a finished bank integration or publish it as a release.
+Version 1.9.1 repairs Windows startup, isolates native browser profiles, expands Sinhala/Tamil UI coverage and adds Work Roles plus a restricted online AI provider. Existing user data is preserved. No large AI model download is required. See [verification and limits](qa/end-to-end-2026-11-03.md) and [Work Roles / AI guide](docs/PART-3-WORK-ROLES-AI.md).
 
 Version 1.8.2 adds a persona-based foundation: six-persona onboarding, saved module switches/sidebar order, an English/Sinhala/Tamil interface shell and opt-in local automations with a resident scheduler. Open **Settings → Modules & language** to configure an existing workspace, then **Automations** to enable routines. See the [complete 100-feature roadmap](docs/PERSONA-UPDATE-ROADMAP.md) and [verified scope and remaining work](qa/persona-automation-foundation.md).
 

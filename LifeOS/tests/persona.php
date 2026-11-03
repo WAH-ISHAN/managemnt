@@ -16,7 +16,17 @@ try {
     foreach ($oldMigrations as $migration) copy(ROOT.'/app/Core/migrations/'.$migration,$directory.'/Core/migrations/'.$migration);
     Db::init($file); $modules=Modules::discover(ROOT.'/app/Modules');
     $moduleDirs=array_map(fn($m)=>$m['path'].'/migrations',$modules);
-    Migrator::run(array_merge([$directory.'/Core/migrations'],$moduleDirs));
+    // A legacy fixture cannot apply a later module data migration before its
+    // prerequisite persona tables exist. Load that module's original schema,
+    // then apply its current migrations alongside the real core upgrade below.
+    $legacyModuleDirs=$moduleDirs;
+    foreach ($legacyModuleDirs as $index=>$moduleDir) if (in_array(basename(dirname($moduleDir)),['School','Employee','StudyTools'],true)) {
+        $moduleName=basename(dirname($moduleDir));$legacySchool=$directory.'/'.$moduleName.'/migrations'; mkdir($legacySchool,0700,true);
+        $initial=match($moduleName){'School'=>'001_school.sql','Employee'=>'001_employee.sql','StudyTools'=>'001_study.sql'};
+        copy($moduleDir.'/'.$initial,$legacySchool.'/'.$initial);
+        $legacyModuleDirs[$index]=$legacySchool;
+    }
+    Migrator::run(array_merge([$directory.'/Core/migrations'],$legacyModuleDirs));
     Db::set('name','Disposable existing owner'); Db::set('pin_hash','retained-test-hash');
     $task=PlannerService::saveTask(null,['title'=>'Retained personal task','due'=>'2026-11-03']);
     $income=SalaryService::addIncome('2026-10-30','Entered income','100.00');
@@ -32,17 +42,18 @@ try {
     persona_check(Db::setting('name')==='Legacy caller' && Db::setting('institution')==='Legacy institute' && Db::setting('notifications_enabled')==='1' && !OnboardingService::needed(),'Old four-argument onboarding API remains compatible');
     persona_check(PersonaService::profile()===null && PersonaService::enabled('Uni'),'Legacy onboarding leaves module behavior unchanged');
     $expected=[
-        'employee'=>['Work','Salary','Investments','Career','Growth','Freedom','Focus','Documents','LifeAdmin','Lessons'],
-        'uni'=>['Uni','Salary','Focus','Growth','Documents','Lessons','Career','Freedom'],
-        'school'=>['Focus','Growth','Lessons'],
-        'freelancer'=>['Work','Salary','Investments','Career','Documents','Growth','Freedom','Websites','Focus'],
-        'business'=>['Work','Salary','Investments','SmallBusiness','Websites','WebAdmin','Documents','LifeAdmin','Growth'],
-        'job_seeker'=>['Career','Growth','Documents','Focus','Salary','Freedom','Lessons'],
+        'employee'=>['Employee','Work','Salary','Investments','Career','Growth','Freedom','Focus','Documents','LifeAdmin','Lessons','LifePlanning','Platform'],
+        'uni'=>['Uni','StudyTools','Salary','Focus','Growth','Documents','Lessons','Career','Freedom','LifePlanning','Platform'],
+        'school'=>['Focus','Growth','Lessons','School'],
+        'freelancer'=>['Work','Salary','Investments','Career','Documents','Growth','Freedom','Websites','Focus','LifePlanning','Platform'],
+        'business'=>['Work','Salary','Investments','SmallBusiness','Websites','WebAdmin','Documents','LifeAdmin','Growth','LifePlanning','Platform'],
+        'job_seeker'=>['Career','Growth','Documents','Focus','Salary','Freedom','Lessons','LifePlanning','Platform'],
     ];
     $layouts=['employee'=>'work','uni'=>'study','school'=>'simple','freelancer'=>'work','business'=>'money','job_seeker'=>'career'];
     $required=['Dashboard','Planner','Settings','Onboarding','Insights','Automation'];
     $personalCounts=[]; foreach (['tasks','income','expenses','accounts','uni_modules','planner_habits','focus_sessions','career_applications','automation_rules'] as $table) $personalCounts[$table]=(int)Db::one('SELECT COUNT(*) n FROM '.$table)['n'];
     foreach ($expected as $persona=>$on) {
+        if($persona!=='school')$on=array_merge($on,['WorkRoles','Intelligence']);
         PersonaService::apply($persona,'si'); $profile=PersonaService::profile();
         persona_check($profile['persona']===$persona && $profile['locale']==='si' && $profile['dashboard_layout']===$layouts[$persona] && $profile['name']==='Legacy caller','Persona identity, locale and dashboard choice are saved: '.$persona);
         foreach (PersonaService::catalog() as $module) persona_check(PersonaService::enabled($module['id'])===in_array($module['id'],array_merge($required,$on),true),'Relevant modules selected for '.$persona.': '.$module['id']);
@@ -86,6 +97,7 @@ try {
 } finally {
     Db::close(); foreach ([$file,$file.'-wal',$file.'-shm'] as $temporary) if (is_file($temporary)) unlink($temporary);
     foreach ($oldMigrations as $migration) if (is_file($directory.'/Core/migrations/'.$migration)) unlink($directory.'/Core/migrations/'.$migration);
+    foreach(['School','Employee','StudyTools']as $moduleName)if (is_dir($directory.'/'.$moduleName.'/migrations')) { foreach (glob($directory.'/'.$moduleName.'/migrations/*') ?: [] as $temporary) unlink($temporary); rmdir($directory.'/'.$moduleName.'/migrations'); rmdir($directory.'/'.$moduleName); }
     rmdir($directory.'/Core/migrations'); rmdir($directory.'/Core'); rmdir($directory);
     restore_error_handler();
 }

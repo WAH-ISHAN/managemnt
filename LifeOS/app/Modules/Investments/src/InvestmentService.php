@@ -2,16 +2,16 @@
 declare(strict_types=1);
 final class InvestmentService {
     public const TYPES=['business'=>'Business','trading'=>'Trading','deposit'=>'Fixed deposit','cash'=>'Cash / savings','other'=>'Other'];
-    public static function asset(int $id): array { $a=Db::one('SELECT * FROM assets WHERE id=?',[$id]); if (!$a) throw new InvalidArgumentException('Asset not found.'); return $a; }
+    public static function asset(int $id): array { $a=Db::one('SELECT * FROM assets WHERE id=?',[$id]); if (!$a) throw new InvalidArgumentException(t('Asset not found.')); return $a; }
     public static function create(string $name,string $type,string $date,string $notes): int {
-        if (!isset(self::TYPES[$type])) throw new InvalidArgumentException('Choose a valid asset type.'); valid_date($date);
+        if (!isset(self::TYPES[$type])) throw new InvalidArgumentException(t('Choose a valid asset type.')); valid_date($date);
         return Db::run('INSERT INTO assets(name,type,start_date,notes) VALUES (?,?,?,?)',[$name,$type,$date,$notes]);
     }
     public static function entry(int $id,string $date,string $type,mixed $amount,string $note,?int $account=null): int {
         self::asset($id); valid_date($date);
-        if (!in_array($type,['deposit','withdraw','valuation'],true)) throw new InvalidArgumentException('Choose a valid entry type.');
+        if (!in_array($type,['deposit','withdraw','valuation'],true)) throw new InvalidArgumentException(t('Choose a valid entry type.'));
         $n=cents($amount,$type==='valuation');
-        if ($account && ($type==='valuation' || !Db::one('SELECT id FROM accounts WHERE id=?',[$account]))) throw new InvalidArgumentException('Select an existing account for a deposit or withdrawal. Valuations do not move cash.');
+        if ($account && ($type==='valuation' || !Db::one('SELECT id FROM accounts WHERE id=?',[$account]))) throw new InvalidArgumentException(t('Select an existing account for a deposit or withdrawal. Valuations do not move cash.'));
         return Db::tx(function () use ($id,$date,$type,$n,$note,$account) {
             $entry=Db::run('INSERT INTO asset_transactions(asset_id,date,type,amount,note,account_id) VALUES (?,?,?,?,?,?)',[$id,$date,$type,$n/100,$note,$account]);
             if ($account) Db::run('UPDATE accounts SET balance=ROUND(balance+?,2) WHERE id=?',[$type==='deposit' ? -$n/100 : $n/100,$account]);
@@ -21,8 +21,8 @@ final class InvestmentService {
     public static function deleteEntry(int $asset,int $id): void {
         Db::tx(function () use ($asset,$id) {
             $row=Db::one('SELECT * FROM asset_transactions WHERE id=? AND asset_id=?',[$id,$asset]);
-            if (!$row) throw new InvalidArgumentException('Entry not found.');
-            if ($row['income_id']) throw new InvalidArgumentException('This deposit belongs to income. Delete the income entry in Money to reverse it.');
+            if (!$row) throw new InvalidArgumentException(t('Entry not found.'));
+            if ($row['income_id']) throw new InvalidArgumentException(t('This deposit belongs to income. Delete the income entry in Money to reverse it.'));
             if ($row['account_id']) Db::run('UPDATE accounts SET balance=ROUND(balance+?,2) WHERE id=?',[$row['type']==='deposit' ? $row['amount'] : -$row['amount'],$row['account_id']]);
             Db::run('DELETE FROM asset_transactions WHERE id=?',[$id]);
         });

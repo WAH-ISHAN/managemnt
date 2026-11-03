@@ -1,16 +1,16 @@
 <?php
 declare(strict_types=1);
-/** Configuration for the current local database. Separate family databases are a later phase. */
+/** Persona and module configuration inside one isolated local database. */
 final class PersonaService {
     public static function profileId(): string { return 'default'; }
     public static function personas(): array {
         return [
-            'employee'=>['name'=>'Employee','description'=>'Work, salary, goals and time for yourself.','layout'=>'work','modules'=>['Work','Salary','Investments','Career','Growth','Freedom','Focus','Documents','LifeAdmin','Lessons']],
-            'uni'=>['name'=>'University student','description'=>'Modules, assignments, study and a student budget.','layout'=>'study','modules'=>['Uni','Salary','Focus','Growth','Documents','Lessons','Career','Freedom']],
-            'school'=>['name'=>'School student','description'=>'A simple space for tasks, study and goals.','layout'=>'simple','modules'=>['Focus','Growth','Lessons']],
-            'freelancer'=>['name'=>'Freelancer','description'=>'Projects, income, clients and career growth.','layout'=>'work','modules'=>['Work','Salary','Investments','Career','Documents','Growth','Freedom','Websites','Focus']],
-            'business'=>['name'=>'Business owner','description'=>'Business projects, money and your websites.','layout'=>'money','modules'=>['Work','Salary','Investments','SmallBusiness','Websites','WebAdmin','Documents','LifeAdmin','Growth']],
-            'job_seeker'=>['name'=>'Job seeker','description'=>'Applications, skills, focus and your next step.','layout'=>'career','modules'=>['Career','Growth','Documents','Focus','Salary','Freedom','Lessons']],
+            'employee'=>['name'=>'Employee','description'=>t('Work, salary, goals and time for yourself.'),'layout'=>'work','modules'=>['Employee','Work','Salary','Investments','Career','Growth','Freedom','Focus','Documents','LifeAdmin','LifePlanning','Lessons']],
+            'uni'=>['name'=>'University student','description'=>t('Modules, assignments, study and a student budget.'),'layout'=>'study','modules'=>['Uni','StudyTools','Salary','Focus','Growth','Documents','Lessons','Career','Freedom','LifePlanning']],
+            'school'=>['name'=>'School student','description'=>t('A simple space for tasks, study and goals.'),'layout'=>'simple','modules'=>['Focus','Growth','Lessons','School']],
+            'freelancer'=>['name'=>'Freelancer','description'=>t('Projects, income, clients and career growth.'),'layout'=>'work','modules'=>['Work','Salary','Investments','Career','Documents','Growth','Freedom','Websites','Focus']],
+            'business'=>['name'=>'Business owner','description'=>t('Business projects, money and your websites.'),'layout'=>'money','modules'=>['Work','Salary','Investments','SmallBusiness','Websites','WebAdmin','Documents','LifeAdmin','Growth']],
+            'job_seeker'=>['name'=>'Job seeker','description'=>t('Applications, skills, focus and your next step.'),'layout'=>'career','modules'=>['Career','Growth','Documents','Focus','Salary','Freedom','Lessons']],
         ];
     }
     public static function templates(): array {
@@ -29,13 +29,14 @@ final class PersonaService {
     }
     public static function apply(string $persona,string $locale='en',string $template='',bool $inTransaction=false): void {
         $definition=self::personas()[$persona] ?? null;
-        if (!$definition || !in_array($locale,['en','si','ta'],true)) throw new InvalidArgumentException('Choose a valid persona and language.');
+        if (!$definition || !in_array($locale,['en','si','ta'],true)) throw new InvalidArgumentException(t('Choose a valid persona and language.'));
         $pack=self::templates()[$template] ?? null;
-        if ($template!=='' && (!$pack || $pack['persona']!==$persona)) throw new InvalidArgumentException('Choose a starter pack that matches your persona.');
+        if ($template!=='' && (!$pack || $pack['persona']!==$persona)) throw new InvalidArgumentException(t('Choose a starter pack that matches your persona.'));
         $catalog=self::catalog();
         $save=function () use ($persona,$locale,$template,$definition,$catalog) {
             Db::run('INSERT INTO local_profiles(id,name,persona,locale,template,dashboard_layout) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,persona=excluded.persona,locale=excluded.locale,template=excluded.template,dashboard_layout=excluded.dashboard_layout,updated_at=CURRENT_TIMESTAMP',[self::profileId(),Db::setting('name'),$persona,$locale,$template,$definition['layout']]);
-            $enabled=array_merge(['Dashboard','Planner','Settings','Onboarding','Insights','Automation'],$definition['modules']);
+            $common=$persona==='school'?[]:['LifePlanning','Platform','WorkRoles','Intelligence'];
+            $enabled=array_merge(['Dashboard','Planner','Settings','Onboarding','Insights','Automation'],$definition['modules'],$common);
             foreach ($catalog as $m) Db::run('INSERT INTO modules(profile_id,module_id,enabled,sort_order) VALUES (?,?,?,?) ON CONFLICT(profile_id,module_id) DO UPDATE SET enabled=excluded.enabled,sort_order=excluded.sort_order',[self::profileId(),$m['id'],(int)in_array($m['id'],$enabled,true),$m['order'] ?? 50]);
             Db::set('locale',$locale);
         };
@@ -43,7 +44,7 @@ final class PersonaService {
     }
     public static function configure(array $enabled,array $order): void {
         $catalog=self::catalog(); $ids=array_column($catalog,'id');
-        if (array_filter($enabled,fn($v)=>!is_string($v)) || array_diff($enabled,$ids) || array_diff(array_keys($order),$ids)) throw new InvalidArgumentException('Choose valid modules.');
+        if (array_filter($enabled,fn($v)=>!is_string($v)) || array_diff($enabled,$ids) || array_diff(array_keys($order),$ids)) throw new InvalidArgumentException(t('Choose valid modules.'));
         $positions=[];
         foreach ($catalog as $m) $positions[$m['id']]=int_range($order[$m['id']] ?? $m['order'] ?? 50,0,999);
         Db::tx(function () use ($catalog,$enabled,$positions) {
@@ -52,6 +53,8 @@ final class PersonaService {
         });
     }
     public static function menu(array $catalog): array {
+        if (class_exists('ProfileManager') && ProfileManager::isKid()) return array_values(array_filter($catalog,fn($m)=>in_array(basename($m['path']),['Planner','Focus','School'],true)&&self::enabled(basename($m['path']))));
+
         $rows=Db::all('SELECT module_id,enabled,sort_order FROM modules WHERE profile_id=?',[self::profileId()]);
         if (!$rows) return $catalog;
         $order=array_column($rows,'sort_order','module_id');

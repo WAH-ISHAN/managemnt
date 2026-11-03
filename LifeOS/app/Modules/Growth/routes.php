@@ -1,6 +1,6 @@
 <?php
 return function (Router $r) {
-    $r->get('/growth',fn()=>View::render(__DIR__.'/views/index.php',['title'=>'Goals & Growth','goals'=>GrowthService::goals()]));
+    $r->get('/growth',fn()=>View::render(__DIR__.'/views/index.php',['title'=>t('Goals & Growth'),'goals'=>GrowthService::goals()]));
     $r->post('/growth',function () { $id=GrowthService::saveGoal(null,$_POST); return redirect('/growth/'.$id,'Goal created. Break it into actionable steps.'); });
     $r->get('/growth/{id}',function ($p) { $id=record_id($p['id']); $goal=GrowthService::goal($id); return View::render(__DIR__.'/views/show.php',['title'=>$goal['title'],'goal'=>$goal,'goals'=>GrowthService::goals(),'steps'=>Db::all('SELECT s.*,p.title prerequisite,p.status prerequisite_status FROM personal_goal_steps s LEFT JOIN personal_goal_steps p ON p.id=s.depends_on WHERE s.goal_id=? ORDER BY s.sort,s.id',[$id])]); });
     $r->post('/growth/{id}/edit',function ($p) { $id=record_id($p['id']); GrowthService::saveGoal($id,$_POST); return redirect('/growth/'.$id,'Goal updated.'); });

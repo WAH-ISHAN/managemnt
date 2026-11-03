@@ -1,0 +1,10 @@
+ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('low','normal','high'));
+ALTER TABLE tasks ADD COLUMN estimate_minutes INTEGER NOT NULL DEFAULT 30 CHECK(estimate_minutes BETWEEN 5 AND 480);
+ALTER TABLE tasks ADD COLUMN deadline TEXT;
+ALTER TABLE tasks ADD COLUMN archived_at TEXT;
+CREATE INDEX tasks_archive ON tasks(archived_at,status,completed_at);
+CREATE TABLE capture_inbox(id INTEGER PRIMARY KEY, raw_text TEXT NOT NULL, draft TEXT NOT NULL, task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','converted','dismissed')), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE planner_blocks(id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE, starts_at TEXT NOT NULL, ends_at TEXT NOT NULL, pinned INTEGER NOT NULL DEFAULT 0 CHECK(pinned IN (0,1)), batch_id INTEGER, UNIQUE(task_id,starts_at), CHECK(ends_at>starts_at));
+CREATE INDEX planner_blocks_time ON planner_blocks(starts_at,ends_at);
+CREATE TABLE planner_batches(id INTEGER PRIMARY KEY, kind TEXT NOT NULL, changes TEXT NOT NULL, undone INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE planner_job_runs(slot TEXT PRIMARY KEY, result TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);

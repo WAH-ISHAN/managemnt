@@ -2,18 +2,18 @@
 declare(strict_types=1);
 final class FinancePlanningService {
     private static function label(mixed $value,int $limit=150): string {
-        $value=trim((string)$value); if ($value==='' || mb_strlen($value)>$limit) throw new InvalidArgumentException('Enter a short title.'); return $value;
+        $value=trim((string)$value); if ($value==='' || mb_strlen($value)>$limit) throw new InvalidArgumentException(t('Enter a short title.')); return $value;
     }
     private static function account(int $id,bool $savings=false): void {
         $row=Db::one('SELECT * FROM accounts WHERE id=?',[$id]);
         if (!$row || ($savings && $row['kind']!=='savings')) throw new InvalidArgumentException($savings ? 'Choose a savings account for the emergency fund.' : 'Choose an existing account.');
     }
-    private static function category(int $id): void { if (!Db::one('SELECT id FROM expense_categories WHERE id=?',[$id])) throw new InvalidArgumentException('Choose an existing expense category.'); }
+    private static function category(int $id): void { if (!Db::one('SELECT id FROM expense_categories WHERE id=?',[$id])) throw new InvalidArgumentException(t('Choose an existing expense category.')); }
     public static function calculate(array $d): array {
         $income=cents($d['income'] ?? ''); $bills=cents($d['bills'] ?? '0',true); $loans=cents($d['loan_payments'] ?? '0',true); $living=cents($d['living'] ?? '0',true);
         $savingRate=cents($d['savings_percent'] ?? '0',true); $investRate=cents($d['investment_percent'] ?? '0',true); $stepInput=$d['savings_step_percent'] ?? '0'; $savingStep=cents($stepInput==='' ? '0' : $stepInput,true);
-        if ($savingStep>10000) throw new InvalidArgumentException('Monthly savings increases must be between 0 and 100 percentage points.');
-        if ($savingRate>10000 || $investRate>10000 || $savingRate+$investRate>10000) throw new InvalidArgumentException('Savings and investment percentages together must not exceed 100%.');
+        if ($savingStep>10000) throw new InvalidArgumentException(t('Monthly savings increases must be between 0 and 100 percentage points.'));
+        if ($savingRate>10000 || $investRate>10000 || $savingRate+$investRate>10000) throw new InvalidArgumentException(t('Savings and investment percentages together must not exceed 100%.'));
         $parts=[intdiv($income*$savingRate,10000),intdiv($income*$investRate,10000)];
         $fractions=[($income*$savingRate)%10000,($income*$investRate)%10000]; arsort($fractions,SORT_NUMERIC);
         $extra=intdiv($income*($savingRate+$investRate)+5000,10000)-array_sum($parts);
@@ -58,16 +58,16 @@ final class FinancePlanningService {
         return $out;
     }
     public static function applyPlanAllocations(string $month,int $spendingAccount,?int $savingsAccount=null,?int $asset=null): void {
-        $plan=self::plan($month); if (!$plan) throw new InvalidArgumentException('Save a salary plan for this month first.');
+        $plan=self::plan($month); if (!$plan) throw new InvalidArgumentException(t('Save a salary plan for this month first.'));
         self::account($spendingAccount);
         $savings=(int)round($plan['savings_percent']*100); $investments=(int)round($plan['investment_percent']*100); $spending=10000-$savings-$investments; $rules=[];
         if ($savings>0) {
-            if (!$savingsAccount) throw new InvalidArgumentException('Choose a savings account for the plan\'s savings share.');
+            if (!$savingsAccount) throw new InvalidArgumentException(t('Choose a savings account for the plan\'s savings share.'));
             self::account($savingsAccount,true);
             $rules[]=['name'=>'Savings','percent'=>number_format($savings/100,2,'.',''),'account'=>$savingsAccount,'active'=>1];
         }
         if ($investments>0) {
-            if (!$asset || !class_exists('InvestmentService') || !Db::one("SELECT id FROM assets WHERE id=? AND status='active'",[$asset])) throw new InvalidArgumentException('Choose an active investment asset for the plan\'s investment share.');
+            if (!$asset || !class_exists('InvestmentService') || !Db::one("SELECT id FROM assets WHERE id=? AND status='active'",[$asset])) throw new InvalidArgumentException(t('Choose an active investment asset for the plan\'s investment share.'));
             $rules[]=['name'=>'Investments','percent'=>number_format($investments/100,2,'.',''),'account'=>$spendingAccount,'asset'=>$asset,'active'=>1];
         }
         if ($spending>0) $rules[]=['name'=>'Living & bills','percent'=>number_format($spending/100,2,'.',''),'account'=>$spendingAccount,'active'=>1];
@@ -79,16 +79,16 @@ final class FinancePlanningService {
         if ($interval==='weekly') return $d->modify('+7 days')->format('Y-m-d');
         if ($interval==='monthly') { $next=$d->modify('first day of next month'); return $next->setDate((int)$next->format('Y'),(int)$next->format('m'),min($anchor,(int)$next->format('t')))->format('Y-m-d'); }
         if ($interval==='yearly') { $year=(int)$d->format('Y')+1; $month=(int)$d->format('m'); $first=new DateTimeImmutable(sprintf('%04d-%02d-01',$year,$month)); return $first->setDate($year,$month,min($anchor,(int)$first->format('t')))->format('Y-m-d'); }
-        throw new InvalidArgumentException('Choose a valid recurrence interval.');
+        throw new InvalidArgumentException(t('Choose a valid recurrence interval.'));
     }
     public static function addObligation(array $d): int {
         $title=self::label($d['title'] ?? ''); $kind=(string)($d['kind'] ?? '');
-        if (!in_array($kind,['bill','loan'],true)) throw new InvalidArgumentException('Choose a bill or loan.');
+        if (!in_array($kind,['bill','loan'],true)) throw new InvalidArgumentException(t('Choose a bill or loan.'));
         $amount=cents($d['amount'] ?? ''); $due=valid_date((string)($d['due_date'] ?? '')); $interval=(string)($d['interval'] ?? 'none');
-        if (!in_array($interval,['none','monthly'],true)) throw new InvalidArgumentException('Choose once or monthly.');
+        if (!in_array($interval,['none','monthly'],true)) throw new InvalidArgumentException(t('Choose once or monthly.'));
         $account=record_id($d['account_id'] ?? ''); $category=record_id($d['category_id'] ?? ''); self::account($account); self::category($category);
         $balance=$kind==='loan' ? cents($d['outstanding'] ?? '')/100 : null;
-        if ($kind==='loan' && $interval==='none' && $amount<(int)round($balance*100)) throw new InvalidArgumentException('Choose monthly for a loan that needs more than one payment.');
+        if ($kind==='loan' && $interval==='none' && $amount<(int)round($balance*100)) throw new InvalidArgumentException(t('Choose monthly for a loan that needs more than one payment.'));
         return Db::run('INSERT INTO financial_obligations(title,kind,amount,due_date,interval,anchor_day,account_id,category_id,original_balance,outstanding) VALUES (?,?,?,?,?,?,?,?,?,?)',[$title,$kind,$amount/100,$due,$interval,(int)substr($due,8,2),$account,$category,$balance,$balance]);
     }
     private static function expenseWithinTransaction(string $date,int $category,int $account,int $amount,string $note): int {
@@ -102,10 +102,10 @@ final class FinancePlanningService {
             $paid=Db::one("SELECT * FROM financial_payments WHERE obligation_id=? AND due_date=? AND status='paid'",[$id,$due]);
             if ($paid && $paid['expense_id']) return (int)$paid['expense_id'];
             $row=Db::one('SELECT * FROM financial_obligations WHERE id=?',[$id]);
-            if (!$row || !$row['active'] || $row['due_date']!==$due) throw new InvalidArgumentException('This payment date changed. Reload the calendar.');
+            if (!$row || !$row['active'] || $row['due_date']!==$due) throw new InvalidArgumentException(t('This payment date changed. Reload the calendar.'));
             $amount=(int)round($row['amount']*100);
             if ($row['kind']==='loan') $amount=min($amount,(int)round($row['outstanding']*100));
-            if ($amount<=0) throw new InvalidArgumentException('This loan has no remaining balance.');
+            if ($amount<=0) throw new InvalidArgumentException(t('This loan has no remaining balance.'));
             $expense=self::expenseWithinTransaction($paidDate,(int)$row['category_id'],(int)$row['account_id'],$amount,ucfirst($row['kind']).': '.$row['title'].' · due '.$due);
             Db::run("INSERT INTO financial_payments(obligation_id,due_date,paid_date,amount,expense_id,status) VALUES (?,?,?,?,?,'paid') ON CONFLICT(obligation_id,due_date) DO UPDATE SET paid_date=excluded.paid_date,amount=excluded.amount,expense_id=excluded.expense_id,status='paid'",[$id,$due,$paidDate,$amount/100,$expense]);
             $outstanding=$row['kind']==='loan' ? max(0,(int)round($row['outstanding']*100)-$amount)/100 : null;
@@ -133,12 +133,12 @@ final class FinancePlanningService {
     }
     public static function outstandingDebt(): float { return (float)Db::one("SELECT COALESCE(SUM(outstanding),0) n FROM financial_obligations WHERE kind='loan'")['n']; }
     public static function addRecurrence(array $d): int {
-        $title=self::label($d['title'] ?? ''); $kind=(string)($d['kind'] ?? ''); if (!in_array($kind,['income','expense'],true)) throw new InvalidArgumentException('Choose recurring income or expense.');
+        $title=self::label($d['title'] ?? ''); $kind=(string)($d['kind'] ?? ''); if (!in_array($kind,['income','expense'],true)) throw new InvalidArgumentException(t('Choose recurring income or expense.'));
         $amount=cents($d['amount'] ?? ''); $next=valid_date((string)($d['next_date'] ?? '')); $interval=(string)($d['interval'] ?? ''); self::nextDate($next,$interval,(int)substr($next,8,2));
-        $type=(string)($d['income_type'] ?? 'salary'); if (!in_array($type,['salary','freelance','business','other'],true)) throw new InvalidArgumentException('Choose a valid income type.');
+        $type=(string)($d['income_type'] ?? 'salary'); if (!in_array($type,['salary','freelance','business','other'],true)) throw new InvalidArgumentException(t('Choose a valid income type.'));
         $account=optional_id($d['account_id'] ?? ''); $category=optional_id($d['category_id'] ?? '');
         if ($account) self::account($account); if ($category) self::category($category);
-        if ($kind==='expense' && (!$account || !$category)) throw new InvalidArgumentException('Recurring expenses need an account and category.');
+        if ($kind==='expense' && (!$account || !$category)) throw new InvalidArgumentException(t('Recurring expenses need an account and category.'));
         $active=!empty($d['active']) ? 1 : 0;
         return Db::run('INSERT INTO financial_recurrences(title,kind,amount,income_type,account_id,category_id,interval,next_date,anchor_day,active) VALUES (?,?,?,?,?,?,?,?,?,?)',[$title,$kind,$amount/100,$type,$account,$category,$interval,$next,(int)substr($next,8,2),$active]);
     }

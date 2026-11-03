@@ -20,8 +20,13 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--baseline-modules', type=Path)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--samples', type=int, default=20)
+parser.add_argument('--production-runtime', action='store_true', help='Measure with the bundled PHP configuration including OPcache')
 args = parser.parse_args()
 php = os.environ.get('LIFEOS_QA_PHP', 'php')
+php_args=[php]
+if args.production_runtime:
+    php=str(ROOT/'dist/php/php.exe')
+    php_args=[php,'-c',str(ROOT/'php.ini'),'-d',"extension_dir='"+str(ROOT/'dist/php/ext')+"'"]
 
 
 def percentile(values, fraction):
@@ -44,7 +49,7 @@ def benchmark(project, data):
             return result, response.headers, (time.perf_counter() - started) * 1000
 
     with (data / 'benchmark-server.log').open('w') as log:
-        server = subprocess.Popen([php, '-S', f'127.0.0.1:{port}', '-t', 'public', 'public/index.php'],
+        server = subprocess.Popen([*php_args, '-S', f'127.0.0.1:{port}', '-t', 'public', 'public/index.php'],
                                   cwd=project, env=dict(os.environ, LIFEOS_DATA_DIR=str(data)), stdout=log, stderr=log)
         try:
             for attempt in range(100):
@@ -84,7 +89,7 @@ with tempfile.TemporaryDirectory(prefix='lifeos-request-performance-') as tempor
     bootstrap.write_text(source, encoding='utf-8')
     seed = work / 'seed'
     seed.mkdir()
-    seeded = subprocess.run([php, str(ROOT / 'tests/seed_load.php'), str(seed)], capture_output=True, text=True, check=True)
+    seeded = subprocess.run([*php_args, str(ROOT / 'tests/seed_load.php'), str(seed)], capture_output=True, text=True, check=True)
     with sqlite3.connect(seed / 'lifeos.db') as connection:
         connection.execute("INSERT INTO settings(key,value) VALUES ('onboarding_complete','1') ON CONFLICT(key) DO UPDATE SET value=excluded.value")
         connection.execute("INSERT INTO settings(key,value) VALUES ('name','Disposable performance owner') ON CONFLICT(key) DO UPDATE SET value=excluded.value")

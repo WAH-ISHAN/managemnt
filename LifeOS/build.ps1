@@ -12,7 +12,7 @@ if (-not (Test-Path -LiteralPath $WebViewInstaller)) { throw 'Provide the offlin
 if (-not (Test-Path -LiteralPath $InnoCompiler)) { throw 'Provide the Inno Setup 6 compiler with -InnoCompiler.' }
 $phpExe = Join-Path $PhpDirectory 'php.exe'
 & $phpExe (Join-Path $projectRoot 'scripts/check-runtime.php')
-if ($LASTEXITCODE -ne 0) { throw 'Build requires PHP 8.3 with pdo_sqlite, sqlite3, mbstring, openssl, zip and fileinfo.' }
+if ($LASTEXITCODE -ne 0) { throw 'Build requires PHP 8.3 with pdo_sqlite, sqlite3, mbstring, openssl, sodium, zip, fileinfo and curl.' }
 & $Dotnet --version
 if ($LASTEXITCODE -ne 0) { throw 'A .NET SDK is required to build the launcher.' }
 foreach ($file in @($WebViewInstaller,$InnoCompiler)) {
@@ -29,11 +29,11 @@ New-Item -ItemType Directory -Path $distribution -Force | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed.' }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'app'),(Join-Path $projectRoot 'public') -Destination $distribution -Recurse
 New-Item -ItemType Directory -Path (Join-Path $distribution 'php/ext'),(Join-Path $distribution 'prerequisites'),(Join-Path $distribution 'scripts') -Force | Out-Null
-foreach ($helper in @('Apply-LifeOSUpdate.ps1','update-backup.php','Set-WindowsStartup.ps1')) { Copy-Item -LiteralPath (Join-Path $projectRoot ('scripts/'+$helper)) -Destination (Join-Path $distribution 'scripts') }
+foreach ($helper in @('Apply-LifeOSUpdate.ps1','update-backup.php','Set-WindowsStartup.ps1','mobile_companion.py','setup_mobile_tls.py','connectivity_worker.py','authorize_calendar.py','lifeos_cli.py','Track-ActiveWindow.ps1','opencode_worker.py')) { Copy-Item -LiteralPath (Join-Path $projectRoot ('scripts/'+$helper)) -Destination (Join-Path $distribution 'scripts') }
 if (Test-Path -LiteralPath (Join-Path $projectRoot 'lifeos-release.json')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'lifeos-release.json') -Destination $distribution }
 Copy-Item -LiteralPath $phpExe,(Join-Path $PhpDirectory 'license.txt') -Destination (Join-Path $distribution 'php')
 Get-ChildItem -LiteralPath $PhpDirectory -Filter '*.dll' | Copy-Item -Destination (Join-Path $distribution 'php')
-foreach ($extension in @('php_pdo_sqlite.dll','php_sqlite3.dll','php_mbstring.dll','php_openssl.dll','php_zip.dll','php_fileinfo.dll','php_curl.dll','php_opcache.dll')) { $extPath = Join-Path $PhpDirectory "ext/$extension"; if (Test-Path -LiteralPath $extPath) { Copy-Item -LiteralPath $extPath -Destination (Join-Path $distribution 'php/ext') } }
+foreach ($extension in @('php_pdo_sqlite.dll','php_sqlite3.dll','php_mbstring.dll','php_openssl.dll','php_zip.dll','php_fileinfo.dll','php_curl.dll','php_sodium.dll','php_opcache.dll')) { $extPath = Join-Path $PhpDirectory "ext/$extension"; if (Test-Path -LiteralPath $extPath) { Copy-Item -LiteralPath $extPath -Destination (Join-Path $distribution 'php/ext') } }
 if(Test-Path -LiteralPath (Join-Path $projectRoot 'integrations')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'integrations') -Destination $distribution -Recurse }
 # App-local Microsoft VC runtime for PHP on clean Windows installations.
 foreach ($dll in @('vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll')) { Copy-Item -LiteralPath (Join-Path $env:WINDIR "System32/$dll") -Destination (Join-Path $distribution 'php') }

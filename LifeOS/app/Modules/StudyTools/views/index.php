@@ -1,0 +1,1 @@
+<?php $service=StudyService::class;$base='/study';$workspaceTitle='University study tools';$description='Attendance, assignment planning, revision, research and your academic career.';$summaryView=__DIR__.'/summary.php';$detailView=__DIR__.'/detail.php';require ROOT.'/app/Core/views/record-workspace.php'; ?>
