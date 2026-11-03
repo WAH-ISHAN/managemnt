@@ -21,6 +21,7 @@ internal sealed partial class LifeWindow
         if(diagnostic)return;
         trayMenu=new ContextMenuStrip();
         trayMenu.Items.Add("Open LifeOS",null,(_,_)=>ShowMainWindow());
+        trayMenu.Items.Add("LifeOS AI  (Win + Shift + \\)",null,(_,_)=>ShowAssistantPanel());
         trayMenu.Items.Add("Show / hide panel  (Win + \\)",null,(_,_)=>ToggleDesktopPanel());
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(new ToolStripMenuItem("LifeOS is running in the background"){Enabled=false});
@@ -41,7 +42,7 @@ internal sealed partial class LifeWindow
     }
     private void HideToTray()
     {
-        desktopPanel?.Hide();Hide();ShowInTaskbar=false;reminders.Visible=true;WriteResidentState();
+        desktopPanel?.Hide();assistantPanel?.Hide();Hide();ShowInTaskbar=false;reminders.Visible=true;WriteResidentState();
     }
     private void WriteResidentState()
     {

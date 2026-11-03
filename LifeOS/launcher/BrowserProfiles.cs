@@ -36,6 +36,7 @@ internal sealed partial class LifeWindow
             foreach(var request in nibmLocalRequests.Values) request.TrySetCanceled();
             nibmLocalRequests.Clear();
             desktopPanel?.Dispose(); desktopPanel=null;
+            assistantPanel?.Dispose();assistantPanel=null;
             delivered.Clear(); panelAlertIds.Clear(); lastAutoPanelDate=DateOnly.MinValue;
             // Carry only the freshly authenticated target PHP session. External
             // cookies, storage, caches and sign-ins stay in their named profile.

@@ -15,7 +15,8 @@ try {
     $env:LIFEOS_BROWSER_TEST='1';$env:LIFEOS_DATA_DIR=$data
     foreach($run in 1..2){
     $process=Start-Process -FilePath (Join-Path $root $Dotnet) -ArgumentList ('"'+(Join-Path $app 'LifeOS.dll')+'"') -WorkingDirectory $app -WindowStyle Hidden -PassThru
-    if(-not $process.WaitForExit(90000)){$process.Kill();throw 'Browser profile smoke timed out.'}
+    $processTimeout=if($env:LIFEOS_AI_LIVE_TEST -eq '1'){150000}else{90000}
+    if(-not $process.WaitForExit($processTimeout)){$process.Kill();throw 'Browser profile smoke timed out.'}
     $result=Get-Content -LiteralPath (Join-Path $data 'browser-profile-result.json') -Raw | ConvertFrom-Json
     $result | ConvertTo-Json -Depth 5
     if(-not $result.success){throw 'Browser profile smoke failed.'}

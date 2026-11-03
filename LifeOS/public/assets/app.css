@@ -33,3 +33,5 @@ body{font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif}kbd,.t
 @media(max-width:760px){.freedom-heading h1{font-size:32px;letter-spacing:-1px}.freedom-intention,.freedom-runway,.personal-time-card{padding:24px}.freedom-layout{gap:0}.personal-time-layout{grid-template-columns:1fr;gap:28px}.time-log-form{padding:24px 0 0;border-left:0;border-top:1px solid var(--line)}.section-symbol{margin-bottom:24px}.freedom-metric{margin:20px 0}.time-entry-actions{gap:8px}.freedom-heading .btn{white-space:normal}}
 @media(prefers-reduced-motion:reduce){.content{animation:none}button,.btn,.nav-link{transition:none}}
 @media print{.freedom-layout,.personal-time-layout{display:block}.time-log-form,.time-entry-actions,.work-context{display:none}.freedom-intention{box-shadow:none}.personal-time-card{padding:0}}
+
+@media(max-width:760px){.assistant-toolbar-button>span:last-child{display:none}.toolbar-actions{max-width:100%;flex-wrap:wrap}}

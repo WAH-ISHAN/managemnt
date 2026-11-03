@@ -119,7 +119,7 @@ internal sealed partial class LifeWindow : Form
             try { CoreWebView2Environment.GetAvailableBrowserVersionString(); }
             catch { throw new InvalidOperationException("WebView2 Runtime is missing. Run LifeOS-Setup.exe again to install the bundled runtime."); }
             Directory.CreateDirectory(Path.Combine(data,"sessions"));
-            if(!diagnostic){panelHotkeys=new PanelHotkeyWindow(ToggleDesktopPanel,ShowQuickCapture);File.WriteAllText(Path.Combine(data,"desktop-panel-hotkey.json"),JsonSerializer.Serialize(new{shortcut="Win+\\",registered=panelHotkeys.AnyWindowsRegistered,nativeError=panelHotkeys.WindowsError,primary=panelHotkeys.WindowsRegistered,iso=panelHotkeys.AlternateWindowsRegistered,fallback=panelHotkeys.FallbackRegistered,captureShortcut="Ctrl+Shift+Space",captureRegistered=panelHotkeys.CaptureRegistered,captureError=panelHotkeys.CaptureError,processId=Environment.ProcessId,owner="message-only-window"}));}
+            if(!diagnostic){panelHotkeys=new PanelHotkeyWindow(ToggleDesktopPanel,ShowQuickCapture,ToggleAssistantPanel);File.WriteAllText(Path.Combine(data,"desktop-panel-hotkey.json"),JsonSerializer.Serialize(new{shortcut="Win+\\",registered=panelHotkeys.AnyWindowsRegistered,nativeError=panelHotkeys.WindowsError,primary=panelHotkeys.WindowsRegistered,iso=panelHotkeys.AlternateWindowsRegistered,fallback=panelHotkeys.FallbackRegistered,captureShortcut="Ctrl+Shift+Space",captureRegistered=panelHotkeys.CaptureRegistered,captureError=panelHotkeys.CaptureError,assistantShortcut="Win+Shift+\\",assistantRegistered=panelHotkeys.AssistantRegistered||panelHotkeys.AssistantIsoRegistered,assistantError=panelHotkeys.AssistantError,processId=Environment.ProcessId,owner="message-only-window"}));}
             File.WriteAllText(Path.Combine(data,".write-check"), "ok"); File.Delete(Path.Combine(data,".write-check"));
             using var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start(); int port = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop();
@@ -127,7 +127,9 @@ internal sealed partial class LifeWindow : Form
             string instance = Guid.NewGuid().ToString("N");
             string automationKey = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
             var start = new ProcessStartInfo(Path.Combine(root,"php","php.exe")) { WorkingDirectory=root, UseShellExecute=false, CreateNoWindow=true, RedirectStandardError=true, RedirectStandardOutput=true };
-            foreach (string value in new[] { "-c",Path.Combine(root,"php","php.ini"),"-d","extension_dir='"+Path.Combine(root,"php","ext")+"'","-S",$"127.0.0.1:{port}","-t",Path.Combine(root,"public"),Path.Combine(root,"public","index.php") }) start.ArgumentList.Add(value);
+            // Separate Windows OPcache mappings for each host process. Sharing
+            // another installation's opcode pointers can fail under ASLR.
+            foreach (string value in new[] { "-c",Path.Combine(root,"php","php.ini"),"-d","extension_dir='"+Path.Combine(root,"php","ext")+"'","-d","opcache.cache_id=LifeOS_"+instance,"-S",$"127.0.0.1:{port}","-t",Path.Combine(root,"public"),Path.Combine(root,"public","index.php") }) start.ArgumentList.Add(value);
             start.Environment["LIFEOS_INSTANCE"] = instance; start.Environment["LIFEOS_DATA_DIR"] = data;
             start.Environment["LIFEOS_AUTOMATION_KEY"] = automationKey;
             start.Environment["LIFEOS_HELLO_KEY"] = helloBridgeKey;
@@ -199,7 +201,7 @@ internal sealed partial class LifeWindow : Form
                 try {
                     bool ready=await web.CoreWebView2.ExecuteScriptAsync("!!document.getElementById('desktop-titlebar')")=="true";
                     if (!IsDisposed) SetCustomChrome(ready);
-                    appReady=ready;if(ready&&pendingQuickCapture)ShowQuickCapture();if(ready&&pendingPanelToggle){pendingPanelToggle=false;ToggleDesktopPanel();}if(ready)WriteResidentState();
+                    appReady=ready;if(ready&&pendingQuickCapture)ShowQuickCapture();if(ready&&pendingAssistant)ShowAssistantPanel();if(ready&&pendingPanelToggle){pendingPanelToggle=false;ToggleDesktopPanel();}if(ready)WriteResidentState();
                     if(ready&&!diagnostic)await CheckForTodayPanelAsync();
                     PublishUpdateState();
                     if(ready && Environment.GetEnvironmentVariable("LIFEOS_BROWSER_TEST")=="1" && !browserTestStarted) { browserTestStarted=true; BeginInvoke(new Action(async()=>await RunBrowserProfileSmokeAsync())); }
@@ -211,6 +213,7 @@ internal sealed partial class LifeWindow : Form
                     using var message=JsonDocument.Parse(e.WebMessageAsJson); var value=message.RootElement;
                     if (!value.TryGetProperty("type",out var kind) || kind.ValueKind!=JsonValueKind.String) return;
                     if(kind.GetString()=="lifeos-ai-job" && source.AbsolutePath.StartsWith("/intelligence") && value.TryGetProperty("id",out var aiId) && aiId.ValueKind==JsonValueKind.String) { StartAiJob(aiId.GetString()??""); return; }
+                    if(kind.GetString()=="lifeos-assistant-panel"){ShowAssistantPanel();return;}
                     if (kind.GetString()=="lifeos-hello" && source.AbsolutePath=="/unlock") { _=HandlePlatformHello(value.Clone()); return; }
                     if(kind.GetString()=="lifeos-today-panel") {
                         todayPanelChecking=false;
@@ -771,7 +774,7 @@ internal sealed partial class LifeWindow : Form
         DisposeSessionLifecycle();profileSessionCookies.Clear();
         automationRunner?.Dispose(); automationRunner=null;
         panelHotkeys?.Dispose();panelHotkeys=null;
-        todayPanelTimer.Stop();todayPanelTimer.Dispose();desktopPanel?.Dispose();desktopPanel=null;
+        todayPanelTimer.Stop();todayPanelTimer.Dispose();desktopPanel?.Dispose();desktopPanel=null;assistantPanel?.Dispose();assistantPanel=null;
         DisposeNibmCalendar();
         try { if (php is { HasExited:false }) { php.Kill(true); php.WaitForExit(3000); } } catch { }
         php?.Dispose(); php=null; job.Dispose(); reminders.Visible=false; reminders.Dispose();trayMenu?.Dispose();

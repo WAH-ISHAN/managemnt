@@ -63,7 +63,7 @@ final class PersonaService {
         return $out;
     }
     public static function routeEnabled(string $path): bool {
-        $aliases=['/expenses'=>'Salary','/goals'=>'Investments','/tasks'=>'Lessons','/review'=>'Lessons','/why/net-worth'=>'Salary','/settings/grades'=>'Uni','/settings/rules'=>'Salary','/settings/accounts'=>'Salary','/settings/categories'=>'Salary','/settings/budgets'=>'Salary'];
+        $aliases=['/assistant'=>'Intelligence','/expenses'=>'Salary','/goals'=>'Investments','/tasks'=>'Lessons','/review'=>'Lessons','/why/net-worth'=>'Salary','/settings/grades'=>'Uni','/settings/rules'=>'Salary','/settings/accounts'=>'Salary','/settings/categories'=>'Salary','/settings/budgets'=>'Salary'];
         foreach ($aliases as $prefix=>$id) if ($path===$prefix || str_starts_with($path,$prefix.'/')) return self::enabled($id);
         $catalog=self::catalog(); usort($catalog,fn($a,$b)=>strlen($b['route'])<=>strlen($a['route']));
         foreach ($catalog as $m) if ($m['route']!=='/' && ($path===$m['route'] || str_starts_with($path,$m['route'].'/'))) return self::enabled($m['id']);

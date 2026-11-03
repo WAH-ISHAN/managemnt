@@ -111,6 +111,7 @@ with tempfile.TemporaryDirectory(prefix='lifeos-extensions-ui-') as temporary:
                 snapshot('trends-desktop')
                 snapshot('trends-narrow', 390)
                 page.goto(base + '/intelligence')
+                page.get_by_text('Text & local tools', exact=True).click()
                 expect(page.locator('form[action="/intelligence/settings"]')).to_be_visible()
                 snapshot('assistant-desktop')
                 snapshot('assistant-narrow', 390)

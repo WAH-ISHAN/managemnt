@@ -7,7 +7,10 @@ internal sealed partial class LifeWindow
     private static string? FindNativeTool(string name)
     {
         var candidates=new List<string>();
-        if(name=="opencode")candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"npm","node_modules","opencode-ai","bin","opencode.exe"));
+        if(name=="opencode") {
+            candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LifeOS","ai-runtime","opencode-2.2.5","opencode.exe"));
+            candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"npm","node_modules","opencode-ai","bin","opencode.exe"));
+        }
         foreach(string directory in (Environment.GetEnvironmentVariable("PATH")??"").Split(Path.PathSeparator)){
             if(!string.IsNullOrWhiteSpace(directory))candidates.Add(Path.Combine(directory.Trim('"'),name+".exe"));
         }

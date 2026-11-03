@@ -6,10 +6,11 @@ using System.Runtime.InteropServices;
 internal sealed class PanelHotkeyWindow : NativeWindow, IDisposable
 {
     private const int HotkeyMessage=0x0312;
-    private const int WindowsId=0x1A63, AlternateWindowsId=0x1A64, FallbackId=0x1A62, CaptureId=0x1A65;
+    private const int WindowsId=0x1A63, AlternateWindowsId=0x1A64, FallbackId=0x1A62, CaptureId=0x1A65, AssistantId=0x1A66, AssistantIsoId=0x1A67;
     private const uint ModControl=0x0002, ModShift=0x0004, ModWindows=0x0008, ModNoRepeat=0x4000;
     private readonly Action toggle;
     private readonly Action? capture;
+    private readonly Action? assistant;
     private bool disposed;
 
     internal bool WindowsRegistered { get; private set; }
@@ -21,13 +22,17 @@ internal sealed class PanelHotkeyWindow : NativeWindow, IDisposable
     internal int FallbackError { get; private set; }
     internal bool CaptureRegistered { get; private set; }
     internal int CaptureError { get; private set; }
+    internal bool AssistantRegistered { get; private set; }
+    internal bool AssistantIsoRegistered { get; private set; }
+    internal int AssistantError { get; private set; }
     internal IntPtr OwnerHandle => Handle;
 
-    internal PanelHotkeyWindow(Action toggle,Action? capture=null)
+    internal PanelHotkeyWindow(Action toggle,Action? capture=null,Action? assistant=null)
     {
         ArgumentNullException.ThrowIfNull(toggle);
         this.toggle=toggle;
         this.capture=capture;
+        this.assistant=assistant;
         try
         {
             CreateHandle(new CreateParams { Caption="LifeOS panel hotkeys", Parent=new IntPtr(-3) }); // HWND_MESSAGE
@@ -42,6 +47,7 @@ internal sealed class PanelHotkeyWindow : NativeWindow, IDisposable
                 CaptureRegistered=RegisterHotKey(Handle,CaptureId,ModControl|ModShift|ModNoRepeat,(uint)Keys.Space);
                 CaptureError=CaptureRegistered?0:Marshal.GetLastWin32Error();
             }
+            if(assistant is not null){AssistantRegistered=RegisterHotKey(Handle,AssistantId,ModWindows|ModShift|ModNoRepeat,0xDC);AssistantError=AssistantRegistered?0:Marshal.GetLastWin32Error();AssistantIsoRegistered=RegisterHotKey(Handle,AssistantIsoId,ModWindows|ModShift|ModNoRepeat,0xE2);}
         }
         catch
         {
@@ -56,6 +62,7 @@ internal sealed class PanelHotkeyWindow : NativeWindow, IDisposable
         {
             int id=message.WParam.ToInt32();
             if(id==CaptureId && CaptureRegistered) { capture?.Invoke(); return; }
+            if((id==AssistantId&&AssistantRegistered)||(id==AssistantIsoId&&AssistantIsoRegistered)){assistant?.Invoke();return;}
             if(id is WindowsId or AlternateWindowsId or FallbackId)
             {
                 toggle();
@@ -75,9 +82,10 @@ internal sealed class PanelHotkeyWindow : NativeWindow, IDisposable
             UnregisterHotKey(Handle,AlternateWindowsId);
             UnregisterHotKey(Handle,FallbackId);
             UnregisterHotKey(Handle,CaptureId);
+            UnregisterHotKey(Handle,AssistantId);UnregisterHotKey(Handle,AssistantIsoId);
             DestroyHandle();
         }
-        WindowsRegistered=false;AlternateWindowsRegistered=false;FallbackRegistered=false;CaptureRegistered=false;
+        WindowsRegistered=false;AlternateWindowsRegistered=false;FallbackRegistered=false;CaptureRegistered=false;AssistantRegistered=false;AssistantIsoRegistered=false;
         GC.SuppressFinalize(this);
     }
 

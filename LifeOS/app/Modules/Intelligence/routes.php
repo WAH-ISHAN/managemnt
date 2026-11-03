@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 return function (Router $r): void {
+    $r->get('/assistant',fn()=>View::render(__DIR__.'/views/panel.php',['title'=>'LifeOS AI'],'assistant'));
+    $r->get('/assistant/state',function(){header('Content-Type: application/json; charset=utf-8');return json_encode((new OpenCodeCliProvider())->panelState(),JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);});
+    $r->post('/assistant/message',function(){(new OpenCodeCliProvider())->submitAutomatic(text_input('message',2000));header('Content-Type: application/json; charset=utf-8');return json_encode((new OpenCodeCliProvider())->panelState(),JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);});
+    $r->post('/assistant/new',function(){OpenCodeCliProvider::thread(true);header('Content-Type: application/json; charset=utf-8');return json_encode((new OpenCodeCliProvider())->panelState(),JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);});
+    $r->post('/assistant/action/{id}',function($p){(new OpenCodeCliProvider())->apply($p['id'],int_range($_POST['index']??'',0,4),$_POST);header('Content-Type: application/json; charset=utf-8');return json_encode((new OpenCodeCliProvider())->panelState(),JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);});
     $page=static function (array $extra=[]): string {
         View::share('aiJob',isset($_GET['job'])?(new OpenCodeCliProvider())->result(is_string($_GET['job'])?$_GET['job']:''):null);
         View::share('aiModels',(new OpenCodeCliProvider())->models());

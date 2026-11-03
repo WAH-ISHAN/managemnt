@@ -26,6 +26,7 @@ internal sealed partial class LifeWindow
     {
         PauseNibmCalendar();nibmWindow?.Shutdown();nibmWindow=null;
         desktopPanel?.Dispose();desktopPanel=null;
+        assistantPanel?.Dispose();assistantPanel=null;
         foreach(var request in nibmLocalRequests.Values)request.TrySetCanceled();
         nibmLocalRequests.Clear();
     }
