@@ -19,7 +19,9 @@ $actions=[
     ['label'=>'Add goal','description'=>'Something you want to achieve','route'=>'/growth#new-goal','icon'=>'target','keywords'=>'growth milestone future'],
     ['label'=>'Add assignment','description'=>'A university deadline','route'=>'/uni/add/assignment','icon'=>'book','keywords'=>'study homework coursework'],
     ['label'=>'Start focus','description'=>'Make time to study','route'=>'/focus','icon'=>'clock','keywords'=>'pomodoro timer study'],
-    ['label'=>'Add document','description'=>'Save a certificate, CV or file','route'=>'/documents#add-document','icon'=>'folder','keywords'=>'upload file certificate cv']
+    ['label'=>'Add document','description'=>'Save a certificate, CV or file','route'=>'/documents#add-document','icon'=>'folder','keywords'=>'upload file certificate cv'],
+    ['label'=>'Capture a note','description'=>'Save an idea in Knowledge Hub','route'=>'/knowledge/new','icon'=>'book','keywords'=>'notes knowledge journal markdown'],
+    ['label'=>'Today’s note','description'=>'Open your daily journal','route'=>'/knowledge/daily','icon'=>'calendar','keywords'=>'journal reflection daily notes']
 ];
 ?>
 <aside id="navigation-sync" class="sidebar" aria-label="Main navigation" hx-sync="this:replace">

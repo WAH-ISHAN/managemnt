@@ -16,9 +16,11 @@
         <a href="/salary/plan"><?= icon('calendar') ?><span>Plan your salary</span></a>
     <?php endif; ?>
     <a href="/focus"><?= icon('clock') ?><span><?= $focus ? 'Return to focus' : 'Start study focus' ?></span></a>
+    <a href="/knowledge/daily"><?= icon('book') ?><span>Today’s note</span></a>
 </nav>
 
 <?php require __DIR__.'/daily-progress.php'; ?>
+<?php if ($pinnedNotes): ?><section class="card dashboard-pinned-notes" aria-labelledby="pinned-notes-title"><div class="section-heading"><h2 id="pinned-notes-title">Pinned notes</h2><a href="/knowledge">Knowledge Hub &rarr;</a></div><div class="knowledge-actions"><?php foreach ($pinnedNotes as $note): ?><a href="/knowledge/<?= e($note['id']) ?>"><?= e($note['title']) ?> <small>· <?= e($note['notebook']) ?></small></a><?php endforeach; ?></div></section><?php endif; ?>
 <div class="two-col dashboard-primary">
     <section class="card">
         <div class="section-heading"><h2>Today</h2><a href="/planner">Open planner &rarr;</a></div>
