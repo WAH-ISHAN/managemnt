@@ -85,11 +85,19 @@ internal sealed partial class LifeWindow
             case "check": if(!diagnostic) _=CheckAppUpdateAsync();else PublishUpdateState();break;
             case "apply":
                 if(diagnostic || !updateReady || updateChecking) return;
-                if(AppUpdateFiles.StartPending(root,AppDataDirectory,php is {HasExited:false}?php.Id:null)) {
-                    allowExitForMaintenance=true;Close();
-                } else { updateReady=false;updateMessage="The update could not start. Check again to download it.";PublishUpdateState(); }
+                InstallReadyUpdate();
                 break;
         }
+    }
+    private bool InstallReadyUpdate()
+    {
+        if(diagnostic||!updateReady||updateChecking||IsDisposed)return false;
+        if(AppUpdateFiles.StartPending(root,AppDataDirectory,php is {HasExited:false}?php.Id:null)) {
+            updateMessage="Installing the verified update…";PublishUpdateState();
+            allowExitForMaintenance=true;Close();return true;
+        }
+        updateReady=false;updateMessage="The update could not start. It will be downloaded again automatically.";PublishUpdateState();
+        return false;
     }
 
     private async Task CheckAppUpdateAsync()
@@ -139,7 +147,9 @@ internal sealed partial class LifeWindow
             string pending=Path.Combine(updates,"pending.json"),temporary=pending+".tmp";
             await File.WriteAllTextAsync(temporary,JsonSerializer.Serialize(new{stage}),lifetime.Token);File.Move(temporary,pending,true);
             availableVersion=release.Version;updateReady=true;downloadDirectory=null;
-            updateMessage="LifeOS "+release.Version+" is ready. It will install the next time you open the app.";
+            updateMessage=Visible
+                ? "LifeOS "+release.Version+" is ready. Close LifeOS when convenient to install it automatically."
+                : "LifeOS "+release.Version+" is ready and will install now.";
         } catch(OperationCanceledException) { updateMessage="Update check paused. It will retry automatically."; }
         catch(Exception error) when(error is HttpRequestException or IOException or JsonException or InvalidDataException or InvalidOperationException or KeyNotFoundException or FormatException or UnauthorizedAccessException) {
             updateMessage="Could not check for updates. Your current app is ready to use.";
@@ -148,6 +158,7 @@ internal sealed partial class LifeWindow
             // A failed partial download is never promoted to a pending update.
             if(downloadDirectory is not null) { try { File.Delete(Path.Combine(downloadDirectory,"LifeOS-Update.zip")); } catch(IOException) {} catch(UnauthorizedAccessException) {} }
             updateChecking=false;PublishUpdateState();
+            if(updateReady&&!Visible&&!IsDisposed)BeginInvoke(new Action(()=>InstallReadyUpdate()));
         }
     }
 }

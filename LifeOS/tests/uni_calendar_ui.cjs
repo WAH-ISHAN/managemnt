@@ -10,6 +10,7 @@ const document = new EventTarget();
 document.querySelector = selector => selector === '.app-shell' && shell ? {} : null;
 document.querySelectorAll = () => [];
 const messages = [], window = new EventTarget();
+window.lifeosT = text => text;
 window.chrome = { webview: { postMessage: message => messages.push(message), addEventListener() {} } };
 const location = { pathname:'/planner', search:'' };
 let saved = { enabled:true, batchId:'first-batch' };

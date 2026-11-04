@@ -9,8 +9,11 @@ final class Modules {
             $folder=basename(dirname($file));
             if (str_starts_with($folder,'.') || str_ends_with($folder,'.disabled')) continue;
             $m = json_decode(file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
-            if (empty($m['name']) || !preg_match('~^/[a-z0-9/-]*$~', $m['route'] ?? '')) throw new RuntimeException('Invalid module manifest: ' . $file);
-            $m['path'] = dirname($file); $out[] = $m;
+            if (empty($m['name']) || !preg_match('~^/[a-z0-9/-]*$~', $m['route'] ?? '')) throw new RuntimeException(t('Invalid module manifest: ') . $file);
+            $m['path'] = dirname($file);
+            // Keep services/migrations discoverable while an unfinished module has no UI.
+            $m['hidden'] = !empty($m['hidden']) || !is_file($m['path'].'/routes.php');
+            $out[] = $m;
         }
         usort($out, fn($a,$b) => ($a['order'] ?? 99) <=> ($b['order'] ?? 99)); return $out;
     }
@@ -25,9 +28,9 @@ final class Modules {
             // Most services use their class name as the filename. A module can
             // declare exceptions without making every request parse that class.
             $aliases = $m['autoload'] ?? [];
-            if (!is_array($aliases)) throw new RuntimeException('Invalid module service map: ' . $m['path']);
+            if (!is_array($aliases)) throw new RuntimeException(t('Invalid module service map: ') . $m['path']);
             foreach ($aliases as $class => $filename) {
-                if (!is_string($class) || !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D',$class) || !is_string($filename) || !isset($files[$filename])) throw new RuntimeException('Invalid module service map: ' . $m['path']);
+                if (!is_string($class) || !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D',$class) || !is_string($filename) || !isset($files[$filename])) throw new RuntimeException(t('Invalid module service map: ') . $m['path']);
                 $services[strtolower($class)] = $files[$filename];
             }
         }

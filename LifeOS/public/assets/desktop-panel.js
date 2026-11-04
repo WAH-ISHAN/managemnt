@@ -1,11 +1,14 @@
 (() => {
   const root=document.querySelector('main[data-csrf]'),itemsNode=document.querySelector('[data-items]'),dateNode=document.querySelector('[data-date]');
   const addForm=document.querySelector('[data-add-form]'),status=document.querySelector('[data-form-status]');
-  let csrf=root?.dataset.csrf||'',preferences={},currentDate='',refreshing=false;
+  const refreshButton=document.querySelector('[data-refresh]'),refreshLabel=refreshButton?.querySelector('span');
+  if(refreshButton&&refreshLabel){refreshButton.setAttribute('aria-label',refreshLabel.textContent);refreshButton.title=refreshLabel.textContent;refreshLabel.classList.add('sr-only');}
+  let csrf=root?.dataset.csrf||'',preferences={},currentDate='',refreshing=false,refreshQueued=false;
+  if(window.chrome?.webview)new ResizeObserver(()=>window.chrome.webview.postMessage({type:'lifeos-panel-header',headerHeight:Math.ceil(document.querySelector('.panel-header').getBoundingClientRect().bottom)})).observe(document.querySelector('.panel-header'));
   const text=(tag,className,value)=>{const node=document.createElement(tag);if(className)node.className=className;node.textContent=value;return node;};
   function timeLabel(value){
     const match=/^\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/.exec(value||'');
-    if(!match)return 'All day';
+    if(!match)return window.lifeosT('All day');
     const hour=Number(match[1]);return String(hour%12||12)+':'+match[2]+' '+(hour>=12?'PM':'AM');
   }
   async function post(path,fields={}){
@@ -25,13 +28,13 @@
     for(const input of document.querySelectorAll('[data-display-pref]'))fields[input.name]=input.value;
     fields.autoHide=document.querySelector('[name=autoHide]').checked?'1':'0';
     try{const result=await post('/desktop/panel/preferences',fields);preferences=result.preferences;setAutoHide();await refresh();}
-    catch{document.querySelector('[data-preference-status]').textContent='Could not save panel settings. Try again.';}
+    catch{document.querySelector('[data-preference-status]').textContent=window.lifeosT('Could not save panel settings. Try again.');}
   }
   function renderTodos(todos){
     const target=document.querySelector('[data-todos]');target.replaceChildren();
-    if(!todos.length){target.append(text('p','empty','Your quick to-do list is clear.'));return;}
+    if(!todos.length){target.append(text('p','empty',window.lifeosT('Your quick to-do list is clear.')));return;}
     for(const todo of todos){
-      const row=text('div','check-row','');const done=document.createElement('button');done.type='button';done.className='check';done.setAttribute('aria-label','Complete '+todo.title);done.textContent='✓';
+      const row=text('div','check-row','');const done=document.createElement('button');done.type='button';done.className='check';done.setAttribute('aria-label',window.lifeosT('Complete ')+todo.title);done.textContent='✓';
       const title=text('span','check-title',todo.title);row.append(done,title);
       if(todo.due)row.append(text('time','',todo.due));
       done.addEventListener('click',async()=>{done.disabled=true;try{await post('/desktop/panel/todo/'+todo.id+'/complete');await refresh();}catch{done.disabled=false;}});
@@ -40,19 +43,19 @@
   }
   function renderNotes(notes){
     const target=document.querySelector('[data-notes]');target.replaceChildren();
-    if(!notes.length){target.append(text('p','empty','Your notes will be here.'));return;}
+    if(!notes.length){target.append(text('p','empty',window.lifeosT('Your notes will be here.')));return;}
     for(const note of notes){
       const row=text('article','note','');const content=text('div','note-content','');content.append(text('strong','',note.title));
       if(note.body)content.append(text('p','',note.body));
-      const remove=document.createElement('button');remove.type='button';remove.className='icon-button';remove.textContent='×';remove.setAttribute('aria-label','Delete '+note.title);
+      const remove=document.createElement('button');remove.type='button';remove.className='icon-button';remove.textContent='×';remove.setAttribute('aria-label',window.lifeosT('Delete ')+note.title);
       remove.addEventListener('click',async()=>{remove.disabled=true;try{await post('/desktop/panel/note/'+note.id+'/delete');await refresh();}catch{remove.disabled=false;}});
       row.append(content,remove);target.append(row);
     }
   }
   async function refresh(){
-    if(refreshing)return;
+    if(refreshing){refreshQueued=true;return;}
     refreshing=true;
-    try{
+    do{refreshQueued=false;try{
       const response=await fetch('/desktop/panel/data',{headers:{Accept:'application/json'},cache:'no-store'});
       if(!response.ok)throw Error('response');
       const data=await response.json();currentDate=data.today;preferences=data.preferences||preferences;setAutoHide();
@@ -62,7 +65,7 @@
       const date=new Date(data.today+'T12:00:00+05:30');dateNode.textContent=date.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
       itemsNode.replaceChildren();
       document.querySelector('[data-schedule-count]').textContent=String(data.items.length);
-      if(!data.items.length)itemsNode.append(text('p','empty','Nothing scheduled for today.'));
+      if(!data.items.length)itemsNode.append(text('p','empty',window.lifeosT('Nothing scheduled for today.')));
       else{
         const list=text('div','items','');
         for(const item of data.items){const row=text('div','event','');const stamp=text('time','',timeLabel(item.due));stamp.title=item.due;row.append(stamp,text('strong','',item.title),text('small','',item.kind));list.append(row);}
@@ -73,8 +76,9 @@
       document.querySelector('[name=autoHide]').checked=preferences.autoHide!==false;
       document.querySelector('[data-todo-section]').hidden=preferences.showTodos===false;
       document.querySelector('[data-notes-section]').hidden=preferences.showNotes===false;
-    }catch{if(!itemsNode.children.length)itemsNode.append(text('p','muted','Could not refresh today’s panel.'));}
-    finally{refreshing=false;}
+    }catch{if(!itemsNode.children.length)itemsNode.append(text('p','muted',window.lifeosT('Could not refresh today’s panel.')));}
+    }while(refreshQueued);
+    refreshing=false;
   }
   document.querySelector('[data-close]').addEventListener('click',()=>window.chrome?.webview?.postMessage({type:'lifeos-panel-close'}));
   document.querySelector('[data-refresh]').addEventListener('click',refresh);
@@ -88,8 +92,8 @@
   addForm.addEventListener('submit',async event=>{
     event.preventDefault();status.textContent='';const fields={kind:addForm.elements.kind.value,title:addForm.elements.title.value,body:addForm.elements.body.value,due:addForm.elements.due.value};
     const save=addForm.querySelector('[type=submit]');save.disabled=true;
-    try{await post('/desktop/panel/add',fields);addForm.reset();addForm.hidden=true;await refresh();}
-    catch{status.textContent='Could not save that item. Check the title and try again.';}
+    try{await post('/desktop/panel/add',fields);addForm.reset();addForm.hidden=true;status.textContent=window.lifeosT('Saved.');await refresh();}
+    catch{status.textContent=window.lifeosT('Could not save that item. Check the title and try again.');}
     finally{save.disabled=false;}
   });
   window.addEventListener('keydown',event=>{if(event.key==='Escape'){if(!addForm.hidden){addForm.hidden=true;addForm.reset();}else window.chrome?.webview?.postMessage({type:'lifeos-panel-close'});}});
@@ -102,6 +106,7 @@
   document.querySelector('[data-resize]').addEventListener('pointerdown',event=>{if(event.button===0){event.preventDefault();native({type:'lifeos-panel-resize'});}});
   document.querySelector('[data-apply-size]').addEventListener('click',()=>native({type:'lifeos-panel-size',width:Number(document.querySelector('[data-panel-width]').value),height:Number(document.querySelector('[data-panel-height]').value)}));
   document.querySelector('[data-reset-layout]').addEventListener('click',()=>native({type:'lifeos-panel-reset'}));
+  document.addEventListener('wheel',event=>{if(event.target instanceof HTMLInputElement&&event.target.type==='number'&&document.activeElement===event.target)event.target.blur();},{passive:true});
   window.chrome?.webview?.addEventListener('message',event=>{
     if(event.data?.type!=='lifeos-panel-layout')return;
     document.querySelector('[data-panel-width]').value=event.data.width;

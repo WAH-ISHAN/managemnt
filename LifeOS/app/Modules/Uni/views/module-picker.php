@@ -1,3 +1,3 @@
-<label>Existing module<select name="module_id"><option value="">Choose a module, or enter a new name below</option><?php foreach($modules as $module): ?><option value="<?= e($module['id']) ?>"><?= e($module['name']) ?><?= $module['code'] ? ' ('.e($module['code']).')' : '' ?></option><?php endforeach; ?></select></label>
-<label>New module name (if not selected above)<input name="new_module_name" maxlength="150" placeholder="e.g. Database Systems"></label>
-<p class="footnote full uni-module-help">You can add credits and grades later in Modules &amp; grades. Assignments, exams and classes can each be added independently.</p>
+<label><?= e(t('Existing module')) ?><select name="module_id"><option value=""><?= e(t('Choose a module, or enter a new name below')) ?></option><?php foreach($modules as $module): ?><option value="<?= e($module['id']) ?>"><?= e($module['name']) ?><?= $module['code'] ? ' ('.e($module['code']).')' : '' ?></option><?php endforeach; ?></select></label>
+<label><?= e(t('New module name (if not selected above)')) ?><input name="new_module_name" maxlength="150" placeholder="<?= e(t('e.g. Database Systems')) ?>"></label>
+<p class="footnote full uni-module-help"><?= e(t('You can add credits and grades later in Modules & grades. Assignments, exams and classes can each be added independently.')) ?></p>

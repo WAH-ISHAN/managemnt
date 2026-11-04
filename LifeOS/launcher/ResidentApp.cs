@@ -4,16 +4,24 @@ internal sealed partial class LifeWindow
 {
     private static readonly uint ActivateResidentMessage=RegisterWindowMessage("LifeOS.ShowMain.E89C8D98DC124820A52B1334E5D06A19");
     private static readonly uint ShutdownResidentMessage=RegisterWindowMessage("LifeOS.UpdateShutdown.E89C8D98DC124820A52B1334E5D06A19");
-    private bool allowExitForMaintenance,cleanupDone;
+    internal const string ActivationEventName=@"Local\LifeOS.Activate.E89C8D98DC124820A52B1334E5D06A19";
+    internal const string ShutdownEventName=@"Local\LifeOS.Shutdown.E89C8D98DC124820A52B1334E5D06A19";
+    private bool allowExitForMaintenance,cleanupDone,hiddenToTray,trayHideQueued;
     private ContextMenuStrip? trayMenu;
 
-    internal static void NotifyExistingInstance(bool shutdown=false)=>PostMessage(new IntPtr(0xffff),shutdown?ShutdownResidentMessage:ActivateResidentMessage,IntPtr.Zero,IntPtr.Zero);
+    internal static void NotifyExistingInstance(bool shutdown=false,string? activationEventName=null)
+    {
+        try { using var signal=EventWaitHandle.OpenExisting(shutdown ? ShutdownEventName : activationEventName ?? ActivationEventName); signal.Set(); return; }
+        catch (WaitHandleCannotBeOpenedException) { }
+        PostMessage(new IntPtr(0xffff),shutdown?ShutdownResidentMessage:ActivateResidentMessage,IntPtr.Zero,IntPtr.Zero);
+    }
 
     private void InitializeResidency()
     {
         if(diagnostic)return;
         trayMenu=new ContextMenuStrip();
         trayMenu.Items.Add("Open LifeOS",null,(_,_)=>ShowMainWindow());
+        trayMenu.Items.Add("LifeOS AI  (Win + Shift + \\)",null,(_,_)=>ShowAssistantPanel());
         trayMenu.Items.Add("Show / hide panel  (Win + \\)",null,(_,_)=>ToggleDesktopPanel());
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(new ToolStripMenuItem("LifeOS is running in the background"){Enabled=false});
@@ -22,19 +30,41 @@ internal sealed partial class LifeWindow
         reminders.ContextMenuStrip=trayMenu;
         reminders.DoubleClick+=(_,_)=>ShowMainWindow();
         reminders.Visible=true;
-        FormClosing+=(_,e)=>{
-            if(e.CloseReason!=CloseReason.UserClosing||allowExitForMaintenance)return;
-            e.Cancel=true;HideToTray();
-        };
+        FormClosing+=HideOnUserClosing;
+    }
+    private void HideOnUserClosing(object? sender,FormClosingEventArgs e)
+    {
+        if(e.CloseReason!=CloseReason.UserClosing||allowExitForMaintenance)return;
+        e.Cancel=true;
+        if(updateReady&&!updateChecking) {
+            BeginInvoke(new Action(()=>InstallReadyUpdate()));
+            return;
+        }
+        if(trayHideQueued)return;
+        trayHideQueued=true;
+        // Finish cancelling the native close before changing window visibility.
+        BeginInvoke(new Action(()=>{
+            if(!trayHideQueued)return;
+            trayHideQueued=false;
+            if(!IsDisposed&&!cleanupDone&&!allowExitForMaintenance)HideToTray();
+        }));
     }
     private void ShowMainWindow()
     {
         if(IsDisposed)return;
-        ShowInTaskbar=true;Show();WindowState=FormWindowState.Normal;Activate();WriteResidentState();
+        trayHideQueued=false;
+        if(hiddenToTray){hiddenToTray=false;UpdateStyles();}
+        Show();if(WindowState==FormWindowState.Minimized)WindowState=FormWindowState.Normal;Activate();WriteResidentState();
     }
     private void HideToTray()
     {
-        desktopPanel?.Hide();Hide();ShowInTaskbar=false;reminders.Visible=true;WriteResidentState();
+        if(IsDisposed||cleanupDone)return;
+        startupWelcome?.Hide();nibmWindow?.Hide();desktopPanel?.Hide();assistantPanel?.Hide();
+        Hide();
+        // ShowInTaskbar recreates the HWND, including its WebView parent and
+        // owned windows. Update the hidden window's styles in place instead.
+        hiddenToTray=true;UpdateStyles();
+        reminders.Visible=true;WriteResidentState();
     }
     private void WriteResidentState()
     {

@@ -5,7 +5,8 @@
   const status = message => document.querySelectorAll('[data-nibm-status]').forEach(el => { el.textContent = message; });
   async function configure(force = false) {
     if (!desktop || configuring) return;
-    if (!document.querySelector('.app-shell')) { config = null; window.chrome.webview.postMessage({type:'lifeos-nibm',action:'configure',enabled:false,batchId:''}); return; }
+    const shell = document.querySelector('.app-shell');
+    if (!shell || shell.dataset?.uniEnabled === '0') { config = null; window.chrome.webview.postMessage({type:'lifeos-nibm',action:'configure',enabled:false,batchId:''}); return; }
     if (config && !force) return;
     configuring = true;
     try {
@@ -13,16 +14,16 @@
       if (!response.ok || !response.headers.get('Content-Type')?.includes('application/json')) return;
       config = await response.json();
       window.chrome.webview.postMessage({type:'lifeos-nibm',action:'configure',enabled:config.enabled,batchId:config.batchId});
-      document.querySelectorAll('[data-nibm-desktop-note]').forEach(el => { el.textContent='Your NIBM session is saved on this PC and refreshed automatically when possible. Saved lectures remain available offline. Sync resumes when LifeOS is open and unlocked.'; });
+      document.querySelectorAll('[data-nibm-desktop-note]').forEach(el => { el.textContent=window.lifeosT('Your NIBM session is saved on this PC and refreshed automatically when possible. Saved lectures remain available offline. Sync resumes when LifeOS is open and unlocked.'); });
     } catch (_) {} finally { configuring = false; }
   }
   document.addEventListener('click', async event => {
     const button = event.target.closest('[data-nibm-action]');
     if (!button) return;
-    if (!desktop) { status('Open the LifeOS Windows app to sign in and sync NIBM.'); return; }
+    if (!desktop) { status(window.lifeosT('Open the LifeOS Windows app to sign in and sync NIBM.')); return; }
     await configure(true);
     if (!config?.enabled) return;
-    status(button.dataset.nibmAction==='open' ? 'Opening NIBM sign-in…' : 'Checking your NIBM calendar…');
+    status(button.dataset.nibmAction==='open' ? window.lifeosT('Opening NIBM sign-in…') : window.lifeosT('Checking your NIBM calendar…'));
     window.chrome.webview.postMessage({type:'lifeos-nibm',action:button.dataset.nibmAction,batchId:config.batchId});
   });
   if (desktop) window.chrome.webview.addEventListener('message', event => {

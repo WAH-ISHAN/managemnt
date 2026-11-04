@@ -23,7 +23,7 @@
     if(copy) {
       const value=copy.dataset.hubCopyValue ?? copy.previousElementSibling?.value;
       const status=copy.closest('.card')?.querySelector('[data-hub-copy-status]');
-      if(value) navigator.clipboard.writeText(value).then(()=>{if(status)status.textContent='Copied.';}).catch(()=>{if(status)status.textContent='Select the value and copy it manually.';});
+      if(value) navigator.clipboard.writeText(value).then(()=>{if(status)status.textContent='Copied.';}).catch(()=>{if(status)status.textContent=window.lifeosT('Select the value and copy it manually.');});
       return;
     }
     const button = event.target.closest('[data-studio-nav]');

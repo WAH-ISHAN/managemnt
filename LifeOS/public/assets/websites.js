@@ -10,9 +10,9 @@
       const card=entry.card;
       if (card.dataset.status==='signed' && Number(card.dataset.expires)<=now) {
         card.dataset.status='signin';
-        card.querySelector('[data-website-status-label]').textContent='Sign in required';
-        card.querySelector('[data-website-context]').textContent='Session ended. Sign in to continue.';
-        card.querySelector('[data-website-open-label]').textContent='Sign in to website';
+        card.querySelector('[data-website-status-label]').textContent=window.lifeosT('Sign in required');
+        card.querySelector('[data-website-context]').textContent=window.lifeosT('Session ended. Sign in to continue.');
+        card.querySelector('[data-website-open-label]').textContent=window.lifeosT('Sign in to website');
         card.querySelector('.website-open').classList.add('secondary');
       }
       if (card.dataset.status==='signed') {
@@ -80,7 +80,7 @@
       const input=toggle.parentElement.querySelector('input');
       const show=input.type==='password'; input.type=show ? 'text' : 'password';
       toggle.textContent=show ? 'Hide' : 'Show';
-      toggle.setAttribute('aria-label',show ? 'Hide password' : 'Show password');
+      toggle.setAttribute('aria-label',show ? window.lifeosT('Hide password') : window.lifeosT('Show password'));
       toggle.setAttribute('aria-pressed',String(show));
       return;
     }

@@ -1,0 +1,4 @@
+CREATE TABLE intelligence_sources(id INTEGER PRIMARY KEY,kind TEXT NOT NULL CHECK(kind IN ('note','voice','receipt')),body TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE intelligence_drafts(id INTEGER PRIMARY KEY,source_id INTEGER REFERENCES intelligence_sources(id) ON DELETE CASCADE,kind TEXT NOT NULL CHECK(kind IN ('tasks','move','receipt')),payload TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'preview' CHECK(status IN ('preview','applied','undone')),result TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE intelligence_task_links(task_id INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,source_id INTEGER NOT NULL REFERENCES intelligence_sources(id) ON DELETE CASCADE,draft_id INTEGER NOT NULL REFERENCES intelligence_drafts(id) ON DELETE CASCADE);
+CREATE UNIQUE INDEX intelligence_one_receipt_post ON intelligence_drafts(source_id) WHERE kind='receipt' AND status='applied';

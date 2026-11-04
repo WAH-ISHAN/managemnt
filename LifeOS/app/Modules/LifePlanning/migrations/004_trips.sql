@@ -1,0 +1,1 @@
+CREATE TABLE life_trips(id INTEGER PRIMARY KEY,plan_id INTEGER NOT NULL REFERENCES life_festival_plans(id) ON DELETE RESTRICT,destination TEXT NOT NULL,departs_on TEXT NOT NULL,returns_on TEXT NOT NULL,planned_cost REAL NOT NULL DEFAULT 0,notes TEXT NOT NULL DEFAULT '',appointment_id INTEGER REFERENCES planner_appointments(id) ON DELETE SET NULL);

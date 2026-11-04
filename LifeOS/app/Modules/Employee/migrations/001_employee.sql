@@ -1,0 +1,4 @@
+CREATE TABLE employee_records(id INTEGER PRIMARY KEY,kind TEXT NOT NULL,data TEXT NOT NULL,archived INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX employee_kind ON employee_records(kind,archived);
+CREATE TABLE IF NOT EXISTS workspace_task_links(identity TEXT PRIMARY KEY,task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE RESTRICT);
+CREATE TABLE employee_invoice_numbers(record_id INTEGER PRIMARY KEY REFERENCES employee_records(id),number TEXT NOT NULL UNIQUE);

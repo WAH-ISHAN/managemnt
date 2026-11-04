@@ -112,17 +112,31 @@ try {
             Write-QaLog ($files.Count.ToString()+' PHP files passed syntax checks.')
         }
         Invoke-QaStage 'javascript-syntax' {
-            foreach($file in @('public/assets/app.js','public/assets/theme.js','public/assets/window-chrome.js','public/assets/websites.js','public/assets/admin-studio.js','public/assets/work.js','public/assets/progress.js','public/assets/cashflow3d.js','public/assets/uni-calendar.js','tests/ui_lifecycle.cjs','tests/nibm_bridge.cjs','tests/uni_calendar_ui.cjs')) {
+            foreach($file in @('public/assets/app.js','public/assets/theme.js','public/assets/window-chrome.js','public/assets/websites.js','public/assets/admin-studio.js','public/assets/work.js','public/assets/progress.js','public/assets/cashflow3d.js','public/assets/uni-calendar.js','public/assets/persona.js','tests/ui_lifecycle.cjs','tests/nibm_bridge.cjs','tests/uni_calendar_ui.cjs')) {
                 Invoke-CheckedNative $nodeCommand @('--check',$file)
             }
-            Write-QaLog '12 JavaScript files passed syntax checks.'
+            Write-QaLog '13 JavaScript files passed syntax checks.'
         }
         Invoke-QaStage 'phpunit' { Invoke-CheckedNative $phpCommand @('vendor/bin/phpunit','--no-progress') }
-        foreach($suite in @('module_loading','fresh_workspace','services','finance_planning','planner_growth_career','planner_search','documents_encryption','freedom','daily_progress','modern_tools','knowledge','websites','website_accounts','website_costs','website_gateway','admin_studio','work_management','cloud_hub','wordpress_adapter','uni_calendar','uni_calendar_upgrade')) {
+        foreach($suite in @('module_loading','fresh_workspace','services','finance_planning','planner_growth_career','planner_search','documents_encryption','freedom','daily_progress','modern_tools','knowledge','life_planning','websites','website_accounts','website_costs','website_gateway','admin_studio','work_management','cloud_hub','wordpress_adapter','uni_calendar','uni_calendar_upgrade','persona','automation','expense_category_rules','sri_lanka_calendar','profiles_packs','capture_planning_trends','focus_intelligence','connectivity','localization','work_roles','ai_provider','school','school_guardian','employee_study','platform')) {
             $suiteName=$suite
             Invoke-QaStage ('service-'+$suiteName) { Invoke-CheckedNative $phpCommand @('tests/'+$suiteName+'.php') }
         }
         Invoke-QaStage 'http-acceptance' { Invoke-CheckedNative $pythonCommand @('tests/http_acceptance.py') }
+        Invoke-QaStage 'persona-http' { Invoke-CheckedNative $pythonCommand @('tests/persona_http.py') }
+        Invoke-QaStage 'desktop-panel-http' { Invoke-CheckedNative $pythonCommand @('tests/desktop_panel_http.py') }
+        Invoke-QaStage 'expense-rules-http' { Invoke-CheckedNative $pythonCommand @('tests/expense_rules_http.py') }
+        foreach($extensionSuite in @('profiles_http','capture_planning_http','intelligence_http','connectivity_http','connectivity_worker','calendar_authorization')) {
+            $extensionName=$extensionSuite
+            Invoke-QaStage $extensionName { Invoke-CheckedNative $pythonCommand @('tests/'+$extensionName+'.py') }
+        }
+        Invoke-QaStage 'extensions-ui' { Invoke-CheckedNative $pythonCommand @('tests/extensions_ui.py') }
+        Invoke-QaStage 'roles-ai-ui' { Invoke-CheckedNative $pythonCommand @('tests/roles_ai_ui.py') }
+        Invoke-QaStage 'localization-ui' { Invoke-CheckedNative $pythonCommand @('tests/localization_ui.py') }
+        Invoke-QaStage 'opencode-worker' { Invoke-CheckedNative $pythonCommand @('tests/opencode_worker.py') }
+        Invoke-QaStage 'ai-account-worker' { Invoke-CheckedNative $pythonCommand @('tests/ai_accounts.py') }
+        Invoke-QaStage 'ai-account-ui' { Invoke-CheckedNative $pythonCommand @('tests/ai_account_ui.py') }
+        Invoke-QaStage 'persona-ui' { Invoke-CheckedNative $pythonCommand @('tests/persona_ui.py','--output',(Join-Path $evidence 'persona-ui')) }
         Invoke-QaStage 'uni-calendar-http' { Invoke-CheckedNative $pythonCommand @('tests/uni_calendar_http.py') }
         Invoke-QaStage 'admin-studio-http' { Invoke-CheckedNative $pythonCommand @('tests/admin_studio_http.py') }
         Invoke-QaStage 'work-management-http' { Invoke-CheckedNative $pythonCommand @('tests/work_management_http.py') }
@@ -136,7 +150,7 @@ try {
             Invoke-QaStage 'desktop' {
                 if(-not(Test-Path -LiteralPath 'dist/php/php.exe')) { Stop-QaBlocked 'Desktop runtime is missing. Prepare dist with build.ps1 first; this QA runner does not download or install prerequisites.' }
                 $bundledPhp=Join-Path $projectRoot 'dist/php/php.exe'
-                Invoke-CheckedNative $bundledPhp @('-c',(Join-Path $projectRoot 'dist/php/php.ini'),'-d',('extension_dir='+(Join-Path $projectRoot 'dist/php/ext')),'scripts/check-runtime.php')
+                Invoke-CheckedNative $bundledPhp @('-c',(Join-Path $projectRoot 'dist/php/php.ini'),'-d',("extension_dir='"+(Join-Path $projectRoot 'dist/php/ext')+"'"),'scripts/check-runtime.php')
                 $dotnetTool=$Dotnet
                 if([string]::IsNullOrWhiteSpace($dotnetTool)) {
                     if(Test-Path -LiteralPath '.tools/dotnet/dotnet.exe') { $dotnetTool=Join-Path $projectRoot '.tools/dotnet/dotnet.exe' }
@@ -144,6 +158,11 @@ try {
                 }
                 $dotnetCommand=Resolve-Tool $dotnetTool
                 Invoke-CheckedNative $dotnetCommand @('--version')
+                Invoke-CheckedNative $dotnetCommand @('build','launcher/LifeOS.csproj','-c','Release')
+                Invoke-CheckedNative $dotnetCommand @('run','--project','tests/resident-lifecycle/ResidentLifecycle.csproj','-c','Release','--',(Join-Path $evidence 'resident-lifecycle'))
+                Invoke-CheckedNative 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File','tests/BrowserProfiles-Smoke.ps1')
+                Invoke-CheckedNative 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File','tests/Activation-Smoke.ps1')
+                Invoke-CheckedNative 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File','tests/Startup-Welcome.ps1')
                 Invoke-CheckedNative $dotnetCommand @('publish','launcher/LifeOS.csproj','-c','Release','-r','win-x64','--self-contained','true','-p:PublishSingleFile=true','-p:IncludeNativeLibrariesForSelfExtract=true','-o','dist')
                 $script:desktopPayload=[ordered]@{path='dist/LifeOS.exe';sha256=(Get-FileHash -LiteralPath 'dist/LifeOS.exe' -Algorithm SHA256).Hash.ToLowerInvariant();version=(Get-Item -LiteralPath 'dist/LifeOS.exe').VersionInfo.ProductVersion}
                 $powershellCommand=Resolve-Tool 'powershell.exe'

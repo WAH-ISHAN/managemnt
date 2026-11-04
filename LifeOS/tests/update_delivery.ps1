@@ -13,6 +13,7 @@ function Check([bool]$Condition,[string]$Label){if(-not $Condition){throw $Label
 function Write-Text([string]$Path,[string]$Value){New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($Path)) -Force|Out-Null;[IO.File]::WriteAllText($Path,$Value,$script:utf8)}
 $source=Join-Path $testRoot 'source';$output=Join-Path $testRoot 'output'
 foreach($entry in @('LifeOS.exe','app/index.php','public/index.php','php/php.exe')){Write-Text (Join-Path $source $entry) ('new payload '+$entry)}
+Write-Text (Join-Path $source 'docs/PERSONA-UPDATE-ROADMAP.md') 'release roadmap'
 foreach($entry in @('Apply-LifeOSUpdate.ps1','update-backup.php')){New-Item -ItemType Directory -Path (Join-Path $source 'scripts') -Force|Out-Null;Copy-Item -LiteralPath (Join-Path $project ('scripts/'+$entry)) -Destination (Join-Path $source ('scripts/'+$entry))}
 Write-Text (Join-Path $source 'data/private.txt') 'PRIVATE MUST NEVER SHIP'
 Write-Text (Join-Path $source 'prerequisites/installer.exe') 'exclude offline prerequisite from updates'
@@ -20,7 +21,10 @@ Write-Text (Join-Path $source 'prerequisites/installer.exe') 'exclude offline pr
 & dotnet run --project (Join-Path $project 'tests/update-release/UpdateRelease.Tests.csproj') -- (Join-Path $output 'lifeos-update.json')
 if($LASTEXITCODE -ne 0){throw 'Desktop update manifest contract checks failed.'}
 $zip=[IO.Compression.ZipFile]::OpenRead((Join-Path $output 'LifeOS-update.zip'))
-try{Check (@($zip.Entries|Where-Object {$_.FullName -match '(^|/)(data|prerequisites)(/|$)'}).Count -eq 0) 'Package excludes personal data and prerequisites'}finally{$zip.Dispose()}
+try{
+    Check (@($zip.Entries|Where-Object {$_.FullName -match '(^|/)(data|prerequisites)(/|$)'}).Count -eq 0) 'Package excludes personal data and prerequisites'
+    Check (@($zip.Entries|Where-Object {$_.FullName -eq 'docs/PERSONA-UPDATE-ROADMAP.md'}).Count -eq 1) 'Package includes the roadmap linked from release documentation'
+}finally{$zip.Dispose()}
 function New-Installation([string]$Name) {
     $case=Join-Path $script:testRoot $Name;$install=Join-Path $case 'install';$data=Join-Path $case 'external-data';$updates=Join-Path $data 'updates'
     foreach($entry in @('LifeOS.exe','app/obsolete.php','public/old.txt','php/php.exe')){Write-Text (Join-Path $install $entry) ('old payload '+$entry)}
@@ -63,7 +67,7 @@ New-Item -ItemType Directory -Path (Join-Path $case.install 'scripts') -Force|Ou
 Copy-Item -LiteralPath (Join-Path $project 'scripts/update-backup.php') -Destination (Join-Path $case.install 'scripts/update-backup.php')
 $seed=Join-Path $testRoot 'seed.php'
 Write-Text $seed '<?php $db=new SQLite3($argv[1]);$db->exec("CREATE TABLE personal(value TEXT); INSERT INTO personal VALUES (\"keep my record\")");'
-& (Join-Path ([IO.Path]::GetFullPath($PhpDirectory)) 'php.exe') -c (Join-Path ([IO.Path]::GetFullPath($PhpDirectory)) 'php.ini') -d ('extension_dir='+(Join-Path ([IO.Path]::GetFullPath($PhpDirectory)) 'ext')) $seed (Join-Path $case.data 'lifeos.db')
+& (Join-Path ([IO.Path]::GetFullPath($PhpDirectory)) 'php.exe') -c (Join-Path ([IO.Path]::GetFullPath($PhpDirectory)) 'php.ini') -d ("extension_dir='"+(Join-Path ([IO.Path]::GetFullPath($PhpDirectory)) 'ext')+"'") $seed (Join-Path $case.data 'lifeos.db')
 if($LASTEXITCODE -ne 0){throw 'Could not create disposable SQLite fixture.'}
 $before=(Get-FileHash -LiteralPath (Join-Path $case.data 'lifeos.db')).Hash
 $result=Run-Update $case

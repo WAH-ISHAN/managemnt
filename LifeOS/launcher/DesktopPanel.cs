@@ -5,9 +5,10 @@ using Microsoft.Web.WebView2.WinForms;
 
 internal sealed class DesktopPanelWindow : Form
 {
-    private readonly WebView2 browser = new() { Dock=DockStyle.Fill };
+    private readonly WebView2 browser = new() { Dock=DockStyle.Fill,DefaultBackgroundColor=Color.Transparent };
     private readonly Uri home;
     private readonly CoreWebView2Environment environment;
+    private readonly string profile;
     private readonly System.Windows.Forms.Timer autoHideTimer=new(){Interval=1000};
     private bool autoHideEnabled=true;
     private DateTime autoHideGraceUntil;
@@ -15,14 +16,18 @@ internal sealed class DesktopPanelWindow : Form
     private readonly string layoutPath=Path.Combine(Path.GetFullPath(Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR") ?? Path.Combine(AppContext.BaseDirectory,"data")),"desktop-panel-layout.json");
     private Rectangle? savedBounds;
     private PanelGlassResult glassResult;
+    private int headerHeight=80;
     internal event Action<string>? OpenRouteRequested;
     internal bool IsPanelVisible => Visible;
+    internal string ProfileName => browser.CoreWebView2?.Profile.ProfileName ?? "";
     internal PanelGlassResult GlassResult=>glassResult;
+    internal bool ContentFillsClient=>browser.Bounds==ClientRectangle;
+    internal int HeaderHeight=>LogicalToDeviceUnits(headerHeight);
     internal async Task<string> EvaluateAsync(string script){if(browser.CoreWebView2 is null)return "";return await browser.CoreWebView2.ExecuteScriptAsync(script);}
 
-    internal DesktopPanelWindow(Uri home,CoreWebView2Environment environment)
+    internal DesktopPanelWindow(Uri home,CoreWebView2Environment environment,string profile="default")
     {
-        this.home=home; this.environment=environment;
+        this.home=home; this.environment=environment; this.profile=profile;
         FormBorderStyle=FormBorderStyle.None; MinimumSize=new Size(320,360); ShowInTaskbar=false; TopMost=true;
         Text="LifeOS desktop panel";
         BackColor=Color.Black; Width=420;
@@ -34,6 +39,7 @@ internal sealed class DesktopPanelWindow : Form
         FormClosing+=(_,e)=>{if(e.CloseReason==CloseReason.UserClosing){e.Cancel=true;Hide();}};
         VisibleChanged+=async(_,_)=>{if(Visible){browser.CoreWebView2?.Resume();autoHideGraceUntil=DateTime.UtcNow.AddSeconds(12);if(autoHideEnabled)autoHideTimer.Start();}else{autoHideTimer.Stop();if(browser.CoreWebView2 is not null)try{await browser.CoreWebView2.TrySuspendAsync();}catch(InvalidOperationException){}}};
         SizeChanged+=(_,_)=>{if(glassResult.RoundedClipApplied)PanelGlass.UpdateRoundedClip(this);};
+        DpiChanged+=(_,_)=>{if(glassResult.RoundedClipApplied)PanelGlass.UpdateRoundedClip(this);};
         ResizeEnd+=(_,_)=>SaveLayout();
         LocationChanged+=(_,_)=>{if(Visible&&!restoringBounds) savedBounds=Bounds;};
         autoHideTimer.Tick+=(_,_)=>{
@@ -81,7 +87,9 @@ internal sealed class DesktopPanelWindow : Form
     private void HandleLayoutMessage(JsonElement message)
     {
         string kind=message.GetProperty("type").GetString()??"";
-        if(kind=="lifeos-panel-drag"||kind=="lifeos-panel-resize") {
+        if(kind=="lifeos-panel-header"&&message.TryGetProperty("headerHeight",out var measuredHeight)&&measuredHeight.ValueKind==JsonValueKind.Number&&measuredHeight.TryGetInt32(out int pixels)) {
+            headerHeight=Math.Clamp(pixels,0,ClientSize.Height);
+        } else if(kind=="lifeos-panel-drag"||kind=="lifeos-panel-resize") {
             ReleaseCapture();SendMessage(Handle,0x0112,new IntPtr(kind=="lifeos-panel-drag"?0xF012:0xF008),IntPtr.Zero);SaveLayout();
         } else if(kind=="lifeos-panel-size"&&message.TryGetProperty("width",out var w)&&w.ValueKind==JsonValueKind.Number&&w.TryGetInt32(out int width)&&message.TryGetProperty("height",out var h)&&h.ValueKind==JsonValueKind.Number&&h.TryGetInt32(out int height)) {
             savedBounds=new Rectangle(Left,Top,width,height);RepositionForCurrentScreen();SaveLayout();
@@ -91,15 +99,14 @@ internal sealed class DesktopPanelWindow : Form
     {
         if(initialized||IsDisposed)return; initialized=true;
         try {
-            await browser.EnsureCoreWebView2Async(environment);
-            browser.DefaultBackgroundColor=Color.Transparent;
+            await browser.EnsureCoreWebView2Async(environment,LifeWindow.BrowserOptions(environment,profile));
             browser.CoreWebView2.Settings.AreDevToolsEnabled=false;
             browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled=false;
             browser.CoreWebView2.NewWindowRequested+=(_,e)=>e.Handled=true;
             browser.CoreWebView2.PermissionRequested+=(_,e)=>e.State=CoreWebView2PermissionState.Deny;
             browser.CoreWebView2.NavigationCompleted+=async(_,_)=>{PublishLayout();try{await browser.CoreWebView2.ExecuteScriptAsync("document.documentElement.dataset.nativeGlass="+(glassResult.NativeBackdropConfigured?"'true'":"'false'"));}catch(InvalidOperationException){}};
             browser.CoreWebView2.NavigationStarting+=(_,e)=>{if(!Uri.TryCreate(e.Uri,UriKind.Absolute,out var uri)||uri.GetLeftPart(UriPartial.Authority)!=home.GetLeftPart(UriPartial.Authority))e.Cancel=true;};
-            browser.CoreWebView2.WebMessageReceived+=(_,e)=>{try{if(!Uri.TryCreate(e.Source,UriKind.Absolute,out var source)||source.GetLeftPart(UriPartial.Authority)!=home.GetLeftPart(UriPartial.Authority))return;using var message=JsonDocument.Parse(e.WebMessageAsJson);if(!message.RootElement.TryGetProperty("type",out var kind)||kind.ValueKind!=JsonValueKind.String)return;if(kind.GetString() is "lifeos-panel-drag" or "lifeos-panel-resize" or "lifeos-panel-size" or "lifeos-panel-reset")HandleLayoutMessage(message.RootElement);else if(kind.GetString()=="lifeos-panel-close")Hide();else if(kind.GetString()=="lifeos-panel-autohide"&&message.RootElement.TryGetProperty("enabled",out var enabled)){autoHideEnabled=enabled.ValueKind==JsonValueKind.True;if(Visible&&autoHideEnabled)autoHideTimer.Start();else autoHideTimer.Stop();}else if(kind.GetString()=="lifeos-panel-open"&&message.RootElement.TryGetProperty("route",out var route)){string path=route.GetString()??"";if(path.StartsWith('/')&&!path.StartsWith("//")&&!path.Contains('\\')){OpenRouteRequested?.Invoke(path);Hide();}}}catch(JsonException){}};
+            browser.CoreWebView2.WebMessageReceived+=(_,e)=>{try{if(!Uri.TryCreate(e.Source,UriKind.Absolute,out var source)||source.GetLeftPart(UriPartial.Authority)!=home.GetLeftPart(UriPartial.Authority))return;using var message=JsonDocument.Parse(e.WebMessageAsJson);if(!message.RootElement.TryGetProperty("type",out var kind)||kind.ValueKind!=JsonValueKind.String)return;if(kind.GetString() is "lifeos-panel-drag" or "lifeos-panel-resize" or "lifeos-panel-size" or "lifeos-panel-reset" or "lifeos-panel-header")HandleLayoutMessage(message.RootElement);else if(kind.GetString()=="lifeos-panel-close")Hide();else if(kind.GetString()=="lifeos-panel-autohide"&&message.RootElement.TryGetProperty("enabled",out var enabled)){autoHideEnabled=enabled.ValueKind==JsonValueKind.True;if(Visible&&autoHideEnabled)autoHideTimer.Start();else autoHideTimer.Stop();}else if(kind.GetString()=="lifeos-panel-open"&&message.RootElement.TryGetProperty("route",out var route)){string path=route.GetString()??"";if(path.StartsWith('/')&&!path.StartsWith("//")&&!path.Contains('\\')){OpenRouteRequested?.Invoke(path);Hide();}}}catch(JsonException){}};
             browser.CoreWebView2.Navigate(new Uri(home,"/desktop/panel").ToString());
         } catch(InvalidOperationException){Hide();}
     }

@@ -11,3 +11,4 @@ __pycache__/
 
 /tests/update-release/bin/
 /tests/update-release/obj/
+/tests/resident-lifecycle/obj/

@@ -10,19 +10,19 @@ final class UniCalendarService {
             'portalUrl'=>Db::setting('uni_calendar_url'),'lastSync'=>Db::setting('uni_calendar_last_sync'),'lastError'=>Db::setting('uni_calendar_error')];
     }
     private static function uuid(mixed $value): string {
-        if (!is_string($value) || !preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iD',$value)) throw new InvalidArgumentException('Choose a valid NIBM batch or lecture ID.');
+        if (!is_string($value) || !preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iD',$value)) throw new InvalidArgumentException(t('Choose a valid NIBM batch or lecture ID.'));
         return strtolower($value);
     }
     private static function text(mixed $value,int $max,bool $required=false): string {
-        if (!is_string($value) || !mb_check_encoding($value,'UTF-8') || str_contains($value,"\0") || mb_strlen($value)>$max || ($required && trim($value)==='')) throw new InvalidArgumentException('The calendar contains invalid or oversized text.');
+        if (!is_string($value) || !mb_check_encoding($value,'UTF-8') || str_contains($value,"\0") || mb_strlen($value)>$max || ($required && trim($value)==='')) throw new InvalidArgumentException(t('The calendar contains invalid or oversized text.'));
         return trim($value);
     }
     public static function configure(string $portalUrl): array {
         $url=parse_url(trim($portalUrl));
-        if (!$url || strlen($portalUrl)>2048 || preg_match('/[\x00-\x20\x7f\\\\]/',trim($portalUrl)) || ($url['scheme'] ?? '')!=='https' || strtolower($url['host'] ?? '')!=='aca.mynibm.com' || ($url['path'] ?? '')!=='/dashboard' || isset($url['user']) || isset($url['pass']) || isset($url['fragment']) || (isset($url['port']) && $url['port']!==443)) throw new InvalidArgumentException('Paste your HTTPS NIBM dashboard link, including its selected batch.');
+        if (!$url || strlen($portalUrl)>2048 || preg_match('/[\x00-\x20\x7f\\\\]/',trim($portalUrl)) || ($url['scheme'] ?? '')!=='https' || strtolower($url['host'] ?? '')!=='aca.mynibm.com' || ($url['path'] ?? '')!=='/dashboard' || isset($url['user']) || isset($url['pass']) || isset($url['fragment']) || (isset($url['port']) && $url['port']!==443)) throw new InvalidArgumentException(t('Paste your HTTPS NIBM dashboard link, including its selected batch.'));
         $batchKeys=0;
         foreach (explode('&',$url['query'] ?? '') as $pair) if (urldecode(explode('=',$pair,2)[0])==='batch') $batchKeys++;
-        if ($batchKeys!==1) throw new InvalidArgumentException('Choose exactly one batch in your NIBM calendar link.');
+        if ($batchKeys!==1) throw new InvalidArgumentException(t('Choose exactly one batch in your NIBM calendar link.'));
         parse_str($url['query'] ?? '',$query); $batch=self::uuid($query['batch'] ?? '');
         $canonical='https://aca.mynibm.com/dashboard?view=month&batch='.$batch;
         Db::tx(function()use($batch,$canonical){
@@ -39,33 +39,33 @@ final class UniCalendarService {
     public static function error(string $message): void {
         // Fixed messages only: never save raw API errors, tokens, or response bodies.
         $allowed=['Sign in to NIBM to continue syncing.','NIBM could not be reached. Your saved lectures are unchanged.','NIBM returned an unsupported calendar response. Your saved lectures are unchanged.'];
-        if (!in_array($message,$allowed,true)) throw new InvalidArgumentException('Choose a valid calendar status.');
+        if (!in_array($message,$allowed,true)) throw new InvalidArgumentException(t('Choose a valid calendar status.'));
         Db::set('uni_calendar_error',$message);
     }
     private static function instant(mixed $value): string {
-        if (!is_string($value) || !preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/D',$value)) throw new InvalidArgumentException('The calendar must include valid dates, times and time zones.');
+        if (!is_string($value) || !preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/D',$value)) throw new InvalidArgumentException(t('The calendar must include valid dates, times and time zones.'));
         try { $date=new DateTimeImmutable($value); $errors=DateTimeImmutable::getLastErrors(); }
-        catch (Exception) { throw new InvalidArgumentException('The calendar contains an invalid date.'); }
-        if (($errors!==false && ($errors['warning_count'] || $errors['error_count'])) || $date->format('Y')<'2000' || $date->format('Y')>'2100') throw new InvalidArgumentException('The calendar contains an invalid date.');
+        catch (Exception) { throw new InvalidArgumentException(t('The calendar contains an invalid date.')); }
+        if (($errors!==false && ($errors['warning_count'] || $errors['error_count'])) || $date->format('Y')<'2000' || $date->format('Y')>'2100') throw new InvalidArgumentException(t('The calendar contains an invalid date.'));
         return $date->setTimezone(new DateTimeZone('Asia/Colombo'))->format('Y-m-d H:i');
     }
     public static function import(string $batchId,string $windowStart,string $windowEnd,array $lectures): array {
         $batchId=self::uuid($batchId); $config=self::config();
-        if (!$config['enabled'] || $batchId!==$config['batchId']) throw new InvalidArgumentException('Connect this NIBM batch before syncing it.');
+        if (!$config['enabled'] || $batchId!==$config['batchId']) throw new InvalidArgumentException(t('Connect this NIBM batch before syncing it.'));
         valid_date($windowStart); valid_date($windowEnd);
         $from=new DateTimeImmutable($windowStart); $until=new DateTimeImmutable($windowEnd);
-        if ($until<$from || (int)$from->diff($until)->days>399) throw new InvalidArgumentException('Sync a calendar window of up to 400 days.');
-        if (!array_is_list($lectures) || count($lectures)>2000) throw new InvalidArgumentException('The NIBM calendar is too large or has an unsupported format.');
+        if ($until<$from || (int)$from->diff($until)->days>399) throw new InvalidArgumentException(t('Sync a calendar window of up to 400 days.'));
+        if (!array_is_list($lectures) || count($lectures)>2000) throw new InvalidArgumentException(t('The NIBM calendar is too large or has an unsupported format.'));
         $prepared=[];
         foreach ($lectures as $lecture) {
-            if (!is_array($lecture)) throw new InvalidArgumentException('The calendar contains an invalid lecture.');
+            if (!is_array($lecture)) throw new InvalidArgumentException(t('The calendar contains an invalid lecture.'));
             $id=self::uuid($lecture['lectureId'] ?? null);
-            if (isset($prepared[$id])) throw new InvalidArgumentException('The calendar contains repeated lecture IDs.');
-            if (isset($lecture['batchId']) && self::uuid($lecture['batchId'])!==$batchId) throw new InvalidArgumentException('The calendar contains a lecture from another batch.');
+            if (isset($prepared[$id])) throw new InvalidArgumentException(t('The calendar contains repeated lecture IDs.'));
+            if (isset($lecture['batchId']) && self::uuid($lecture['batchId'])!==$batchId) throw new InvalidArgumentException(t('The calendar contains a lecture from another batch.'));
             $start=self::instant($lecture['startAt'] ?? null); $end=self::instant($lecture['endAt'] ?? null);
-            if ($end<=$start || substr($start,0,10)<$windowStart || substr($start,0,10)>$windowEnd) throw new InvalidArgumentException('A lecture is outside the requested calendar window or has invalid start/end times.');
+            if ($end<=$start || substr($start,0,10)<$windowStart || substr($start,0,10)>$windowEnd) throw new InvalidArgumentException(t('A lecture is outside the requested calendar window or has invalid start/end times.'));
             $status=self::text($lecture['status'] ?? null,50,true);
-            if (!in_array($status,[...self::ACTIVE,...self::INACTIVE],true)) throw new InvalidArgumentException('NIBM returned an unsupported lecture status. Your saved lectures are unchanged.');
+            if (!in_array($status,[...self::ACTIVE,...self::INACTIVE],true)) throw new InvalidArgumentException(t('NIBM returned an unsupported lecture status. Your saved lectures are unchanged.'));
             $module=self::text($lecture['moduleName'] ?? '',150); $type=self::text($lecture['lectureType'] ?? '',50);
             $title=$module!=='' ? $module : ($type!=='' ? str_replace('_',' ',$type) : 'NIBM lecture');
             $location=self::text($lecture['facilityName'] ?? '',200);

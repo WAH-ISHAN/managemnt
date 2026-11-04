@@ -17,15 +17,15 @@ final class WebsiteHttpClient {
     public static function normalizeUrl(string $value,bool $optional=false): string {
         $value=trim($value);
         if ($value==='' && $optional) return '';
-        if ($value==='' || strlen($value)>2048 || preg_match('/[\x00-\x20\x7f\\\\]/',$value)) throw new InvalidArgumentException('Enter a valid public HTTPS URL without credentials or spaces.');
+        if ($value==='' || strlen($value)>2048 || preg_match('/[\x00-\x20\x7f\\\\]/',$value)) throw new InvalidArgumentException(t('Enter a valid public HTTPS URL without credentials or spaces.'));
         if (!str_contains($value,'://')) $value='https://'.$value;
         $parts=parse_url($value);
-        if (!$parts || strtolower($parts['scheme'] ?? '')!=='https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || (isset($parts['port']) && $parts['port']!==443)) throw new InvalidArgumentException('Use an HTTPS URL on port 443, without a query, fragment, or embedded credentials.');
+        if (!$parts || strtolower($parts['scheme'] ?? '')!=='https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || (isset($parts['port']) && $parts['port']!==443)) throw new InvalidArgumentException(t('Use an HTTPS URL on port 443, without a query, fragment, or embedded credentials.'));
         $host=strtolower($parts['host']); $ip=trim($host,'[]');
         if (filter_var($ip,FILTER_VALIDATE_IP)) {
-            if (!self::isPublicIp($ip)) throw new InvalidArgumentException('Connector URLs must use a public address. Local and private networks are not supported.');
+            if (!self::isPublicIp($ip)) throw new InvalidArgumentException(t('Connector URLs must use a public address. Local and private networks are not supported.'));
         } elseif (strlen($host)>253 || !str_contains($host,'.') || str_ends_with($host,'.') || !preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/D',$host) || preg_match('/\.(?:localhost|local|internal|onion)$/D',$host)) {
-            throw new InvalidArgumentException('Enter a public domain name or public IP address. Use an ASCII/punycode domain name.');
+            throw new InvalidArgumentException(t('Enter a public domain name or public IP address. Use an ASCII/punycode domain name.'));
         }
         $path=$parts['path'] ?? '';
         return 'https://'.$host.$path;
@@ -61,29 +61,29 @@ final class WebsiteHttpClient {
             $addresses=[];
             foreach ($records ?: [] as $row) if (isset($row['ip']) || isset($row['ipv6'])) $addresses[]=$row['ip'] ?? $row['ipv6'];
         }
-        if (!is_array($addresses) || !$addresses || count($addresses)>64) throw new InvalidArgumentException('The connector domain could not be resolved to a public address.');
-        foreach ($addresses as $address) if (!is_string($address) || !self::isPublicIp($address)) throw new InvalidArgumentException('The connector domain resolves to a local, private, or reserved address.');
+        if (!is_array($addresses) || !$addresses || count($addresses)>64) throw new InvalidArgumentException(t('The connector domain could not be resolved to a public address.'));
+        foreach ($addresses as $address) if (!is_string($address) || !self::isPublicIp($address)) throw new InvalidArgumentException(t('The connector domain resolves to a local, private, or reserved address.'));
         return array_values(array_unique($addresses));
     }
 
     public static function request(string $url,?string $token,array $payload): array {
         $url=self::normalizeUrl($url);
-        if ($token===null && ($payload['action'] ?? '')!=='login') throw new InvalidArgumentException('Sign in to the website first.');
-        if ($token!==null && !preg_match('/^[\x21-\x7e]{32,4096}$/D',$token)) throw new InvalidArgumentException('Enter a connector token of 32 to 4096 visible characters, without spaces.');
+        if ($token===null && ($payload['action'] ?? '')!=='login') throw new InvalidArgumentException(t('Sign in to the website first.'));
+        if ($token!==null && !preg_match('/^[\x21-\x7e]{32,4096}$/D',$token)) throw new InvalidArgumentException(t('Enter a connector token of 32 to 4096 visible characters, without spaces.'));
         try { $json=json_encode($payload,JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE); }
-        catch (JsonException) { throw new InvalidArgumentException('The connector request contains invalid text or unsupported data.'); }
-        if (strlen($json)>self::MAX_REQUEST) throw new InvalidArgumentException('This record is too large for the connector. Shorten the content and try again.');
+        catch (JsonException) { throw new InvalidArgumentException(t('The connector request contains invalid text or unsupported data.')); }
+        if (strlen($json)>self::MAX_REQUEST) throw new InvalidArgumentException(t('This record is too large for the connector. Shorten the content and try again.'));
         $parts=parse_url($url); $host=$parts['host'];
         $addresses=self::addresses($host); $address=$addresses[0];
         $pin=$host.':443:'.(str_contains($address,':') ? '['.$address.']' : $address);
         $options=['addresses'=>$addresses,'pinnedAddress'=>$address,'verifyPeer'=>true,'verifyHost'=>2,'followRedirects'=>false,'proxy'=>'','maxResponse'=>self::MAX_RESPONSE];
         if (self::$testTransport!==null) {
             $response=(self::$testTransport)($url,$token,$payload,$options);
-            if (!is_array($response) || !isset($response['status'],$response['body']) || !is_int($response['status']) || !is_string($response['body'])) throw new RuntimeException('Invalid test transport response.');
+            if (!is_array($response) || !isset($response['status'],$response['body']) || !is_int($response['status']) || !is_string($response['body'])) throw new RuntimeException(t('Invalid test transport response.'));
             $status=$response['status']; $body=$response['body']; $contentType=$response['content_type'] ?? 'application/json';
-            if (strlen($body)>self::MAX_RESPONSE) throw new InvalidArgumentException('The connector response is too large. Use smaller pages or shorter records.');
+            if (strlen($body)>self::MAX_RESPONSE) throw new InvalidArgumentException(t('The connector response is too large. Use smaller pages or shorter records.'));
         } else {
-            if (!extension_loaded('curl')) throw new InvalidArgumentException('Website connections need the bundled cURL runtime. Update or reopen the desktop app.');
+            if (!extension_loaded('curl')) throw new InvalidArgumentException(t('Website connections need the bundled cURL runtime. Update or reopen the desktop app.'));
             $curl=curl_init($url); $body=''; $contentType=''; $headerBytes=0; $tooLarge=false;
             $settings=[
                 CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$json,
@@ -107,18 +107,18 @@ final class WebsiteHttpClient {
             if (!filter_var(trim($host,'[]'),FILTER_VALIDATE_IP)) $settings[CURLOPT_RESOLVE]=[$pin];
             curl_setopt_array($curl,$settings);
             $ok=curl_exec($curl); $status=(int)curl_getinfo($curl,CURLINFO_RESPONSE_CODE); curl_close($curl);
-            if ($tooLarge) throw new InvalidArgumentException('The connector response is too large. Use smaller pages or shorter records.');
-            if ($ok===false) throw new InvalidArgumentException('The HTTPS connector could not be reached securely. Check its address, certificate and network connection.');
+            if ($tooLarge) throw new InvalidArgumentException(t('The connector response is too large. Use smaller pages or shorter records.'));
+            if ($ok===false) throw new InvalidArgumentException(t('The HTTPS connector could not be reached securely. Check its address, certificate and network connection.'));
         }
         if ($status===401 || $status===403) throw new InvalidArgumentException(($payload['action'] ?? '')==='login' ? 'Website username or password is incorrect, or access is disabled.' : 'The website did not authorise this request. Sign in again or check your permissions.');
-        if ($status===429) throw new InvalidArgumentException('Too many website login attempts. Try again in 15 minutes.');
-        if ($status===409) throw new InvalidArgumentException('This record changed on the website. Refresh the records before trying again.');
-        if ($status>=300 && $status<400) throw new InvalidArgumentException('The connector redirected the request. Enter its final HTTPS endpoint.');
-        if ($status<200 || $status>=300) throw new InvalidArgumentException('The connector could not complete this operation (HTTP '.$status.').');
-        if (!is_string($contentType) || !preg_match('~^application/(?:[a-z0-9.+-]+\+)?json(?:\s*;|$)~i',$contentType)) throw new InvalidArgumentException('The endpoint did not return connector JSON. Check the connector URL.');
+        if ($status===429) throw new InvalidArgumentException(t('Too many website login attempts. Try again in 15 minutes.'));
+        if ($status===409) throw new InvalidArgumentException(t('This record changed on the website. Refresh the records before trying again.'));
+        if ($status>=300 && $status<400) throw new InvalidArgumentException(t('The connector redirected the request. Enter its final HTTPS endpoint.'));
+        if ($status<200 || $status>=300) throw new InvalidArgumentException(t('The connector could not complete this operation (HTTP ').$status.').');
+        if (!is_string($contentType) || !preg_match('~^application/(?:[a-z0-9.+-]+\+)?json(?:\s*;|$)~i',$contentType)) throw new InvalidArgumentException(t('The endpoint did not return connector JSON. Check the connector URL.'));
         try { $result=json_decode($body,true,24,JSON_THROW_ON_ERROR); }
-        catch (JsonException) { throw new InvalidArgumentException('The connector returned invalid JSON.'); }
-        if (!is_array($result) || array_is_list($result) || ($result['protocol'] ?? '')!=='lifeos-admin-v1') throw new InvalidArgumentException('This endpoint does not support the LifeOS admin connector protocol.');
+        catch (JsonException) { throw new InvalidArgumentException(t('The connector returned invalid JSON.')); }
+        if (!is_array($result) || array_is_list($result) || ($result['protocol'] ?? '')!=='lifeos-admin-v1') throw new InvalidArgumentException(t('This endpoint does not support the LifeOS admin connector protocol.'));
         return $result;
     }
 }

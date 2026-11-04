@@ -3,7 +3,7 @@ declare(strict_types=1);
 final class LessonService {
     public const AREAS=['Uni','Money','Business','Trading','Health','Habits','Other'];
     public static function add(array $d): int {
-        if (!in_array($d['area'] ?? '',self::AREAS,true) || trim($d['what_happened'] ?? '')==='') throw new InvalidArgumentException('Choose an area and describe what happened.');
+        if (!in_array($d['area'] ?? '',self::AREAS,true) || trim($d['what_happened'] ?? '')==='') throw new InvalidArgumentException(t('Choose an area and describe what happened.'));
         $due=optional_date($d['due'] ?? '');
         return Db::tx(function () use ($d,$due) {
             $task=null; $action=trim($d['action'] ?? '');
@@ -14,7 +14,7 @@ final class LessonService {
     public static function repeated(): array { return Db::all("SELECT area,COUNT(*) n FROM lessons WHERE created_at>=datetime('now','-90 day') GROUP BY area HAVING COUNT(*)>=2 ORDER BY n DESC,area"); }
     public static function completeTask(int $id): void {
         Db::tx(function () use ($id) {
-            if (!Db::one('SELECT id FROM tasks WHERE id=?',[$id])) throw new InvalidArgumentException('Task not found.');
+            if (!Db::one('SELECT id FROM tasks WHERE id=?',[$id])) throw new InvalidArgumentException(t('Task not found.'));
             Db::run("UPDATE tasks SET status='done' WHERE id=?",[$id]);
             Db::run("UPDATE lessons SET status='applied' WHERE task_id=? AND status='open'",[$id]);
         });
@@ -23,12 +23,12 @@ final class LessonService {
         Db::tx(function () use ($id) { Db::run("UPDATE tasks SET status='open' WHERE id=?",[$id]); Db::run("UPDATE lessons SET status='open' WHERE task_id=?",[$id]); });
     }
     public static function status(int $id,string $status): void {
-        if (!in_array($status,['open','applied','verified'],true)) throw new InvalidArgumentException('Choose a valid lesson status.');
+        if (!in_array($status,['open','applied','verified'],true)) throw new InvalidArgumentException(t('Choose a valid lesson status.'));
         Db::tx(function () use ($id,$status) {
-            $row=Db::one('SELECT * FROM lessons WHERE id=?',[$id]); if (!$row) throw new InvalidArgumentException('Lesson not found.');
+            $row=Db::one('SELECT * FROM lessons WHERE id=?',[$id]); if (!$row) throw new InvalidArgumentException(t('Lesson not found.'));
             if ($row['task_id']) {
                 $task=Db::one('SELECT * FROM tasks WHERE id=?',[$row['task_id']]);
-                if ($status!=='open' && $task['status']!=='done') throw new InvalidArgumentException('Complete the lesson’s action task before marking it applied or verified.');
+                if ($status!=='open' && $task['status']!=='done') throw new InvalidArgumentException(t('Complete the lesson’s action task before marking it applied or verified.'));
                 if ($status==='open') Db::run("UPDATE tasks SET status='open' WHERE id=?",[$row['task_id']]);
             }
             Db::run('UPDATE lessons SET status=? WHERE id=?',[$status,$id]);

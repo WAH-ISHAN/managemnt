@@ -26,39 +26,39 @@ final class WebAdminService {
             'integrations'=>$section('Integrations & references','Workspace',['service'=>$text('Service'),'url'=>$text('Public dashboard URL','url'),'owner'=>$text('Managed by'),'notes'=>$text('Configuration notes (no passwords)','textarea')],['planned'=>'Planned','active'=>'Active','paused'=>'Paused']),
         ];
     }
-    public static function definition(string $section):array {return self::sections()[$section] ?? throw new InvalidArgumentException('Choose an Admin Studio section.');}
+    public static function definition(string $section):array {return self::sections()[$section] ?? throw new InvalidArgumentException(t('Choose an Admin Studio section.'));}
     private static function text(mixed $value,int $max,bool $required=false):string {
-        if(!is_string($value) || !mb_check_encoding($value,'UTF-8') || str_contains($value,"\0") || mb_strlen($value)>$max || ($required && trim($value)===''))throw new InvalidArgumentException('Complete valid fields within their allowed length.');
+        if(!is_string($value) || !mb_check_encoding($value,'UTF-8') || str_contains($value,"\0") || mb_strlen($value)>$max || ($required && trim($value)===''))throw new InvalidArgumentException(t('Complete valid fields within their allowed length.'));
         return trim($value);
     }
     public static function save(int $site,string $section,array $input,?int $id=null,?int $version=null):int {
         WebsiteService::profile($site);$schema=self::definition($section);
         $title=self::text($input['title'] ?? '',200,true);$status=self::text($input['status'] ?? '',30,true);
-        if(!isset($schema['statuses'][$status]))throw new InvalidArgumentException('Choose a valid record status.');
+        if(!isset($schema['statuses'][$status]))throw new InvalidArgumentException(t('Choose a valid record status.'));
         $fields=$input['fields'] ?? [];
-        if(!is_array($fields) || array_diff(array_keys($fields),array_keys($schema['fields'])))throw new InvalidArgumentException('This form contains unknown fields.');
+        if(!is_array($fields) || array_diff(array_keys($fields),array_keys($schema['fields'])))throw new InvalidArgumentException(t('This form contains unknown fields.'));
         $data=[];
         foreach($schema['fields'] as $name=>$field){
             $value=self::text($fields[$name] ?? '',$field['max'],$field['required']);
             if($value!==''){
                 if($field['type']==='date')$value=valid_date($value);
                 if($field['type']==='money')$value=number_format(cents($value,true)/100,2,'.','');
-                if($field['type']==='integer' && (!ctype_digit($value) || strlen($value)>6))throw new InvalidArgumentException('Enter a display order from 0 to 999999.');
-                if($field['type']==='email' && !filter_var($value,FILTER_VALIDATE_EMAIL))throw new InvalidArgumentException('Enter a valid email address.');
+                if($field['type']==='integer' && (!ctype_digit($value) || strlen($value)>6))throw new InvalidArgumentException(t('Enter a display order from 0 to 999999.'));
+                if($field['type']==='email' && !filter_var($value,FILTER_VALIDATE_EMAIL))throw new InvalidArgumentException(t('Enter a valid email address.'));
                 if($field['type']==='url'){
                     $parts=parse_url($value);
-                    if(!$parts || !in_array(strtolower($parts['scheme'] ?? ''),['https','http'],true) || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || preg_match('/[\x00-\x20\x7f]/',$value))throw new InvalidArgumentException('Use a complete HTTP or HTTPS URL without credentials.');
+                    if(!$parts || !in_array(strtolower($parts['scheme'] ?? ''),['https','http'],true) || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || preg_match('/[\x00-\x20\x7f]/',$value))throw new InvalidArgumentException(t('Use a complete HTTP or HTTPS URL without credentials.'));
                 }
-                if($field['type']==='slug' && !preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D',$value))throw new InvalidArgumentException('Use lowercase letters, numbers and hyphens for the slug.');
-                if($field['type']==='color' && !preg_match('/^#[a-fA-F0-9]{6}$/D',$value))throw new InvalidArgumentException('Enter a six-digit hex colour, such as #2563eb.');
+                if($field['type']==='slug' && !preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D',$value))throw new InvalidArgumentException(t('Use lowercase letters, numbers and hyphens for the slug.'));
+                if($field['type']==='color' && !preg_match('/^#[a-fA-F0-9]{6}$/D',$value))throw new InvalidArgumentException(t('Enter a six-digit hex colour, such as #2563eb.'));
             }
             $data[$name]=$value;
         }
         return Db::tx(function()use($site,$section,$title,$status,$data,$id,$version):int{
             self::unique($site,$section,$data,$id);
             if($id!==null){
-                $record=self::record($site,$id);if($record['section']!==$section || $record['deleted_at']!==null)throw new InvalidArgumentException('Choose an active record from this section.');
-                if($version!==$record['version'])throw new InvalidArgumentException('This record changed. Reload it before saving.');
+                $record=self::record($site,$id);if($record['section']!==$section || $record['deleted_at']!==null)throw new InvalidArgumentException(t('Choose an active record from this section.'));
+                if($version!==$record['version'])throw new InvalidArgumentException(t('This record changed. Reload it before saving.'));
                 Db::run('UPDATE website_studio_records SET title=?,status=?,data=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=?',[$title,$status,json_encode($data,JSON_THROW_ON_ERROR),$id]);
             }else $id=Db::run('INSERT INTO website_studio_records(website_id,section,title,status,data) VALUES (?,?,?,?,?)',[$site,$section,$title,$status,json_encode($data,JSON_THROW_ON_ERROR)]);
             self::log($site,$id!==null && $version!==null?'updated':'created',$section,$title);return $id;
@@ -66,16 +66,16 @@ final class WebAdminService {
     }
     public static function record(int $site,int $id):array {
         WebsiteService::profile($site);$row=Db::one('SELECT * FROM website_studio_records WHERE website_id=? AND id=?',[$site,$id]);
-        if(!$row)throw new InvalidArgumentException('Admin Studio record not found for this website.');
+        if(!$row)throw new InvalidArgumentException(t('Admin Studio record not found for this website.'));
         $row['version']=(int)$row['version'];$row['values']=json_decode($row['data'],true,32,JSON_THROW_ON_ERROR);return $row;
     }
     private static function unique(int $site,string $section,array $data,?int $id):void {
         $key=match($section){'pages','blog'=>'slug','invoices'=>'reference',default=>null};
-        if($key!==null && Db::one('SELECT id FROM website_studio_records WHERE website_id=? AND section=? AND deleted_at IS NULL AND lower(json_extract(data,?))=lower(?) AND id<>? LIMIT 1',[$site,$section,'$.'.$key,$data[$key],$id ?? 0]))throw new InvalidArgumentException('This website already has a record with that '.($key==='slug'?'slug':'invoice number').'.');
+        if($key!==null && Db::one('SELECT id FROM website_studio_records WHERE website_id=? AND section=? AND deleted_at IS NULL AND lower(json_extract(data,?))=lower(?) AND id<>? LIMIT 1',[$site,$section,'$.'.$key,$data[$key],$id ?? 0]))throw new InvalidArgumentException(t('This website already has a record with that ').($key==='slug'?'slug':'invoice number').'.');
     }
     public static function listing(int $site,string $section,string $query='',string $status='',int $page=1):array {
         WebsiteService::profile($site);$schema=self::definition($section);$query=self::text($query,150);
-        if($status!=='' && !isset($schema['statuses'][$status]))throw new InvalidArgumentException('Choose a valid status filter.');
+        if($status!=='' && !isset($schema['statuses'][$status]))throw new InvalidArgumentException(t('Choose a valid status filter.'));
         $where='website_id=? AND section=? AND deleted_at IS NULL';$args=[$site,$section];
         if($query!==''){$where.=" AND (instr(lower(title),lower(?))>0 OR instr(lower(data),lower(?))>0)";$args[]=$query;$args[]=$query;}
         if($status!==''){$where.=' AND status=?';$args[]=$status;}
@@ -85,7 +85,7 @@ final class WebAdminService {
         return compact('rows','count','page','pages','query','status');
     }
     public static function trash(int $site,int $id,int $version,bool $restore=false):void {
-        Db::tx(function()use($site,$id,$version,$restore){$row=self::record($site,$id);if($row['version']!==$version)throw new InvalidArgumentException('This record changed. Reload before continuing.');if(($row['deleted_at']===null)===$restore)throw new InvalidArgumentException('This record is already in that state.');if($restore)self::unique($site,$row['section'],$row['values'],$id);Db::run('UPDATE website_studio_records SET deleted_at='.($restore?'NULL':'CURRENT_TIMESTAMP').',updated_at=CURRENT_TIMESTAMP,version=version+1 WHERE id=?',[$id]);self::log($site,$restore?'restored':'moved to trash',$row['section'],$row['title']);});
+        Db::tx(function()use($site,$id,$version,$restore){$row=self::record($site,$id);if($row['version']!==$version)throw new InvalidArgumentException(t('This record changed. Reload before continuing.'));if(($row['deleted_at']===null)===$restore)throw new InvalidArgumentException(t('This record is already in that state.'));if($restore)self::unique($site,$row['section'],$row['values'],$id);Db::run('UPDATE website_studio_records SET deleted_at='.($restore?'NULL':'CURRENT_TIMESTAMP').',updated_at=CURRENT_TIMESTAMP,version=version+1 WHERE id=?',[$id]);self::log($site,$restore?'restored':'moved to trash',$row['section'],$row['title']);});
     }
     public static function summary(int $site):array {
         WebsiteService::profile($site);$counts=[];foreach(Db::all('SELECT section,COUNT(*) n FROM website_studio_records WHERE website_id=? AND deleted_at IS NULL GROUP BY section',[$site]) as $row)$counts[$row['section']]=(int)$row['n'];
@@ -99,23 +99,23 @@ final class WebAdminService {
     public static function activity(int $site):array {WebsiteService::profile($site);return Db::all('SELECT * FROM website_studio_activity WHERE website_id=? ORDER BY id DESC LIMIT 50',[$site]);}
     public static function deleted(int $site):array {WebsiteService::profile($site);return Db::all('SELECT * FROM website_studio_records WHERE website_id=? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC,id DESC LIMIT 100',[$site]);}
     public static function media(int $site):array {WebsiteService::profile($site);return Db::all('SELECT * FROM website_studio_media WHERE website_id=? ORDER BY id DESC LIMIT 100',[$site]);}
-    public static function mediaFile(int $site,int $id):array {WebsiteService::profile($site);return Db::one('SELECT * FROM website_studio_media WHERE website_id=? AND id=?',[$site,$id]) ?? throw new InvalidArgumentException('Media file not found for this website.');}
+    public static function mediaFile(int $site,int $id):array {WebsiteService::profile($site);return Db::one('SELECT * FROM website_studio_media WHERE website_id=? AND id=?',[$site,$id]) ?? throw new InvalidArgumentException(t('Media file not found for this website.'));}
     public static function mediaPath(array $file):string {
-        if(!defined('DATA') || !preg_match('/^[a-f0-9]{48}\.bin$/D',$file['storage_name']))throw new RuntimeException('Media storage unavailable.');return DATA.'/uploads/website-studio/'.$file['storage_name'];
+        if(!defined('DATA') || !preg_match('/^[a-f0-9]{48}\.bin$/D',$file['storage_name']))throw new RuntimeException(t('Media storage unavailable.'));return DATA.'/uploads/website-studio/'.$file['storage_name'];
     }
     public static function upload(int $site,array $upload):int {
         WebsiteService::profile($site);
-        if(($upload['error'] ?? UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK || !is_string($upload['tmp_name'] ?? null) || !is_uploaded_file($upload['tmp_name']))throw new InvalidArgumentException('Choose a file to upload.');
+        if(($upload['error'] ?? UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK || !is_string($upload['tmp_name'] ?? null) || !is_uploaded_file($upload['tmp_name']))throw new InvalidArgumentException(t('Choose a file to upload.'));
         $info=self::inspectMedia($upload['tmp_name']);$bytes=$info['bytes'];$mime=$info['mime'];$sha=$info['sha256'];
         $filename=self::text($upload['name'] ?? 'upload',200,true);$filename=basename(str_replace('\\','/',$filename));
-        $storage=bin2hex(random_bytes(24)).'.bin';$path=self::mediaPath(['storage_name'=>$storage]);if(!is_dir(dirname($path)) && !mkdir(dirname($path),0700,true))throw new RuntimeException('Cannot prepare media storage.');
-        if(!move_uploaded_file($upload['tmp_name'],$path))throw new RuntimeException('Cannot save uploaded media.');@chmod($path,0600);
+        $storage=bin2hex(random_bytes(24)).'.bin';$path=self::mediaPath(['storage_name'=>$storage]);if(!is_dir(dirname($path)) && !mkdir(dirname($path),0700,true))throw new RuntimeException(t('Cannot prepare media storage.'));
+        if(!move_uploaded_file($upload['tmp_name'],$path))throw new RuntimeException(t('Cannot save uploaded media.'));@chmod($path,0600);
         try{return Db::tx(function()use($site,$filename,$storage,$mime,$bytes,$sha){$id=Db::run('INSERT INTO website_studio_media(website_id,filename,storage_name,mime,bytes,sha256) VALUES (?,?,?,?,?,?)',[$site,$filename,$storage,$mime,$bytes,$sha]);self::log($site,'uploaded','media',$filename);return $id;});}catch(Throwable $e){unlink($path);throw $e;}
     }
     public static function inspectMedia(string $path):array {
-        if(!is_file($path) || is_link($path))throw new InvalidArgumentException('Choose a regular media file.');
-        $bytes=filesize($path);if($bytes===false || $bytes<1 || $bytes>5*1024*1024)throw new InvalidArgumentException('Choose a file up to 5 MB.');
-        $mime=(new finfo(FILEINFO_MIME_TYPE))->file($path);if(!in_array($mime,['image/jpeg','image/png','image/webp','image/gif','application/pdf','video/mp4'],true))throw new InvalidArgumentException('Use JPG, PNG, WebP, GIF, PDF or MP4 files.');
+        if(!is_file($path) || is_link($path))throw new InvalidArgumentException(t('Choose a regular media file.'));
+        $bytes=filesize($path);if($bytes===false || $bytes<1 || $bytes>5*1024*1024)throw new InvalidArgumentException(t('Choose a file up to 5 MB.'));
+        $mime=(new finfo(FILEINFO_MIME_TYPE))->file($path);if(!in_array($mime,['image/jpeg','image/png','image/webp','image/gif','application/pdf','video/mp4'],true))throw new InvalidArgumentException(t('Use JPG, PNG, WebP, GIF, PDF or MP4 files.'));
         return ['bytes'=>$bytes,'mime'=>$mime,'sha256'=>hash_file('sha256',$path)];
     }
     public static function export(int $site):array {return ['format'=>'lifeos-admin-studio-v1','exported_at'=>gmdate('c'),'website'=>array_intersect_key(WebsiteService::profile($site),array_flip(['name','base_url','business_name'])),'records'=>Db::all('SELECT section,title,status,data,version,created_at,updated_at,deleted_at FROM website_studio_records WHERE website_id=? ORDER BY id',[$site]),'media'=>array_map(fn($file)=>array_intersect_key($file,array_flip(['id','filename','mime','bytes','created_at'])),Db::all('SELECT * FROM website_studio_media WHERE website_id=? ORDER BY id',[$site]))];}

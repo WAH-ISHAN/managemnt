@@ -6,7 +6,10 @@ internal sealed partial class LifeWindow
     private bool customChrome;
     private bool chromeCloseRequested;
     private int lastChromeResizeHit;
+    private const int ChromeHeaderHeight=48; // Matches --window-chrome-height.
     private int ResizeRing => Math.Max(6,(int)Math.Round(6*DeviceDpi/96d));
+    private Rectangle? VisibleChromeBounds=>Visible&&customChrome&&WindowState!=FormWindowState.Minimized
+        ? new Rectangle(PointToScreen(Point.Empty),new Size(ClientSize.Width,LogicalToDeviceUnits(ChromeHeaderHeight))) : null;
 
     private void InitializeWindowChrome()
     {
@@ -24,6 +27,7 @@ internal sealed partial class LifeWindow
     {
         get {
             var cp=base.CreateParams;
+            if(hiddenToTray){cp.ExStyle&=~0x00040000;cp.ExStyle|=0x00000080;} // Hidden tool window: no taskbar or Alt+Tab entry.
             if (customChrome) cp.Style |= 0x00040000 | 0x00020000 | 0x00010000 | 0x00080000; // Resize, minimize, maximize and system menu.
             return cp;
         }
@@ -124,7 +128,7 @@ internal sealed partial class LifeWindow
                     ReleaseCapture();
                     var cursor=Cursor.Position;
                     long position=((long)(ushort)cursor.Y<<16)|(ushort)cursor.X;
-                    SendMessage(Handle,0x00A1,(IntPtr)hit,(IntPtr)position);
+                    SendMessage(Handle,0x0112,(IntPtr)(0xF000+hit-9),(IntPtr)position);
                 }));
                 break;
             case "menu": BeginInvoke(new Action(ShowWindowMenu)); break;
@@ -143,7 +147,7 @@ internal sealed partial class LifeWindow
         bool maximized=WindowState==FormWindowState.Maximized;
         EnableMenuItem(menu,0xF120,(uint)(maximized ? 0 : 1));
         EnableMenuItem(menu,0xF030,(uint)(maximized ? 1 : 0));
-        var point=PointToScreen(new Point(ResizeRing,LogicalToDeviceUnits(48)));
+        var point=PointToScreen(new Point(ResizeRing,LogicalToDeviceUnits(ChromeHeaderHeight)));
         uint command=TrackPopupMenuEx(menu,0x0102,point.X,point.Y,Handle,IntPtr.Zero);
         if (command!=0) SendMessage(Handle,0x0112,(IntPtr)command,IntPtr.Zero);
     }
@@ -230,7 +234,7 @@ internal sealed partial class LifeWindow
             });
             await Task.Delay(100,lifetime.Token);
             if (lastChromeResizeHit!=11 || Math.Abs(Width-(originalBounds.Width-32))>3 || Height!=originalBounds.Height)
-                throw new InvalidOperationException("The WebView edge did not perform a native resize: "+name);
+                throw new InvalidOperationException($"The WebView edge did not perform a native resize: {name}; hit={lastChromeResizeHit}; width={Width}; expected={originalBounds.Width-32}; height={Height}; expectedHeight={originalBounds.Height}");
             checks[name]=true;
         } finally { Bounds=originalBounds; Cursor.Position=originalCursor; }
     }

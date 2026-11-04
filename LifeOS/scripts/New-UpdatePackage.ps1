@@ -24,7 +24,7 @@ foreach($required in @('LifeOS.exe','app','public','php/php.exe','scripts/Apply-
 }
 $package=Join-Path $outputPath 'LifeOS-update.zip'
 if(Test-Path -LiteralPath $package){Remove-Item -LiteralPath $package -Force}
-$allowed=@('LifeOS.exe','app','public','php','scripts','integrations','qa','README.md','README-si.md','THIRD-PARTY.md','VERIFICATION.md','PERFORMANCE.md','lifeos-release.json')
+$allowed=@('LifeOS.exe','app','public','php','scripts','integrations','qa','docs','README.md','README-si.md','THIRD-PARTY.md','VERIFICATION.md','PERFORMANCE.md','lifeos-release.json')
 $archive=[IO.Compression.ZipFile]::Open($package,[IO.Compression.ZipArchiveMode]::Create)
 try {
     foreach($rootName in $allowed) {

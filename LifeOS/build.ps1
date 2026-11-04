@@ -2,9 +2,15 @@ param(
     [string]$PhpDirectory = (Split-Path (Get-Command php.exe -ErrorAction Stop).Source),
     [string]$Dotnet = 'dotnet',
     [string]$InnoCompiler = 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe',
-    [string]$WebViewInstaller = "$PSScriptRoot/.tools/MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
+    [string]$WebViewInstaller = "$PSScriptRoot/.tools/MicrosoftEdgeWebView2RuntimeInstallerX64.exe",
+    [switch]$Commercial,
+    [string]$LicensePublicKey = '',
+    [string]$AiExecutable = "$env:LOCALAPPDATA/LifeOS/ai-runtime/opencode-2.2.5/opencode.exe",
+    [switch]$WithoutAiRuntime
 )
 $ErrorActionPreference = 'Stop'
+if($Commercial -and ([string]::IsNullOrWhiteSpace($LicensePublicKey) -or [Convert]::FromBase64String($LicensePublicKey).Length -ne 32)){throw 'Commercial builds require the server Ed25519 public key (-LicensePublicKey). Never pass the private key.'}
+if(!$WithoutAiRuntime -and !(Test-Path -LiteralPath $AiExecutable)){throw 'Provide the already-installed approved runtime using -AiExecutable, or explicitly build without bundled AI using -WithoutAiRuntime. This build never downloads AI packages.'}
 $projectRoot = [IO.Path]::GetFullPath($PSScriptRoot)
 $distribution = [IO.Path]::GetFullPath((Join-Path $projectRoot 'dist'))
 if ($distribution -ne (Join-Path $projectRoot 'dist')) { throw 'Unsafe distribution path.' }
@@ -12,7 +18,7 @@ if (-not (Test-Path -LiteralPath $WebViewInstaller)) { throw 'Provide the offlin
 if (-not (Test-Path -LiteralPath $InnoCompiler)) { throw 'Provide the Inno Setup 6 compiler with -InnoCompiler.' }
 $phpExe = Join-Path $PhpDirectory 'php.exe'
 & $phpExe (Join-Path $projectRoot 'scripts/check-runtime.php')
-if ($LASTEXITCODE -ne 0) { throw 'Build requires PHP 8.3 with pdo_sqlite, sqlite3, mbstring, openssl, zip and fileinfo.' }
+if ($LASTEXITCODE -ne 0) { throw 'Build requires PHP 8.3 with pdo_sqlite, sqlite3, mbstring, openssl, sodium, zip, fileinfo and curl.' }
 & $Dotnet --version
 if ($LASTEXITCODE -ne 0) { throw 'A .NET SDK is required to build the launcher.' }
 foreach ($file in @($WebViewInstaller,$InnoCompiler)) {
@@ -28,12 +34,21 @@ New-Item -ItemType Directory -Path $distribution -Force | Out-Null
 & $Dotnet publish (Join-Path $projectRoot 'launcher/LifeOS.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $distribution
 if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed.' }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'app'),(Join-Path $projectRoot 'public') -Destination $distribution -Recurse
+if($Commercial){
+    $licenseConfig=@{server='https://orean.tech';required=$true;publicKey=$LicensePublicKey}|ConvertTo-Json -Compress
+    [IO.File]::WriteAllText((Join-Path $distribution 'app/Core/license-config.json'),$licenseConfig,[Text.UTF8Encoding]::new($false))
+}
+if(!$WithoutAiRuntime){
+    & python (Join-Path $projectRoot 'scripts/package_ai_runtime.py') --opencode $AiExecutable --output (Join-Path $distribution 'scripts/ai-runtime')
+    if($LASTEXITCODE -ne 0){throw 'Bundled AI runtime verification failed.'}
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/OPENCODE-LICENSE.txt') -Destination (Join-Path $distribution 'scripts/ai-runtime/OPENCODE-LICENSE.txt')
+}
 New-Item -ItemType Directory -Path (Join-Path $distribution 'php/ext'),(Join-Path $distribution 'prerequisites'),(Join-Path $distribution 'scripts') -Force | Out-Null
-foreach ($helper in @('Apply-LifeOSUpdate.ps1','update-backup.php','Set-WindowsStartup.ps1')) { Copy-Item -LiteralPath (Join-Path $projectRoot ('scripts/'+$helper)) -Destination (Join-Path $distribution 'scripts') }
+foreach ($helper in @('Apply-LifeOSUpdate.ps1','update-backup.php','Set-WindowsStartup.ps1','mobile_companion.py','setup_mobile_tls.py','connectivity_worker.py','authorize_calendar.py','lifeos_cli.py','Track-ActiveWindow.ps1','opencode_worker.py')) { Copy-Item -LiteralPath (Join-Path $projectRoot ('scripts/'+$helper)) -Destination (Join-Path $distribution 'scripts') }
 if (Test-Path -LiteralPath (Join-Path $projectRoot 'lifeos-release.json')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'lifeos-release.json') -Destination $distribution }
 Copy-Item -LiteralPath $phpExe,(Join-Path $PhpDirectory 'license.txt') -Destination (Join-Path $distribution 'php')
 Get-ChildItem -LiteralPath $PhpDirectory -Filter '*.dll' | Copy-Item -Destination (Join-Path $distribution 'php')
-foreach ($extension in @('php_pdo_sqlite.dll','php_sqlite3.dll','php_mbstring.dll','php_openssl.dll','php_zip.dll','php_fileinfo.dll','php_curl.dll','php_opcache.dll')) { $extPath = Join-Path $PhpDirectory "ext/$extension"; if (Test-Path -LiteralPath $extPath) { Copy-Item -LiteralPath $extPath -Destination (Join-Path $distribution 'php/ext') } }
+foreach ($extension in @('php_pdo_sqlite.dll','php_sqlite3.dll','php_mbstring.dll','php_openssl.dll','php_zip.dll','php_fileinfo.dll','php_curl.dll','php_sodium.dll','php_opcache.dll')) { $extPath = Join-Path $PhpDirectory "ext/$extension"; if (Test-Path -LiteralPath $extPath) { Copy-Item -LiteralPath $extPath -Destination (Join-Path $distribution 'php/ext') } }
 if(Test-Path -LiteralPath (Join-Path $projectRoot 'integrations')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'integrations') -Destination $distribution -Recurse }
 # App-local Microsoft VC runtime for PHP on clean Windows installations.
 foreach ($dll in @('vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll')) { Copy-Item -LiteralPath (Join-Path $env:WINDIR "System32/$dll") -Destination (Join-Path $distribution 'php') }
@@ -41,6 +56,7 @@ Copy-Item -LiteralPath (Join-Path $projectRoot 'php.ini') -Destination (Join-Pat
 Copy-Item -LiteralPath $WebViewInstaller -Destination (Join-Path $distribution 'prerequisites/MicrosoftEdgeWebView2RuntimeInstallerX64.exe')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md'),(Join-Path $projectRoot 'README-si.md'),(Join-Path $projectRoot 'THIRD-PARTY.md') -Destination $distribution
 if(Test-Path -LiteralPath (Join-Path $projectRoot 'qa')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'qa') -Destination $distribution -Recurse }
+if(Test-Path -LiteralPath (Join-Path $projectRoot 'docs')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $distribution -Recurse }
 if (Test-Path -LiteralPath (Join-Path $projectRoot 'VERIFICATION.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'VERIFICATION.md') -Destination $distribution }
 if (Test-Path -LiteralPath (Join-Path $projectRoot 'PERFORMANCE.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'PERFORMANCE.md') -Destination $distribution }
 & $InnoCompiler (Join-Path $projectRoot 'lifeos.iss')

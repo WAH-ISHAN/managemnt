@@ -21,7 +21,7 @@ $utf8=New-Object Text.UTF8Encoding($false)
 $stage=$null;$lock=$null;$applied=$false;$mutationStarted=$false;$rollbackOkay=$true
 $movedOld=New-Object Collections.Generic.List[string]
 $movedNew=New-Object Collections.Generic.List[string]
-$allowed=@('LifeOS.exe','app','public','php','scripts','integrations','qa','README.md','README-si.md','THIRD-PARTY.md','VERIFICATION.md','PERFORMANCE.md','lifeos-release.json')
+$allowed=@('LifeOS.exe','app','public','php','scripts','integrations','qa','docs','README.md','README-si.md','THIRD-PARTY.md','VERIFICATION.md','PERFORMANCE.md','lifeos-release.json')
 function Assert-Within([string]$Path,[string]$Root) {
     $full=[IO.Path]::GetFullPath($Path)
     if(-not $full.StartsWith($Root.TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)){throw 'Update path is outside its expected directory.'}
@@ -96,7 +96,7 @@ try {
     if(Test-Path -LiteralPath $database) {
         $backups=Join-Path $updateData 'backups';New-Item -ItemType Directory -Path $backups -Force|Out-Null
         $backup=Join-Path $backups ('lifeos-before-update-'+(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[guid]::NewGuid().ToString('N')+'.db')
-        & (Join-Path $install 'php/php.exe') -c (Join-Path $install 'php/php.ini') -d ('extension_dir='+(Join-Path $install 'php/ext')) (Join-Path $install 'scripts/update-backup.php') $database $backup
+        & (Join-Path $install 'php/php.exe') -c (Join-Path $install 'php/php.ini') -d ("extension_dir='"+(Join-Path $install 'php/ext')+"'") (Join-Path $install 'scripts/update-backup.php') $database $backup
         if($LASTEXITCODE -ne 0){throw 'Verified database backup failed. Update was not applied.'}
     }
     $mutationStarted=$true

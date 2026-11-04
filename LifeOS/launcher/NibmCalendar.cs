@@ -59,7 +59,7 @@ internal sealed partial class LifeWindow
             nibmWindow.PortalChanged += async (_, _) => { if (nibmEnabled && !nibmBusy) await SyncNibmCalendarAsync(); };
         }
         var window = nibmWindow;
-        try { await window.InitializeAsync(nibmEnvironment); return window; }
+        try { await window.InitializeAsync(nibmEnvironment,browserProfile); return window; }
         catch {
             window.Shutdown();
             if (nibmWindow == window) nibmWindow = null;
@@ -232,18 +232,19 @@ internal sealed class NibmCalendarWindow : Form
         Width = 1160; Height = 800; MinimumSize = new Size(720, 600);
         StartPosition = FormStartPosition.CenterParent;
         Controls.Add(portal);
-        FormClosing += (_, e) => { if (!shutdown) { e.Cancel = true; Hide(); } };
+        FormClosing += (_, e) => { if (!shutdown && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); } };
     }
 
     internal bool BrowserReady => portal.CoreWebView2 is not null;
-    internal Task InitializeAsync(CoreWebView2Environment environment) => initialize ??= InitializeCoreAsync(environment, true);
-    internal Task InitializeDiagnosticAsync(CoreWebView2Environment environment) => initialize ??= InitializeCoreAsync(environment, false);
+    internal Task InitializeAsync(CoreWebView2Environment environment,string profile="default") => initialize ??= InitializeCoreAsync(environment, true,profile);
+    internal Task InitializeDiagnosticAsync(CoreWebView2Environment environment,string profile="default") => initialize ??= InitializeCoreAsync(environment, false,profile);
+    internal string ProfileName => portal.CoreWebView2?.Profile.ProfileName ?? "";
 
-    private async Task InitializeCoreAsync(CoreWebView2Environment environment, bool navigate)
+    private async Task InitializeCoreAsync(CoreWebView2Environment environment, bool navigate,string profile="default")
     {
         _ = Handle;
         _ = portal.Handle;
-        await portal.EnsureCoreWebView2Async(environment);
+        await portal.EnsureCoreWebView2Async(environment,LifeWindow.BrowserOptions(environment,profile));
         var core = portal.CoreWebView2;
         core.Settings.AreDevToolsEnabled = false;
         core.Settings.IsStatusBarEnabled = false;

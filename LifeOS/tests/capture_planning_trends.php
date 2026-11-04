@@ -1,0 +1,80 @@
+<?php
+declare(strict_types=1);
+require __DIR__.'/bootstrap.php';
+Db::init(':memory:'); $mods=Modules::discover(ROOT.'/app/Modules'); Migrator::run(array_merge([ROOT.'/app/Core/migrations'],array_map(fn($m)=>$m['path'].'/migrations',$mods)));
+$n=0; function cp_check(bool $ok,string $label): void { global $n; if (!$ok) throw new RuntimeException($label); $n++; }
+function cp_reject(callable $fn): void { try {$fn();} catch (InvalidArgumentException) {cp_check(true,'Rejected');return;} throw new RuntimeException('Expected rejection'); }
+$d=CaptureService::parse('call amma tomorrow 5pm !high ~45m','2026-11-03');
+cp_check($d['title']==='call amma' && $d['due']==='2026-11-04' && $d['time']==='17:00' && $d['priority']==='high' && $d['estimate_minutes']===45,'Natural capture parsed');
+cp_check(CaptureService::parse('පාඩම් හෙට','2026-11-03')['due']==='2026-11-04','Sinhala date');
+cp_check(CaptureService::parse('படி நாளை','2026-11-03')['due']==='2026-11-04','Tamil date');
+cp_check(CaptureService::parse('tomorrowland meeting','2026-11-03')['due']===null,'Word boundaries');
+cp_check(CaptureService::parse('study 12am')['time']==='00:00','Midnight');
+cp_reject(fn()=>CaptureService::parse('study tomorrow 2026-11-05'));
+cp_reject(fn()=>CaptureService::parse('study 2026-02-30'));
+cp_reject(fn()=>CaptureService::parse('study 15pm'));
+$inbox=CaptureService::add('read tomorrow');$draft=CaptureService::parse('read tomorrow'); $task=CaptureService::convert($inbox,$draft);
+cp_check(PlannerService::task($task)['source']==='capture','Converted into domain task');
+cp_reject(fn()=>CaptureService::convert($inbox,$draft));
+cp_check((int)Db::one('SELECT COUNT(*) n FROM tasks')['n']===1,'Repeated conversion not duplicated');
+Db::run('DELETE FROM tasks');
+PlanningService::configure(['start'=>'09:00','end'=>'12:00','days'=>[1,2,3,4,5],'archive_days'=>30]);
+$high=PlannerService::saveTask(null,['title'=>'High','due'=>'2026-11-02','priority'=>'high','estimate_minutes'=>60,'deadline'=>'2026-11-03']);
+$normal=PlannerService::saveTask(null,['title'=>'Normal','due'=>'2026-11-03','estimate_minutes'=>60]);
+PlannerService::saveAppointment(null,['title'=>'Meeting','starts_at'=>'2026-11-03T09:30','ends_at'=>'2026-11-03T10:30']);
+$now=strtotime('2026-11-03 08:00'); $plan=PlanningService::preview('2026-11-03',true,$now);
+cp_check(count($plan['changes'])===2,'Tasks fit next free slots');
+cp_check($plan['changes'][0]['task_id']===$high && $plan['changes'][0]['starts_at']==='2026-11-03 10:30','Priority and conflict protection');
+cp_check($plan['changes'][1]['starts_at']==='2026-11-04 09:00','Overflow next weekday');
+$batch=PlanningService::apply($plan,$now);
+cp_check(PlannerService::task($high)['due']==='2026-11-03','Overdue due moved');
+cp_reject(fn()=>PlanningService::apply($plan,$now));
+cp_check(count(PlanningService::preview('2026-11-03',true,$now)['changes'])===0,'Already blocked tasks skipped');
+Db::run('UPDATE planner_blocks SET pinned=1 WHERE task_id=?',[$high]);cp_reject(fn()=>PlanningService::undo($batch));
+cp_check((int)Db::one('SELECT COUNT(*) n FROM planner_blocks')['n']===2,'Undo conflict atomic');
+Db::run('UPDATE planner_blocks SET pinned=0');PlanningService::undo($batch);
+cp_check(PlannerService::task($high)['due']==='2026-11-02' && !(bool)Db::one('SELECT 1 FROM planner_blocks'),'Undo restored due and blocks');
+cp_reject(fn()=>PlanningService::undo($batch));
+PlannerService::taskStatus($normal,'done'); Db::run("UPDATE tasks SET completed_at='2026-09-01 00:00:00' WHERE id=?",[$normal]);
+cp_check(PlanningService::archive(30,'2026-11-03')===1,'Archive old completed');
+cp_check(PlannerService::taskList('archived')['total']===1 && PlannerService::taskList('all')['total']===1,'Archive hidden by default and recoverable');
+PlannerService::taskStatus($normal,'open');cp_check(PlannerService::task($normal)['archived_at']===null,'Reopen unarchives');
+cp_reject(fn()=>PlannerService::saveTask(null,['title'=>'Impossible','due'=>'2026-11-04','deadline'=>'2026-11-03']));
+cp_reject(fn()=>PlanningService::configure(['start'=>'17:00','end'=>'09:00','days'=>[1]]));
+Db::run("INSERT INTO lessons(area,what_happened,root_cause,created_at) VALUES ('study','A',' Poor sleep ','2026-11-01 00:00:00'),('work','B','poor  sleep','2026-11-02 00:00:00'),('study','C','other','2026-01-01 00:00:00')");
+$trends=TrendService::summarize('2026-11');cp_check(count($trends['patterns'])===1 && $trends['patterns'][0]['count']===2,'Normalized cause pattern with evidence');
+cp_check($trends['spending']['change_percent']===null,'Sparse spending no spurious percentage');
+TrendService::configure(['enabled'=>1,'daily_minutes'=>30,'open_tasks'=>1]); $trends=TrendService::summarize(date('Y-m'));cp_check(count($trends['overload'])===1,'Opt-in workload warning');
+cp_check(Db::one('PRAGMA integrity_check')['integrity_check']==='ok' && !Db::all('PRAGMA foreign_key_check'),'Database integrity');
+// Independent review regressions: ambiguous capture, stale plans and daily atomicity.
+cp_check(CaptureService::parse('high priority call !low')['priority']==='low','Priority marker parsed even after ordinary priority words');
+cp_reject(fn()=>CaptureService::parse('call today tomorrow'));
+cp_reject(fn()=>CaptureService::parse('call 3pm 5pm'));
+$stale=PlanningService::preview('2026-11-03',false,$now);
+cp_reject(fn()=>PlanningService::apply($stale,strtotime('2026-11-03 16:00')));
+$bad=$stale; $bad['changes'][0]['ends_at']='2026-11-03 11:45';
+cp_reject(fn()=>PlanningService::apply($bad,$now));
+Db::run('DELETE FROM planner_blocks'); Db::run('DELETE FROM planner_batches'); Db::run('DELETE FROM tasks'); Db::run('DELETE FROM planner_appointments');
+$overdue=PlannerService::saveTask(null,['title'=>'Only overdue','due'=>'2026-11-02','estimate_minutes'=>30]);
+PlannerService::saveTask(null,['title'=>'Undated']); PlannerService::saveTask(null,['title'=>'Due today','due'=>'2026-11-03']);
+PlanningService::configure(['start'=>'09:00','end'=>'12:00','days'=>[1,2,3,4,5],'reschedule'=>1,'archive_days'=>0]);
+$runNow=strtotime('2026-11-03 09:00');
+Db::exec("CREATE TRIGGER planning_forced_failure BEFORE INSERT ON planner_blocks BEGIN SELECT RAISE(ABORT,'deliberate test failure'); END");
+try { PlanningService::tick('2026-11-03',$runNow); throw new RuntimeException('Expected write failure'); } catch (PDOException $expected) {}
+cp_check(!Db::one('SELECT 1 FROM planner_job_runs') && !Db::one('SELECT 1 FROM planner_batches') && PlannerService::task($overdue)['due']==='2026-11-02','Failed daily planning rolls back slot, batches and due dates');
+Db::exec('DROP TRIGGER planning_forced_failure');
+$run=PlanningService::tick('2026-11-03',$runNow);
+cp_check($run['blocks']===1 && count(Db::all('SELECT * FROM planner_blocks'))===1,'Reschedule-only opt-in affects overdue tasks only');
+cp_check(PlanningService::tick('2026-11-03',$runNow)['blocks']===0,'Committed daily slot prevents repeat execution');
+$scheduledBatch=(int)Db::one('SELECT id FROM planner_batches ORDER BY id DESC LIMIT 1')['id']; PlannerService::taskStatus($overdue,'done');
+cp_reject(fn()=>PlanningService::undo($scheduledBatch));
+// Future focus history and overlapping meetings must not invent overload.
+Db::run('DELETE FROM tasks'); Db::run('DELETE FROM planner_appointments');
+$today=date('Y-m-d');
+PlannerService::saveAppointment(null,['title'=>'Meeting A','starts_at'=>$today.'T09:00','ends_at'=>$today.'T10:00']);
+PlannerService::saveAppointment(null,['title'=>'Meeting B','starts_at'=>$today.'T09:30','ends_at'=>$today.'T10:30']);
+for ($i=1;$i<=3;$i++) Db::run("INSERT INTO focus_sessions(subject,kind,target_minutes,status,elapsed_seconds,completed_at) VALUES ('Future imported','study',120,'complete',7200,?)",[gmdate('Y-m-d H:i:s',strtotime('+'.$i.' days'))]);
+TrendService::configure(['enabled'=>1,'daily_minutes'=>90,'open_tasks'=>200]);
+cp_check(TrendService::summarize(date('Y-m'))['overload']===[],'Overlapping appointment minutes counted once and future focus excluded');
+
+echo "$n capture, planning, archive and trend checks passed.\n";
