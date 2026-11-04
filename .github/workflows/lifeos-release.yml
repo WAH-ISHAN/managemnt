@@ -30,7 +30,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: pdo_sqlite, sqlite3, mbstring, openssl, zip, fileinfo, curl
+          extensions: pdo_sqlite, sqlite3, mbstring, openssl, sodium, zip, fileinfo, curl
           tools: composer
           coverage: none
         env:
@@ -82,7 +82,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: pdo_sqlite, sqlite3, mbstring, openssl, zip, fileinfo, curl
+          extensions: pdo_sqlite, sqlite3, mbstring, openssl, sodium, zip, fileinfo, curl
           tools: none
           coverage: none
         env:
@@ -90,6 +90,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Prepare trusted Windows build prerequisites
         run: |
           $ErrorActionPreference = 'Stop'
@@ -100,6 +103,10 @@ jobs:
           $runtime = Get-Item '.tools/MicrosoftEdgeWebView2RuntimeInstallerX64.exe'
           $signature = Get-AuthenticodeSignature -LiteralPath $runtime.FullName
           if ($runtime.Length -lt 50000000 -or $signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { throw 'Expected the Microsoft-signed offline WebView2 x64 standalone installer.' }
+          # Redistribute the same owner-approved runtime; no model weights.
+          Invoke-WebRequest -Uri 'https://github.com/anomalyco/opencode/releases/download/v2.2.5/opencode-windows-x64.zip' -OutFile '.tools/opencode.zip'
+          if((Get-FileHash '.tools/opencode.zip' -Algorithm SHA256).Hash.ToLowerInvariant() -ne '2f3bfd6b3527c60c2a882557b20ddc9ba6bdff4b5a8fe61c853da8fcfb3076e8'){throw 'AI runtime integrity check failed.'}
+          Expand-Archive -LiteralPath '.tools/opencode.zip' -DestinationPath '.tools/ai-runtime'
       - name: Stamp merged-main release identity
         run: |
           [xml]$project = Get-Content launcher/LifeOS.csproj
@@ -110,8 +117,13 @@ jobs:
           "LIFEOS_VERSION=$version" >> $env:GITHUB_ENV
           "LIFEOS_TAG=lifeos-$version-build.$env:BUILD_NUMBER" >> $env:GITHUB_ENV
       - name: Build installer and portable update
+        env:
+          LIFEOS_COMMERCIAL: ${{ vars.LIFEOS_COMMERCIAL }}
+          LIFEOS_LICENSE_PUBLIC_KEY: ${{ vars.LIFEOS_LICENSE_PUBLIC_KEY }}
         run: |
-          ./build.ps1
+          $licenseArgs=@{}
+          if($env:LIFEOS_COMMERCIAL -eq 'true'){$licenseArgs=@{Commercial=$true;LicensePublicKey=$env:LIFEOS_LICENSE_PUBLIC_KEY}}
+          ./build.ps1 -AiExecutable '.tools/ai-runtime/opencode.exe' @licenseArgs
           ./scripts/New-UpdatePackage.ps1 -Version $env:LIFEOS_VERSION -BuildNumber ([int]$env:BUILD_NUMBER) -Commit $env:GITHUB_SHA -Repository $env:GITHUB_REPOSITORY
       - name: Verify update delivery against disposable installations
         run: ./tests/update_delivery.ps1

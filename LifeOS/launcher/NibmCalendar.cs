@@ -232,7 +232,7 @@ internal sealed class NibmCalendarWindow : Form
         Width = 1160; Height = 800; MinimumSize = new Size(720, 600);
         StartPosition = FormStartPosition.CenterParent;
         Controls.Add(portal);
-        FormClosing += (_, e) => { if (!shutdown) { e.Cancel = true; Hide(); } };
+        FormClosing += (_, e) => { if (!shutdown && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); } };
     }
 
     internal bool BrowserReady => portal.CoreWebView2 is not null;

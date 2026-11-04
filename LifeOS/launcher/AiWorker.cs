@@ -4,10 +4,33 @@ using System.Text.Json;
 internal sealed partial class LifeWindow
 {
     private readonly Dictionary<string,Process> aiWorkers=new();
+    private readonly Dictionary<string,string> aiAccountJobs=new();
+    private void CancelAiAccountSignIn()
+    {
+        foreach(var entry in aiAccountJobs.ToArray())try{File.WriteAllText(Path.ChangeExtension(entry.Value,".cancel"),"cancel");}catch(IOException){}catch(UnauthorizedAccessException){}
+    }
+    private void OpenAiAccountAuthorization(string id)
+    {
+        if(id.Length!=32||!id.All(c=>c is >= '0' and <= '9' or >= 'a' and <= 'f'))return;
+        string data=Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR")??Path.Combine(root,"data");
+        if(browserProfile!="default")data=Path.Combine(data,"profiles",browserProfile);
+        string file=Path.Combine(data,"ai","jobs",id+".json");
+        try {
+            if(!File.Exists(file)||new FileInfo(file).Length>40000)return;
+            using var document=JsonDocument.Parse(File.ReadAllText(file));var state=document.RootElement;
+            if(state.GetProperty("kind").GetString()!="account_connect"||state.GetProperty("status").GetString()!="running")return;
+            var auth=state.GetProperty("authorization");
+            if(auth.GetProperty("expires_at").GetDouble()<=DateTimeOffset.UtcNow.ToUnixTimeSeconds())return;
+            if(!Uri.TryCreate(auth.GetProperty("url").GetString(),UriKind.Absolute,out var uri)||uri.Scheme!="https"||uri.Host!="opencode.ai"||uri.Port!=443||uri.UserInfo.Length!=0)return;
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri){UseShellExecute=true});
+        }catch(Exception error)when(error is IOException or UnauthorizedAccessException or JsonException or KeyNotFoundException or InvalidOperationException or System.ComponentModel.Win32Exception){LogStartup("AI sign-in page could not open",error);}
+    }
     private static string? FindNativeTool(string name)
     {
         var candidates=new List<string>();
+        if(name=="python")candidates.Add(Path.Combine(AppContext.BaseDirectory,"scripts","ai-runtime","python","python.exe"));
         if(name=="opencode") {
+            candidates.Add(Path.Combine(AppContext.BaseDirectory,"scripts","ai-runtime","opencode.exe"));
             candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LifeOS","ai-runtime","opencode-2.2.5","opencode.exe"));
             candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"npm","node_modules","opencode-ai","bin","opencode.exe"));
         }
@@ -19,7 +42,7 @@ internal sealed partial class LifeWindow
     private void StartAiJob(string id)
     {
         if(id.Length!=32 || !id.All(c=>c is >= '0' and <= '9' or >= 'a' and <= 'f') || IsDisposed)return;
-        foreach(var key in aiWorkers.Keys.ToArray())if(aiWorkers[key].HasExited){aiWorkers[key].Dispose();aiWorkers.Remove(key);}
+        foreach(var key in aiWorkers.Keys.ToArray())if(aiWorkers[key].HasExited){aiWorkers[key].Dispose();aiWorkers.Remove(key);aiAccountJobs.Remove(key);}
         if(aiWorkers.Count>0)return;
         string data=Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR")??Path.Combine(root,"data");
         if(browserProfile!="default")data=Path.Combine(data,"profiles",browserProfile);
@@ -40,6 +63,7 @@ internal sealed partial class LifeWindow
             process.BeginErrorReadLine();process.BeginOutputReadLine();
             if(!process.HasExited)job.Attach(process);
             aiWorkers[id]=process;
+            if(doc.RootElement.GetProperty("kind").GetString()=="account_connect")aiAccountJobs[id]=file;
         } catch(Exception error) when(error is IOException or JsonException or InvalidOperationException or System.ComponentModel.Win32Exception) { LogStartup("AI worker failed to start",error); }
     }
 }

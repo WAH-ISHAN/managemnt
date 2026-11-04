@@ -201,6 +201,10 @@
     if (!form?.contains(event.target) || totalsFrame!==null) return;
     totalsFrame=requestAnimationFrame(()=>{ totalsFrame=null; updateRuleTotal(); });
   });
+  // Scrolling a page must never silently change a focused numeric value.
+  document.addEventListener('wheel',event=>{
+    if(event.target instanceof HTMLInputElement&&event.target.type==='number'&&document.activeElement===event.target)event.target.blur();
+  },{passive:true});
   const commands={
     openCommands() { menu(false); document.getElementById('quick-add-dialog')?.close(); const dialog=document.getElementById('command-dialog'); if (dialog && !dialog.open) { dialog.showModal(); document.getElementById('command-search').focus(); } },
     openQuickAdd() { menu(false); document.getElementById('command-dialog')?.close(); const dialog=document.getElementById('quick-add-dialog'); if (dialog && !dialog.open) dialog.showModal(); },

@@ -22,7 +22,7 @@ $selectedProfile=$initialPath==='/internal/automation/tick' ? ProfileManager::ac
 ProfileManager::select($selectedProfile);
 define('DATA',ProfileManager::directory());
 date_default_timezone_set('Asia/Colombo');
-foreach (['Db','Migrator','Router','View','Modules','Auth','Backup','helpers'] as $file) require __DIR__ . '/' . $file . '.php';
+foreach (['Db','Migrator','Router','View','Modules','Auth','Backup','helpers','LicenseService'] as $file) require __DIR__ . '/' . $file . '.php';
 try {
     $host = $_SERVER['HTTP_HOST'] ?? '';
     if (!preg_match('/^127\.0\.0\.1(?::\d+)?$/',$host)) { http_response_code(403); exit('LifeOS is available on 127.0.0.1 only.'); }
@@ -52,12 +52,15 @@ try {
     $path = parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH) ?: '/';
     if ($path === '/health') { header('Content-Type: text/plain'); echo 'LifeOS:' . (getenv('LIFEOS_INSTANCE') ?: 'development'); exit; }
     try { Backup::daily(DATA . '/backups'); } catch (Throwable $e) { error_log('Backup: ' . $e); View::share('backupWarning','Daily backup failed. Check free disk space and folder permissions.'); }
-    $router = new Router(); Auth::guard($router); ProfileManager::guard($router); ProfileManager::register($router); Modules::register($mods,$router);
+    $router = new Router(); Auth::guard($router); ProfileManager::guard($router); LicenseService::guard($router); LicenseService::routes($router); ProfileManager::register($router); Modules::register($mods,$router);
     ProfileManager::syncName(Db::setting('name'));
     if ($residentTick) {
-        $result=class_exists('AutomationService') && module_enabled('Automation') ? AutomationService::tick() : ['ran'=>0,'skipped'=>1,'failed'=>0];
+        LicenseService::tick();
+        if(LicenseService::config()['required']&&LicenseService::state()['claims']===null){echo json_encode(['ran'=>0,'skipped'=>1,'reason'=>'activation_required']);exit;}
+        $result=LicenseService::allowed('connections') && class_exists('AutomationService') && module_enabled('Automation') ? AutomationService::tick() : ['ran'=>0,'skipped'=>1,'failed'=>0];
         if (!ProfileManager::isKid()) {
             foreach (['PlanningService','ConnectivityService','LifePlanningService'] as $backgroundService) {
+                if(!LicenseService::allowed($backgroundService==='ConnectivityService'?'connections':'planner'))continue;
                 if($backgroundService==='LifePlanningService'&&!module_enabled('LifePlanning'))continue;
                 if (!class_exists($backgroundService) || ($backgroundService==='ConnectivityService' && !module_enabled('Connectivity'))) continue;
                 try { $result[$backgroundService]=$backgroundService::tick(); }
@@ -67,7 +70,7 @@ try {
         echo json_encode($result,JSON_THROW_ON_ERROR); exit;
     }
     if (class_exists('PersonaService')) {
-        View::share('menu',PersonaService::menu($mods));
+        View::share('menu',array_values(array_filter(PersonaService::menu($mods),fn($module)=>module_enabled(basename($module['path'])))));
         $router->before(function (string $method,string $path) {
             if (!PersonaService::routeEnabled($path)) {
                 http_response_code(403);

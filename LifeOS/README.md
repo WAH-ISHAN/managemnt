@@ -1,5 +1,7 @@
 # LifeOS — Your Life, Your Freedom
 
+First-start setup now supports **multiple roles**: School, University and Employee can be combined, alongside Freelancer, Business owner and Job seeker. Navigation, quick actions, dashboard and settings show the matching tools. Change roles later in **Settings → Modules & language → Your roles**; saved records are retained. See the [role mapping, research and behavior](docs/WORKSPACE-ROLES.md).
+
 Version 1.9.3 adds a dedicated **LifeOS AI** chat panel (**Win + Shift + \\**) with automatic selection of currently available zero-cost online models. Model selection stays in the background. This laptop uses the explicitly approved OpenCode v2.2.5 CLI update; no model weights are downloaded. It preserves the startup, profile isolation, languages and Work Roles improvements from 1.9.1. See [verification and limits](qa/end-to-end-2026-11-03.md) and [Work Roles / AI guide](docs/PART-3-WORK-ROLES-AI.md).
 
 Version 1.8.2 adds a persona-based foundation: six-persona onboarding, saved module switches/sidebar order, an English/Sinhala/Tamil interface shell and opt-in local automations with a resident scheduler. Open **Settings → Modules & language** to configure an existing workspace, then **Automations** to enable routines. See the [complete 100-feature roadmap](docs/PERSONA-UPDATE-ROADMAP.md) and [verified scope and remaining work](qa/persona-automation-foundation.md).

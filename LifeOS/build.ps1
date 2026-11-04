@@ -2,9 +2,15 @@ param(
     [string]$PhpDirectory = (Split-Path (Get-Command php.exe -ErrorAction Stop).Source),
     [string]$Dotnet = 'dotnet',
     [string]$InnoCompiler = 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe',
-    [string]$WebViewInstaller = "$PSScriptRoot/.tools/MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
+    [string]$WebViewInstaller = "$PSScriptRoot/.tools/MicrosoftEdgeWebView2RuntimeInstallerX64.exe",
+    [switch]$Commercial,
+    [string]$LicensePublicKey = '',
+    [string]$AiExecutable = "$env:LOCALAPPDATA/LifeOS/ai-runtime/opencode-2.2.5/opencode.exe",
+    [switch]$WithoutAiRuntime
 )
 $ErrorActionPreference = 'Stop'
+if($Commercial -and ([string]::IsNullOrWhiteSpace($LicensePublicKey) -or [Convert]::FromBase64String($LicensePublicKey).Length -ne 32)){throw 'Commercial builds require the server Ed25519 public key (-LicensePublicKey). Never pass the private key.'}
+if(!$WithoutAiRuntime -and !(Test-Path -LiteralPath $AiExecutable)){throw 'Provide the already-installed approved runtime using -AiExecutable, or explicitly build without bundled AI using -WithoutAiRuntime. This build never downloads AI packages.'}
 $projectRoot = [IO.Path]::GetFullPath($PSScriptRoot)
 $distribution = [IO.Path]::GetFullPath((Join-Path $projectRoot 'dist'))
 if ($distribution -ne (Join-Path $projectRoot 'dist')) { throw 'Unsafe distribution path.' }
@@ -28,6 +34,15 @@ New-Item -ItemType Directory -Path $distribution -Force | Out-Null
 & $Dotnet publish (Join-Path $projectRoot 'launcher/LifeOS.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $distribution
 if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed.' }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'app'),(Join-Path $projectRoot 'public') -Destination $distribution -Recurse
+if($Commercial){
+    $licenseConfig=@{server='https://orean.tech';required=$true;publicKey=$LicensePublicKey}|ConvertTo-Json -Compress
+    [IO.File]::WriteAllText((Join-Path $distribution 'app/Core/license-config.json'),$licenseConfig,[Text.UTF8Encoding]::new($false))
+}
+if(!$WithoutAiRuntime){
+    & python (Join-Path $projectRoot 'scripts/package_ai_runtime.py') --opencode $AiExecutable --output (Join-Path $distribution 'scripts/ai-runtime')
+    if($LASTEXITCODE -ne 0){throw 'Bundled AI runtime verification failed.'}
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/OPENCODE-LICENSE.txt') -Destination (Join-Path $distribution 'scripts/ai-runtime/OPENCODE-LICENSE.txt')
+}
 New-Item -ItemType Directory -Path (Join-Path $distribution 'php/ext'),(Join-Path $distribution 'prerequisites'),(Join-Path $distribution 'scripts') -Force | Out-Null
 foreach ($helper in @('Apply-LifeOSUpdate.ps1','update-backup.php','Set-WindowsStartup.ps1','mobile_companion.py','setup_mobile_tls.py','connectivity_worker.py','authorize_calendar.py','lifeos_cli.py','Track-ActiveWindow.ps1','opencode_worker.py')) { Copy-Item -LiteralPath (Join-Path $projectRoot ('scripts/'+$helper)) -Destination (Join-Path $distribution 'scripts') }
 if (Test-Path -LiteralPath (Join-Path $projectRoot 'lifeos-release.json')) { Copy-Item -LiteralPath (Join-Path $projectRoot 'lifeos-release.json') -Destination $distribution }

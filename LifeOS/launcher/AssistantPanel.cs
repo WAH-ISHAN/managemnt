@@ -5,16 +5,20 @@ using Microsoft.Web.WebView2.WinForms;
 
 internal sealed class AssistantPanelWindow : Form
 {
-    private readonly WebView2 browser=new(){Dock=DockStyle.Fill};
+    private readonly WebView2 browser=new(){Dock=DockStyle.Fill,DefaultBackgroundColor=Color.Transparent};
     private readonly Uri home;
     private readonly CoreWebView2Environment environment;
     private readonly string profile;
     private bool initialized;
     private PanelGlassResult glass;
+    private int headerHeight=80;
     internal event Action<string>? AiJobRequested;
     internal event Action<string>? OpenRouteRequested;
     internal event Action? UnlockRequested;
     internal string ProfileName=>browser.CoreWebView2?.Profile.ProfileName??"";
+    internal PanelGlassResult GlassResult=>glass;
+    internal bool ContentFillsClient=>browser.Bounds==ClientRectangle;
+    internal int HeaderHeight=>LogicalToDeviceUnits(headerHeight);
     internal Task<string> EvaluateAsync(string expression)=>browser.CoreWebView2?.ExecuteScriptAsync(expression)??Task.FromResult("");
     internal async Task CaptureAsync(string path){if(browser.CoreWebView2 is null)return;using var stream=File.Create(path);await browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png,stream);}
     internal AssistantPanelWindow(Uri home,CoreWebView2Environment environment,string profile)
@@ -27,6 +31,7 @@ internal sealed class AssistantPanelWindow : Form
         FormClosing+=(_,e)=>{if(e.CloseReason==CloseReason.UserClosing){e.Cancel=true;Hide();}};
         VisibleChanged+=async(_,_)=>{if(browser.CoreWebView2 is null)return;try{if(Visible){browser.CoreWebView2.Resume();await browser.CoreWebView2.ExecuteScriptAsync("window.dispatchEvent(new Event('lifeos:assistant-show'))");}else{await browser.CoreWebView2.ExecuteScriptAsync("window.dispatchEvent(new Event('lifeos:assistant-hide'))");await browser.CoreWebView2.TrySuspendAsync();}}catch(InvalidOperationException){}};
         SizeChanged+=(_,_)=>{if(IsHandleCreated&&glass.RoundedClipApplied)PanelGlass.UpdateRoundedClip(this);};
+        DpiChanged+=(_,_)=>{if(glass.RoundedClipApplied)PanelGlass.UpdateRoundedClip(this);};
     }
     private async Task InitializeAsync()
     {
@@ -45,6 +50,7 @@ internal sealed class AssistantPanelWindow : Form
                 try{using var document=JsonDocument.Parse(e.WebMessageAsJson);var value=document.RootElement;string type=value.GetProperty("type").GetString()??"";
                     if(type=="lifeos-ai-job"){AiJobRequested?.Invoke(value.GetProperty("id").GetString()??"");return;}
                     if(type=="lifeos-assistant-locked"){Hide();UnlockRequested?.Invoke();return;}
+                    if(type=="lifeos-assistant-layout"&&value.TryGetProperty("headerHeight",out var height)&&height.ValueKind==JsonValueKind.Number&&height.TryGetInt32(out int pixels)){headerHeight=Math.Clamp(pixels,0,ClientSize.Height);return;}
                     if(type=="lifeos-assistant-theme"){glass=PanelGlass.Apply(this,value.GetProperty("dark").GetBoolean(),true);return;}
                     if(type=="lifeos-assistant-open"){string path=value.GetProperty("route").GetString()??"";if(path.StartsWith('/')&&!path.StartsWith("//")&&!path.Contains('\\'))OpenRouteRequested?.Invoke(path);return;}
                     if(type!="lifeos-assistant-window")return;
@@ -56,7 +62,7 @@ internal sealed class AssistantPanelWindow : Form
             core.Navigate(new Uri(home,"/assistant").ToString());
         }catch(InvalidOperationException){Hide();}
     }
-    internal void Reveal(){var work=Screen.FromRectangle(Bounds).WorkingArea;Location=new Point(Math.Clamp(Left,work.Left,Math.Max(work.Left,work.Right-Width)),Math.Clamp(Top,work.Top,Math.Max(work.Top,work.Bottom-Height)));Show();Activate();}
+    internal void Reveal(Form? companion=null,Rectangle? protectedHeader=null)=>FloatingPanelLayout.Reveal(this,companion,protectedHeader);
     protected override CreateParams CreateParams{get{var value=base.CreateParams;value.Style|=0x00040000;return value;}}
     protected override void OnHandleCreated(EventArgs e){base.OnHandleCreated(e);glass=PanelGlass.Apply(this,forceRoundedClip:true);}
     protected override void WndProc(ref Message message){if(message.Msg==PanelGlass.NcCalcSizeMessage){message.Result=IntPtr.Zero;return;}base.WndProc(ref message);}
@@ -73,7 +79,7 @@ internal sealed partial class LifeWindow
         if(IsDisposed)return;if(!appReady||home is null||webEnvironment is null||switchingBrowser){pendingAssistant=true;return;}
         pendingAssistant=false;
         if(assistantPanel is null||assistantPanel.IsDisposed){assistantPanel=new AssistantPanelWindow(home,webEnvironment,browserProfile);assistantPanel.AiJobRequested+=StartAiJob;assistantPanel.OpenRouteRequested+=path=>{ShowMainWindow();GoRoute(path);};assistantPanel.UnlockRequested+=()=>{ShowMainWindow();GoRoute("/unlock");};}
-        assistantPanel.Reveal();
+        assistantPanel.Reveal(desktopPanel,VisibleChromeBounds);
     }
     private void ToggleAssistantPanel(){if(assistantPanel?.Visible==true)assistantPanel.Hide();else ShowAssistantPanel();}
 }

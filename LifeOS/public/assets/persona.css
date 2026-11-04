@@ -5,3 +5,5 @@ html:lang(si) body,html:lang(si) input,html:lang(si) button,html:lang(si) select
 html:lang(ta) body,html:lang(ta) input,html:lang(ta) button,html:lang(ta) select,html:lang(ta) textarea{font-family:'Nirmala UI','Latha','Segoe UI',sans-serif;line-height:1.7;letter-spacing:normal}
 html:lang(si) h1,html:lang(si) h2,html:lang(ta) h1,html:lang(ta) h2{line-height:1.5;letter-spacing:normal}
 html:lang(si) .btn,html:lang(ta) .btn{white-space:normal;overflow-wrap:anywhere}
+
+.role-preview{margin-top:12px;border:1px solid var(--border,#c8ced8);border-radius:14px;padding:14px 16px}.role-preview ul{margin:10px 0;padding-left:20px;line-height:1.65}.persona-choice span{min-width:0;overflow-wrap:anywhere}.persona-choice input{flex-shrink:0}

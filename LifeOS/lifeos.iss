@@ -1,7 +1,7 @@
 [Setup]
 AppId={{E89C8D98-DC12-4820-A52B-1334E5D06A19}
 AppName=LifeOS
-AppVersion=1.9.3
+AppVersion=1.9.5
 AppPublisher=Ishan
 AppComments=Student life management system for study, finances, goals and personal growth.
 DefaultDirName={localappdata}\Programs\LifeOS

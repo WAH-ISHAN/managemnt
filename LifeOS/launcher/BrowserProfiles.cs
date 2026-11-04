@@ -30,6 +30,7 @@ internal sealed partial class LifeWindow
         string id=ValidBrowserProfile(cookies.FirstOrDefault(c=>c.Name=="lifeos_profile")?.Value ?? "default");
         if(id==browserProfile) return false;
         switchingBrowser=true;
+        CancelAiAccountSignIn();
         try {
             appReady=false; web.Visible=false;
             PauseNibmCalendar(); nibmWindow?.Shutdown(); nibmWindow=null;

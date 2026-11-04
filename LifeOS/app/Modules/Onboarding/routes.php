@@ -5,13 +5,17 @@ return function (Router $r) {
     $r->get('/welcome',fn()=>View::render(__DIR__.'/views/index.php',['title'=>t('Welcome to LifeOS')],'welcome'));
     $r->post('/welcome',function () {
         $areas=$_POST['areas'] ?? []; if (!is_array($areas)) throw new InvalidArgumentException(t('Choose your focus areas.'));
-        OnboardingService::finish(text_input('name',100),text_input('institution',150,false),$areas,isset($_POST['notifications']),isset($_POST['persona']) ? text_input('persona',30) : null,text_input('locale',2,false) ?: 'en',text_input('template',40,false));
+        $roles=$_POST['roles']??(isset($_POST['persona'])?[text_input('persona',30)]:[]);
+        if(!is_array($roles))throw new InvalidArgumentException(t('Choose at least one valid role.'));
+        OnboardingService::finish(text_input('name',100),text_input('institution',150,false),$areas,isset($_POST['notifications']),PersonaService::roles($roles),text_input('locale',2,false) ?: 'en',text_input('template',40,false));
         return redirect('/','Your workspace is ready.');
     });
     $r->get('/settings/workspace',fn()=>View::render(__DIR__.'/views/workspace.php',['title'=>t('Your workspace'),'catalog'=>PersonaService::catalog(),'profile'=>PersonaService::profile()]));
     $r->post('/settings/workspace/persona',function () {
-        PersonaService::apply(text_input('persona',30),text_input('locale',2),text_input('template',40,false));
-        return redirect('/settings/workspace','Persona defaults applied. Your saved records are kept.');
+        $roles=$_POST['roles']??(isset($_POST['persona'])?[text_input('persona',30)]:[]);
+        if(!is_array($roles))throw new InvalidArgumentException(t('Choose at least one valid role.'));
+        PersonaService::apply($roles,text_input('locale',2),text_input('template',40,false));
+        return redirect('/settings/workspace','Your roles and tools have been updated. Saved records are kept.');
     });
     $r->post('/settings/workspace/modules',function () {
         $enabled=$_POST['enabled'] ?? []; $order=$_POST['order'] ?? [];

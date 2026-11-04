@@ -12,9 +12,11 @@ final class TemplatePackService {
     public static function installed(string $id): bool { return (bool)Db::one('SELECT 1 FROM starter_pack_installs WHERE pack_id=?',[$id]); }
     public static function install(string $id): array {
         $pack=self::catalog()[$id]??null; if(!$pack) throw new InvalidArgumentException(t('Choose a valid starter pack.'));
+        $roles=PersonaService::selectedRoles();
+        if($roles&&!in_array($pack['persona'],$roles,true))throw new InvalidArgumentException(t('Choose a starter pack that matches your persona.'));
         return Db::tx(function()use($id,$pack) {
             if(self::installed($id)) return ['installed'=>false,'tasks'=>0,'habits'=>0];
-            PersonaService::apply($pack['persona'],Db::setting('locale','en'),$id,true);
+            PersonaService::apply(array_values(array_unique(array_merge(PersonaService::selectedRoles(),[$pack['persona']]))),Db::setting('locale','en'),$id,true);
             Db::run('INSERT INTO starter_pack_installs(pack_id,version) VALUES (?,1)',[$id]);
             foreach($pack['tasks'] as $title) Db::run('INSERT INTO tasks(title,source) VALUES (?,?)',[t($title),'starter:'.$id]);
             foreach($pack['habits'] as $title) Db::run('INSERT INTO planner_habits(title,notes) VALUES (?,?)',[t($title),t('Editable starter habit from').' '.t($pack['name'])]);

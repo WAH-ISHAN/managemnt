@@ -134,6 +134,8 @@ try {
         Invoke-QaStage 'roles-ai-ui' { Invoke-CheckedNative $pythonCommand @('tests/roles_ai_ui.py') }
         Invoke-QaStage 'localization-ui' { Invoke-CheckedNative $pythonCommand @('tests/localization_ui.py') }
         Invoke-QaStage 'opencode-worker' { Invoke-CheckedNative $pythonCommand @('tests/opencode_worker.py') }
+        Invoke-QaStage 'ai-account-worker' { Invoke-CheckedNative $pythonCommand @('tests/ai_accounts.py') }
+        Invoke-QaStage 'ai-account-ui' { Invoke-CheckedNative $pythonCommand @('tests/ai_account_ui.py') }
         Invoke-QaStage 'persona-ui' { Invoke-CheckedNative $pythonCommand @('tests/persona_ui.py','--output',(Join-Path $evidence 'persona-ui')) }
         Invoke-QaStage 'uni-calendar-http' { Invoke-CheckedNative $pythonCommand @('tests/uni_calendar_http.py') }
         Invoke-QaStage 'admin-studio-http' { Invoke-CheckedNative $pythonCommand @('tests/admin_studio_http.py') }
@@ -157,6 +159,7 @@ try {
                 $dotnetCommand=Resolve-Tool $dotnetTool
                 Invoke-CheckedNative $dotnetCommand @('--version')
                 Invoke-CheckedNative $dotnetCommand @('build','launcher/LifeOS.csproj','-c','Release')
+                Invoke-CheckedNative $dotnetCommand @('run','--project','tests/resident-lifecycle/ResidentLifecycle.csproj','-c','Release','--',(Join-Path $evidence 'resident-lifecycle'))
                 Invoke-CheckedNative 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File','tests/BrowserProfiles-Smoke.ps1')
                 Invoke-CheckedNative 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File','tests/Activation-Smoke.ps1')
                 Invoke-CheckedNative 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File','tests/Startup-Welcome.ps1')

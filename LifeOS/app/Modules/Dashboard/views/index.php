@@ -4,7 +4,7 @@
     <div>
         <p class="dashboard-date"><?= e(ui_date('l, j F Y')) ?><?= $name ? ' | '.e($name) : '' ?></p>
         <h1><?= e(t('Today')) ?><?php if (!PersonaService::profile()): ?><?= e(t(': Your day, in perspective.')) ?><?php endif; ?></h1>
-        <p class="muted"><?= e(PersonaService::personas()[PersonaService::profile()['persona'] ?? '']['description'] ?? t('Your tasks, study and money in one place.')) ?></p>
+        <p class="muted"><?= e(PersonaService::description()) ?></p>
     </div>
     <a class="btn" href="/planner?view=tasks#new-task"><?= e(t('+ Add a task')) ?></a>
 </header>
@@ -55,14 +55,14 @@
 <?php endif; ?>
 </div>
 
-<details class="dashboard-details"><summary><?= e(t('Study, goals & reviews')) ?> <span><?= e(t('Open your longer-term progress')) ?></span></summary><div class="two-col dashboard-secondary">
+<details class="dashboard-details"><summary><?= e(t(module_enabled('Uni')||module_enabled('School')?'Study, goals & reviews':'Focus, goals & reviews')) ?> <span><?= e(t('Open your longer-term progress')) ?></span></summary><div class="two-col dashboard-secondary">
     <?php if ($hasUni || $hasFocus): ?><section class="card">
-        <div class="section-heading"><h2><?= e(t('Study')) ?></h2><?php if ($hasUni): ?><a href="/uni"><?= e(t('Open University →')) ?></a><?php endif; ?></div>
+        <div class="section-heading"><h2><?= e(t($hasUni||module_enabled('School')?'Study':'Focus')) ?></h2><?php if ($hasUni): ?><a href="/uni"><?= e(t('Open University →')) ?></a><?php endif; ?></div>
         <dl class="dashboard-summary">
             <?php if ($hasUni): ?><div><dt><?= e(t('University GPA')) ?></dt><dd><?= $gpa===null ? ui_markup('<span class="muted">No data yet</span>') : e(number_format($gpa,2)) ?></dd></div><?php endif; ?>
             <div><dt><?= e(t('Focus this month')) ?></dt><dd><?= ($lifeSummary['focus_minutes'] ?? 0)>0 ? e($lifeSummary['focus_minutes']).' min' : ui_markup('<span class="muted">No sessions yet</span>') ?></dd></div>
         </dl>
-        <h3><?= e(t('Upcoming deadlines')) ?></h3>
+        <?php if($hasUni): ?><h3><?= e(t('Upcoming deadlines')) ?></h3><?php endif; ?>
         <?php foreach ($due as $assignment): ?>
             <div class="deadline"><strong><?= e($assignment['title']) ?></strong><small class="<?= $assignment['due_date']<ui_date('Y-m-d') ? 'error-text' : '' ?>"><?= e($assignment['due_date']) ?><?= $assignment['due_date']<ui_date('Y-m-d') ? ' | Overdue' : '' ?> | <?= e($assignment['module']) ?></small></div>
         <?php endforeach; ?>

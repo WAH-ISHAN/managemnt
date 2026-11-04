@@ -9,6 +9,7 @@ internal sealed partial class LifeWindow
     {
         string data=Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR")!;
         var checks=new Dictionary<string,bool>();
+        var skipped=new List<string>();
         void Check(bool valid,string label) { if(!valid)throw new InvalidOperationException(label);checks[label]=true; }
         async Task Wait(Func<bool> predicate,string label) { for(int i=0;i<200;i++){if(predicate())return;await Task.Delay(50);}throw new InvalidOperationException(label); }
         async Task Page(string route,string expression) { GoRoute(route); if(!await WaitForExpression($"location.pathname==={JsonSerializer.Serialize(route)} && ({expression})"))throw new InvalidOperationException("Page did not open: "+route); }
@@ -29,6 +30,16 @@ internal sealed partial class LifeWindow
             Check(await WaitForExpression("location.pathname==='/'"),"Profile opens authenticated home: "+id);
         }
         try {
+            foreach(var work in new[]{new Rectangle(0,0,1920,1040),new Rectangle(0,0,1366,728),new Rectangle(0,0,800,600),new Rectangle(-1280,0,1280,984)}) {
+                var upper=new Rectangle(work.Right-458,work.Top+18,440,Math.Min(760,work.Height-36));
+                var preferred=new Rectangle(work.Right-468,work.Top+18,450,720);
+                var header=new Rectangle(work.Left,work.Top,work.Width,48);
+                var arranged=FloatingPanelLayout.Arrange(preferred,work,upper,new Size(360,460),12,80,header);
+                Check(work.Contains(arranged),"Panel placement stays in working area "+work.Size);
+                Check(!arranged.IntersectsWith(header),"Floating panel clears the main titlebar "+work.Size);
+                Check(!arranged.IntersectsWith(upper)||arranged.Top>=upper.Top+80,"Narrow-screen cascade exposes the companion header "+work.Size);
+                if(work.Width>=950)Check(!arranged.IntersectsWith(upper),"Panels are separated when space allows "+work.Size);
+            }
             bool reopened=File.Exists(Path.Combine(data,"browser-run-complete"));
             using var fixture=JsonDocument.Parse(File.ReadAllText(Path.Combine(data,"browser-fixture.json")));
             string child=fixture.RootElement.GetProperty("child").GetString()!;
@@ -72,12 +83,36 @@ internal sealed partial class LifeWindow
             Check(await web.CoreWebView2.ExecuteScriptAsync("localStorage.getItem('lifeos-isolation-probe')")=="\"default\"","Default local storage restored without child values");
             Check((await web.CoreWebView2.CookieManager.GetCookiesAsync("https://accounts.example.test/")).Single(c=>c.Name=="synthetic-signin").Value=="default","Default external sign-in restored");
             string probeId=new string('a',32),probeDirectory=Path.Combine(data,"ai","jobs");Directory.CreateDirectory(probeDirectory);
+            if(Environment.GetEnvironmentVariable("LIFEOS_AI_BUNDLED_TEST")=="1") {
+                Check(FindNativeTool("python")==Path.Combine(root,"scripts","ai-runtime","python","python.exe"),"Native AI uses bundled Python before machine-installed tools");
+                Check(FindNativeTool("opencode")==Path.Combine(root,"scripts","ai-runtime","opencode.exe"),"Native AI uses bundled runtime before machine-installed tools");
+            }
             string probePath=Path.Combine(probeDirectory,probeId+".json");
             File.WriteAllText(probePath,JsonSerializer.Serialize(new{id=probeId,kind="unsupported",status="queued",created_at=DateTimeOffset.UtcNow.ToUnixTimeSeconds()}));
             await Page("/intelligence","!!document.querySelector('[data-assistant-open]')");
             await web.CoreWebView2.ExecuteScriptAsync("window.chrome.webview.postMessage({type:'lifeos-ai-job',id:'"+probeId+"'})");
-            await Wait(()=>{try{using var result=JsonDocument.Parse(File.ReadAllText(probePath));return result.RootElement.GetProperty("status").GetString()=="failed";}catch(IOException){return false;}catch(JsonException){return false;}},"Native AI worker did not finish its local-only probe");
+            await Wait(()=>{try{using var stream=new FileStream(probePath,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);using var result=JsonDocument.Parse(stream);return result.RootElement.GetProperty("status").GetString()=="failed";}catch(IOException){return false;}catch(JsonException){return false;}},"Native AI worker did not finish its local-only probe");
             using(var result=JsonDocument.Parse(File.ReadAllText(probePath)))Check(result.RootElement.GetProperty("error").GetString()=="Unsupported AI request.","Native AI bridge starts the bounded worker without model downloads");
+            if(!reopened&&Environment.GetEnvironmentVariable("LIFEOS_AI_AUTH_TEST")=="1") {
+                await Page("/account/ai","!!document.querySelector('[data-ai-account]')");
+                await web.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-account-connect]').click()");
+                string? accountPath=null;
+                await Wait(()=>{
+                    foreach(var file in Directory.EnumerateFiles(probeDirectory,"*.json"))try{
+                        using var stream=new FileStream(file,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);using var doc=JsonDocument.Parse(stream);
+                        if(doc.RootElement.GetProperty("kind").GetString()=="account_connect"&&doc.RootElement.TryGetProperty("authorization",out var auth)){
+                            var uri=new Uri(auth.GetProperty("url").GetString()!);if(uri.Scheme!="https"||uri.Host!="opencode.ai")throw new InvalidOperationException("Unexpected sign-in authority");
+                            accountPath=file;return true;
+                        }
+                    }catch(IOException){}catch(JsonException){}
+                    return false;
+                },"Official AI account authorization did not become ready");
+                Check(await WaitForExpression("!document.querySelector('[data-account-authorization]').hidden"),"Native AI account screen shows the official sign-in instructions");
+                await web.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-account-cancel]').click()");
+                await Wait(()=>{try{using var doc=JsonDocument.Parse(File.ReadAllText(accountPath!));return doc.RootElement.GetProperty("status").GetString()=="failed"&&!doc.RootElement.TryGetProperty("authorization",out _);}catch(IOException){return false;}catch(JsonException){return false;}},"Cancelled AI account attempt did not stop");
+                Check(true,"Native AI account cancellation closes OAuth and removes one-time instructions");
+                using(var capture=File.Create(Path.Combine(data,"ai-account-native.png")))await web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png,capture);
+            }
             ShowAssistantPanel();
             await Wait(()=>assistantPanel is not null&&assistantPanel.ProfileName!="","Default assistant created");
             var activeAssistant=assistantPanel!;
@@ -128,28 +163,75 @@ internal sealed partial class LifeWindow
             }
             int hotkeyCalls=0;
             using(var keys=new PanelHotkeyWindow(()=>{},null,()=>hotkeyCalls++)){
-                Check(keys.AssistantRegistered||keys.AssistantIsoRegistered,"Windows registers the global assistant shortcut");
-                SendMessage(keys.OwnerHandle,0x0312,(IntPtr)(keys.AssistantRegistered?0x1A66:0x1A67),IntPtr.Zero);
-                Check(hotkeyCalls==1,"Registered shortcut dispatch invokes assistant callback");
+                if(!keys.AssistantRegistered&&!keys.AssistantIsoRegistered&&keys.AssistantError==1409&&Environment.GetEnvironmentVariable("LIFEOS_ALLOW_HOTKEY_CONFLICT")=="1")
+                    skipped.Add("Global assistant shortcut registration/dispatch: another running app owns the shortcuts (Win32 1409).");
+                else {
+                    Check(keys.AssistantRegistered||keys.AssistantIsoRegistered,"Windows registers the global assistant shortcut");
+                    SendMessage(keys.OwnerHandle,0x0312,(IntPtr)(keys.AssistantRegistered?0x1A66:0x1A67),IntPtr.Zero);
+                    Check(hotkeyCalls==1,"Registered shortcut dispatch invokes assistant callback");
+                }
             }
             activeAssistant.Hide();Check(!activeAssistant.Visible,"Assistant hides without closing the app");
             ToggleAssistantPanel();await AssistantReady();Check(activeAssistant.Visible,"Assistant shortcut callback reopens existing window");
             activeAssistant.Size=new Size(390,530);Check(activeAssistant.Width==390&&activeAssistant.Height==530,"Assistant compact resize persists");
-            HideToTray();Check(!Visible&&!ShowInTaskbar,"Main window hides to tray");
+            nint residentHandle=Handle;
+            FormClosing+=HideOnUserClosing;
+            try {
+                await web.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-window-action=close]').click()");
+                await Wait(()=>!Visible&&hiddenToTray,"Main close control did not hide to tray");
+            } finally {FormClosing-=HideOnUserClosing;}
+            Check(!IsDisposed&&Handle==residentHandle,"Main close preserves its native window and browser parent");
+            Check(!Visible&&hiddenToTray,"Main window hides to tray");
             Check(!activeAssistant.Visible,"Tray hiding also hides assistant");
-            ShowMainWindow();Check(Visible&&ShowInTaskbar&&WindowState==FormWindowState.Normal,"Hidden window reopens");
+            ShowMainWindow();Check(Visible&&!hiddenToTray&&WindowState==FormWindowState.Normal,"Hidden window reopens");
+            Check(Handle==residentHandle&&await web.CoreWebView2.ExecuteScriptAsync("!!document.querySelector('.app-shell')")=="true","Tray reopen preserves the live main browser");
+            await web.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-window-action=maximize]').click()");
+            await Wait(()=>WindowState==FormWindowState.Maximized,"Main maximize action did not complete");
+            Check(web.Bounds==ClientRectangle,"Maximized main content has no exposed native strip");
+            await web.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-window-action=maximize]').click()");
+            await Wait(()=>WindowState==FormWindowState.Normal,"Main restore action did not complete");
+            await web.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-window-action=minimize]').click()");
+            await Wait(()=>WindowState==FormWindowState.Minimized,"Main minimize action did not complete");
+            ShowMainWindow();Check(WindowState==FormWindowState.Normal,"Minimized main window reopens normally");
             ShowDesktopPanel();
             ShowAssistantPanel();
             await Wait(()=>desktopPanel is not null,"Default panel created");
+            await Wait(()=>desktopPanel!.ProfileName!="","Desktop panel browser initialized");
+            for(int n=0;n<200&&await desktopPanel!.EvaluateAsync("!!document.querySelector('.panel-header')")!="true";n++)await Task.Delay(50);
+            Check(await desktopPanel!.EvaluateAsync("!!document.querySelector('.panel-header')")=="true","Desktop header is ready for layout checks");
+            Check(desktopPanel.ContentFillsClient&&activeAssistant.ContentFillsClient,"Floating WebViews fill their client rectangles without a pale border ring");
+            Check(desktopPanel.GlassResult.RoundedClipApplied&&activeAssistant.GlassResult.RoundedClipApplied,"Both floating windows have native rounded clipping");
+            if(Screen.FromRectangle(desktopPanel.Bounds).WorkingArea.Width>=desktopPanel.Width+activeAssistant.Width+12)
+                Check(!desktopPanel.Bounds.IntersectsWith(activeAssistant.Bounds),"Two visible floating panels are separated");
+            if(VisibleChromeBounds is Rectangle mainHeader)
+                Check(!desktopPanel.Bounds.IntersectsWith(mainHeader)&&!activeAssistant.Bounds.IntersectsWith(mainHeader),"Floating panels do not cover the main window controls");
+            foreach(var size in new[]{new Size(360,460),new Size(450,720),new Size(760,800)}) {
+                var available=Screen.FromRectangle(activeAssistant.Bounds).WorkingArea;
+                activeAssistant.Size=new Size(Math.Min(size.Width,available.Width),Math.Min(size.Height,available.Height));
+                await Task.Delay(100);
+                Check(activeAssistant.ContentFillsClient,"Assistant content follows native resize "+size);
+                Check(await activeAssistant.EvaluateAsync("document.documentElement.scrollWidth<=innerWidth && document.querySelector('[data-assistant-composer]').getBoundingClientRect().bottom<=innerHeight")=="true","Assistant composer fits native resize "+size);
+            }
+            activeAssistant.Size=new Size(390,530);activeAssistant.Reveal(desktopPanel,VisibleChromeBounds);
+            await activeAssistant.CaptureAsync(Path.Combine(data,"assistant-layout-native.png"));
+            await desktopPanel.CaptureAsync(Path.Combine(data,"panel-layout"),false);
+            await desktopPanel.CaptureAsync(Path.Combine(data,"panel-layout"),true);
+            await activeAssistant.EvaluateAsync("document.querySelector('[data-assistant-hide]').click()");
+            await Wait(()=>!activeAssistant.Visible,"Assistant close control did not hide its window");
+            ShowAssistantPanel();await AssistantReady();
+            Check(activeAssistant.Visible,"Assistant reopens after its close control");
+            await desktopPanel.EvaluateAsync("document.querySelector('[data-close]').click()");
+            await Wait(()=>!desktopPanel.Visible,"Desktop close control did not hide its window");
+            ShowDesktopPanel();Check(desktopPanel.Visible,"Desktop panel reopens after its close control");
             QueuePlatformLock();
             Check(await WaitForExpression("location.pathname==='/unlock'"),"Server lock redirects to PIN");
             Check(desktopPanel is null,"Panel disposed at lock");
             Check(assistantPanel is null&&activeAssistant.IsDisposed,"Assistant private view disposed at lock");
         } catch(Exception error) {
-                File.WriteAllText(Path.Combine(data,"browser-profile-result.json"),JsonSerializer.Serialize(new{success=false,error=error.ToString(),checks}));
+                File.WriteAllText(Path.Combine(data,"browser-profile-result.json"),JsonSerializer.Serialize(new{success=false,error=error.ToString(),checks,skipped}));
                 allowExitForMaintenance=true;Close();return;
         }
-        File.WriteAllText(Path.Combine(data,"browser-profile-result.json"),JsonSerializer.Serialize(new{success=checks.Values.All(v=>v),checks}));
+        File.WriteAllText(Path.Combine(data,"browser-profile-result.json"),JsonSerializer.Serialize(new{success=checks.Values.All(v=>v),checks,skipped}));
         File.WriteAllText(Path.Combine(data,"browser-run-complete"),"ok");
         allowExitForMaintenance=true;Close();
     }

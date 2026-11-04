@@ -36,10 +36,14 @@ try {
     foreach(['/settings/restore','/settings/pin','/profiles/create','/profiles/policy','/automation','/salary','/documents','/planner/tasks/4/delete'] as $route) ppcheck(!ProfileManager::kidAllowed('POST',$route),'Kid mutation blocked: '.$route);
     ppreject(fn()=>ProfileManager::policy('default',false,'5678'),'Child cannot promote or administer guardian');
     ProfileManager::revoke('default'); ProfileManager::select('default'); ppreject(fn()=>ProfileManager::report($child),'Child can revoke guardian visibility');
+    PersonaService::apply('employee');
+    ppreject(fn()=>TemplatePackService::install('hnd'),'Starter install cannot add an unselected role');
     foreach(TemplatePackService::catalog() as $packId=>$pack) {
+        PersonaService::apply(array_values(array_unique(array_merge(PersonaService::selectedRoles(),[$pack['persona']]))));
         $before=(int)Db::one('SELECT COUNT(*) n FROM tasks')['n']; $result=TemplatePackService::install($packId);
         ppcheck($result['installed']&&$result['tasks']===3&&$result['habits']===2,'Real pack installs editable records: '.$packId);
         ppcheck((int)Db::one('SELECT COUNT(*) n FROM tasks')['n']===$before+3,'Pack creates actual tasks: '.$packId);
+        ppcheck(PersonaService::enabled('Employee'),'Installing a study/school starter pack retains the existing employee role');
         ppcheck(!TemplatePackService::install($packId)['installed']&&(int)Db::one('SELECT COUNT(*) n FROM tasks')['n']===$before+3,'Repeated install idempotent: '.$packId);
     }
     ppcheck((int)Db::one("SELECT COUNT(*) n FROM tasks WHERE status='done'")['n']===0,'No fabricated completed history');
@@ -47,5 +51,5 @@ try {
     ppcheck(Db::one('PRAGMA integrity_check')['integrity_check']==='ok'&&Db::all('PRAGMA foreign_key_check')===[],'Profile pack integrity');
     ppreject(fn()=>TemplatePackService::install('invalid'),'Unknown pack rejected');
     $db=null;
-}finally{Db::close(); ProfileManager::close(); ppremove($root);}
+}finally{$db=null;Db::close(); ProfileManager::close(); ppremove($root);}
 echo "$count profile and starter pack checks passed.\n";

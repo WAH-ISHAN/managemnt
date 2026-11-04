@@ -107,6 +107,9 @@ with tempfile.TemporaryDirectory(prefix='lifeos-persona-http-') as temporary:
             for persona in ['employee', 'uni', 'school', 'freelancer', 'business', 'job_seeker']:
                 check(f'value="{persona}"'.encode() in page, f'Onboarding offers {persona}')
             token = csrf(page)
+            for invalid in [{}, {'roles':'uni'}, {'roles[]':['uni','unknown']}]:
+                malformed={'_csrf':token,'name':'Invalid setup','institution':'','locale':'en','template':'',**invalid}
+                check(request('/welcome',malformed)[0]==422,'First-start rejects missing or invalid role selections')
             fields = {'_csrf': token, 'name': 'Persona HTTP QA', 'institution': '',
                       'persona': 'employee', 'locale': 'en', 'template': 'software_engineer'}
             code, page, _, url = request('/welcome', fields)
@@ -129,6 +132,8 @@ with tempfile.TemporaryDirectory(prefix='lifeos-persona-http-') as temporary:
             count = db.execute('SELECT COUNT(*) FROM uni_modules').fetchone()[0]
             check(request('/uni')[0] == 403, 'Disabled University direct GET is blocked')
             check(request('/uni/add/assignment')[0] == 403, 'Disabled nested University GET is blocked')
+            check(request('/settings/workspace/modules', {'_csrf':token,'enabled[]':['Uni']})[0]==422,
+                  'Module payload cannot enable a tool without its matching role')
             check(request('/uni/module', {'_csrf': token, 'code': 'NO', 'name': 'Must not save',
                                           'credits': '3', 'semester': 'QA'})[0] == 403,
                   'Disabled University POST is blocked even with valid CSRF')
@@ -136,6 +141,7 @@ with tempfile.TemporaryDirectory(prefix='lifeos-persona-http-') as temporary:
                   'Disabled POST leaves university records intact')
             check(request('/settings/workspace/modules', {'enabled[]': ['Uni']})[0] == 419,
                   'Module configuration requires CSRF')
+            check(request('/settings/workspace/persona', {'_csrf': token, 'roles[]': ['employee', 'uni'], 'locale': 'en'})[0] == 200, 'Adding University alongside Employee enables the combined workspace')
             enabled = [row[0] for row in db.execute(
                 'SELECT module_id FROM modules WHERE profile_id=? AND enabled=1', ('default',))]
             code, _, _, _ = request('/settings/workspace/modules',

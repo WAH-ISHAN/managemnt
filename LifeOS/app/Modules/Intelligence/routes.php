@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 return function (Router $r): void {
+    $r->get('/account/ai',fn()=>View::render(__DIR__.'/views/account.php',['title'=>'Your AI account'],'lock'));
+    $r->get('/account/ai/state',function(){header('Content-Type: application/json; charset=utf-8');return json_encode(AiAccountService::state(),JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);});
+    $r->post('/account/ai/{action}',function($p){
+        if($p['action']==='cancel')AiAccountService::cancel(text_input('id',32));
+        else (new OpenCodeCliProvider())->accountJob($p['action']);
+        header('Content-Type: application/json; charset=utf-8');return json_encode(AiAccountService::state(),JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
+    });
     $r->get('/assistant',fn()=>View::render(__DIR__.'/views/panel.php',['title'=>'LifeOS AI'],'assistant'));
     $r->get('/assistant/state',function(){header('Content-Type: application/json; charset=utf-8');return json_encode((new OpenCodeCliProvider())->panelState(),JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);});
     $r->post('/assistant/message',function(){(new OpenCodeCliProvider())->submitAutomatic(text_input('message',2000));header('Content-Type: application/json; charset=utf-8');return json_encode((new OpenCodeCliProvider())->panelState(),JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);});

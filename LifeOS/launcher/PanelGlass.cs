@@ -40,6 +40,10 @@ internal static class PanelGlass
             DwmSetWindowAttribute(window.Handle, UseImmersiveDarkMode, ref darkValue, sizeof(int));
             int corner = RoundCorners;
             cornerResult = DwmSetWindowAttribute(window.Handle, WindowCornerPreference, ref corner, sizeof(int));
+            // The WebView supplies the panel edge in both acrylic and solid
+            // modes. A native border here otherwise becomes a pale side strip.
+            int border = NoBorderColor;
+            DwmSetWindowAttribute(window.Handle, BorderColor, ref border, sizeof(int));
 
             bool canUseAcrylic = composition && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22621)
                 && !SystemInformation.HighContrast && ReadTransparencyEnabled();
@@ -55,8 +59,6 @@ internal static class PanelGlass
                     // must also use DefaultBackgroundColor=Color.Transparent,
                     // with transparent html/body and translucent CSS surfaces.
                     window.BackColor = Color.Black;
-                    int border = NoBorderColor;
-                    DwmSetWindowAttribute(window.Handle, BorderColor, ref border, sizeof(int));
                     bool clipped = forceRoundedClip && UpdateRoundedClip(window);
                     if (!forceRoundedClip) ClearRoundedClip(window);
                     return new(true, cornerResult.GetValueOrDefault(-1) >= 0, clipped, dark, "desktop-acrylic", frameResult, backdropResult, cornerResult);

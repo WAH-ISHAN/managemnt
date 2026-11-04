@@ -1,7 +1,10 @@
 (() => {
   const root=document.querySelector('main[data-csrf]'),itemsNode=document.querySelector('[data-items]'),dateNode=document.querySelector('[data-date]');
   const addForm=document.querySelector('[data-add-form]'),status=document.querySelector('[data-form-status]');
-  let csrf=root?.dataset.csrf||'',preferences={},currentDate='',refreshing=false;
+  const refreshButton=document.querySelector('[data-refresh]'),refreshLabel=refreshButton?.querySelector('span');
+  if(refreshButton&&refreshLabel){refreshButton.setAttribute('aria-label',refreshLabel.textContent);refreshButton.title=refreshLabel.textContent;refreshLabel.classList.add('sr-only');}
+  let csrf=root?.dataset.csrf||'',preferences={},currentDate='',refreshing=false,refreshQueued=false;
+  if(window.chrome?.webview)new ResizeObserver(()=>window.chrome.webview.postMessage({type:'lifeos-panel-header',headerHeight:Math.ceil(document.querySelector('.panel-header').getBoundingClientRect().bottom)})).observe(document.querySelector('.panel-header'));
   const text=(tag,className,value)=>{const node=document.createElement(tag);if(className)node.className=className;node.textContent=value;return node;};
   function timeLabel(value){
     const match=/^\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/.exec(value||'');
@@ -50,9 +53,9 @@
     }
   }
   async function refresh(){
-    if(refreshing)return;
+    if(refreshing){refreshQueued=true;return;}
     refreshing=true;
-    try{
+    do{refreshQueued=false;try{
       const response=await fetch('/desktop/panel/data',{headers:{Accept:'application/json'},cache:'no-store'});
       if(!response.ok)throw Error('response');
       const data=await response.json();currentDate=data.today;preferences=data.preferences||preferences;setAutoHide();
@@ -74,7 +77,8 @@
       document.querySelector('[data-todo-section]').hidden=preferences.showTodos===false;
       document.querySelector('[data-notes-section]').hidden=preferences.showNotes===false;
     }catch{if(!itemsNode.children.length)itemsNode.append(text('p','muted',window.lifeosT('Could not refresh today’s panel.')));}
-    finally{refreshing=false;}
+    }while(refreshQueued);
+    refreshing=false;
   }
   document.querySelector('[data-close]').addEventListener('click',()=>window.chrome?.webview?.postMessage({type:'lifeos-panel-close'}));
   document.querySelector('[data-refresh]').addEventListener('click',refresh);
@@ -88,7 +92,7 @@
   addForm.addEventListener('submit',async event=>{
     event.preventDefault();status.textContent='';const fields={kind:addForm.elements.kind.value,title:addForm.elements.title.value,body:addForm.elements.body.value,due:addForm.elements.due.value};
     const save=addForm.querySelector('[type=submit]');save.disabled=true;
-    try{await post('/desktop/panel/add',fields);addForm.reset();addForm.hidden=true;await refresh();}
+    try{await post('/desktop/panel/add',fields);addForm.reset();addForm.hidden=true;status.textContent=window.lifeosT('Saved.');await refresh();}
     catch{status.textContent=window.lifeosT('Could not save that item. Check the title and try again.');}
     finally{save.disabled=false;}
   });
@@ -102,6 +106,7 @@
   document.querySelector('[data-resize]').addEventListener('pointerdown',event=>{if(event.button===0){event.preventDefault();native({type:'lifeos-panel-resize'});}});
   document.querySelector('[data-apply-size]').addEventListener('click',()=>native({type:'lifeos-panel-size',width:Number(document.querySelector('[data-panel-width]').value),height:Number(document.querySelector('[data-panel-height]').value)}));
   document.querySelector('[data-reset-layout]').addEventListener('click',()=>native({type:'lifeos-panel-reset'}));
+  document.addEventListener('wheel',event=>{if(event.target instanceof HTMLInputElement&&event.target.type==='number'&&document.activeElement===event.target)event.target.blur();},{passive:true});
   window.chrome?.webview?.addEventListener('message',event=>{
     if(event.data?.type!=='lifeos-panel-layout')return;
     document.querySelector('[data-panel-width]').value=event.data.width;

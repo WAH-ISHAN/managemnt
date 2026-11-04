@@ -131,6 +131,10 @@ internal sealed partial class LifeWindow : Form
             // another installation's opcode pointers can fail under ASLR.
             foreach (string value in new[] { "-c",Path.Combine(root,"php","php.ini"),"-d","extension_dir='"+Path.Combine(root,"php","ext")+"'","-d","opcache.cache_id=LifeOS_"+instance,"-S",$"127.0.0.1:{port}","-t",Path.Combine(root,"public"),Path.Combine(root,"public","index.php") }) start.ArgumentList.Add(value);
             start.Environment["LIFEOS_INSTANCE"] = instance; start.Environment["LIFEOS_DATA_DIR"] = data;
+            using (var machineIdentity = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography")) {
+                string deviceIdentity = machineIdentity?.GetValue("MachineGuid") as string ?? Environment.MachineName;
+                start.Environment["LIFEOS_DEVICE_HASH"] = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("lifeos-device-v1:"+deviceIdentity))).ToLowerInvariant();
+            }
             start.Environment["LIFEOS_AUTOMATION_KEY"] = automationKey;
             start.Environment["LIFEOS_HELLO_KEY"] = helloBridgeKey;
             start.Environment["LIFEOS_WEBSITE_KEY"] = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
@@ -212,7 +216,8 @@ internal sealed partial class LifeWindow : Form
                 try {
                     using var message=JsonDocument.Parse(e.WebMessageAsJson); var value=message.RootElement;
                     if (!value.TryGetProperty("type",out var kind) || kind.ValueKind!=JsonValueKind.String) return;
-                    if(kind.GetString()=="lifeos-ai-job" && source.AbsolutePath.StartsWith("/intelligence") && value.TryGetProperty("id",out var aiId) && aiId.ValueKind==JsonValueKind.String) { StartAiJob(aiId.GetString()??""); return; }
+                    if(kind.GetString()=="lifeos-ai-job" && (source.AbsolutePath.StartsWith("/intelligence")||source.AbsolutePath=="/account/ai") && value.TryGetProperty("id",out var aiId) && aiId.ValueKind==JsonValueKind.String) { StartAiJob(aiId.GetString()??""); return; }
+                    if(kind.GetString()=="lifeos-ai-auth-open"&&source.AbsolutePath=="/account/ai"&&value.TryGetProperty("id",out var authId)&&authId.ValueKind==JsonValueKind.String){OpenAiAccountAuthorization(authId.GetString()??"");return;}
                     if(kind.GetString()=="lifeos-assistant-panel"){ShowAssistantPanel();return;}
                     if (kind.GetString()=="lifeos-hello" && source.AbsolutePath=="/unlock") { _=HandlePlatformHello(value.Clone()); return; }
                     if(kind.GetString()=="lifeos-today-panel") {
@@ -410,7 +415,7 @@ internal sealed partial class LifeWindow : Form
             await Check("onboarding-form","!!document.querySelector('form[action=\"/welcome\"] input[name=name]')");
             await Check("onboarding-brand","document.querySelector('.lifeos-logo img')?.complete && document.querySelector('.lifeos-logo img').naturalWidth===256");
             await Capture("onboarding");
-            await web.CoreWebView2.ExecuteScriptAsync("(()=>{const f=document.querySelector('form[action=\"/welcome\"]');f.querySelector('input[name=persona][value=employee]').checked=true;f.querySelector('[data-wizard-next]').click();f.elements.name.value='Windows smoke';f.elements.institution.value='Disposable test workspace';f.querySelector('[data-wizard-next]').click();f.elements.locale.value='en';f.requestSubmit()})()");
+            await web.CoreWebView2.ExecuteScriptAsync("(()=>{const f=document.querySelector('form[action=\"/welcome\"]');f.querySelector('[data-role-choices] input[value=employee]').checked=true;f.querySelector('[data-wizard-next]').click();f.elements.name.value='Windows smoke';f.elements.institution.value='Disposable test workspace';f.querySelector('[data-wizard-next]').click();f.elements.locale.value='en';f.requestSubmit()})()");
             if (!await WaitForHeading("Today")) throw new InvalidOperationException("Persona onboarding did not open the dashboard.");
             await Check("onboarding-persona-defaults","location.pathname==='/' && !!document.querySelector('.sidebar a[href=\"/automation\"]') && !document.querySelector('.sidebar a[href=\"/uni\"]')");
             checks["onboarding-submit"]=true;
@@ -421,6 +426,8 @@ internal sealed partial class LifeWindow : Form
         await Act("document.querySelector('.sidebar-bottom a[href=\"/settings/workspace\"]')?.click()");
         if (!await WaitForHeading("Your workspace")) throw new InvalidOperationException("Workspace module settings did not open.");
         await Check("workspace-settings-route","location.pathname==='/settings/workspace' && !!document.querySelector('form[action=\"/settings/workspace/modules\"]')");
+        await Act("(()=>{const f=document.querySelector('[data-role-picker]');for(const input of f.querySelectorAll('[name=\"roles[]\"]'))input.checked=true;f.requestSubmit()})()");
+        await Changed("workspace-roles-enable-full-smoke-surface","document.querySelector('#main h1')?.textContent==='Your workspace' && !!document.querySelector('.sidebar a[href=\"/uni\"]') && !!document.querySelector('.sidebar a[href=\"/school\"]')");
         await Act("(()=>{const f=document.querySelector('form[action=\"/settings/workspace/modules\"]');for(const input of f.querySelectorAll('input[name=\"enabled[]\"]'))input.checked=true;f.requestSubmit()})()");
         await Changed("workspace-module-controls-enable-full-smoke-surface","document.querySelector('#main h1')?.textContent==='Your workspace' && !!document.querySelector('.sidebar a[href=\"/uni\"]') && !!document.querySelector('.sidebar a[href=\"/automation\"]')");
         await Navigate("/");
@@ -755,7 +762,7 @@ internal sealed partial class LifeWindow : Form
     private void ShowDesktopPanel()
     {
         if(home is null||webEnvironment is null||(diagnostic&&!browserTestStarted)||IsDisposed)return;
-        try{if(desktopPanel is null){desktopPanel=new DesktopPanelWindow(home,webEnvironment,browserProfile);desktopPanel.OpenRouteRequested+=path=>{ShowMainWindow();GoRoute(path);};}if(!desktopPanel.Visible){desktopPanel.RepositionForCurrentScreen();desktopPanel.Show();}}
+        try{if(desktopPanel is null){desktopPanel=new DesktopPanelWindow(home,webEnvironment,browserProfile);desktopPanel.OpenRouteRequested+=path=>{ShowMainWindow();GoRoute(path);};}if(!desktopPanel.Visible){desktopPanel.RepositionForCurrentScreen();FloatingPanelLayout.Reveal(desktopPanel,assistantPanel,VisibleChromeBounds);}}
         catch(InvalidOperationException){}
     }
     private void ToggleDesktopPanel(){if(!appReady){pendingPanelToggle=!pendingPanelToggle;return;}if(desktopPanel?.Visible==true)desktopPanel.Hide();else ShowDesktopPanel();}

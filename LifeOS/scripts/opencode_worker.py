@@ -1,7 +1,7 @@
 """Small, isolated OpenCode adapter. No package/model downloads or shell commands.
 The desktop host starts this only for a queued, profile-scoped user request.
 """
-import argparse,hashlib,json,os,re,subprocess,threading,time
+import argparse,base64,hashlib,json,os,re,secrets,socket,subprocess,threading,time,urllib.error,urllib.parse,urllib.request
 from pathlib import Path
 
 ADAPTER_VERSION='opencode-v2-1'
@@ -12,8 +12,118 @@ CHAT_TIMEOUT=90
 MODEL_TIMEOUT=20
 
 class ToolRefused(RuntimeError):pass
+
+def sandbox_for(directory):
+    identity=hashlib.sha256(str(directory.resolve()).encode()).hexdigest()[:24]
+    return Path(os.environ.get('LOCALAPPDATA',str(directory)))/'LifeOS'/'ai-sandbox'/identity
+
+def authorization_url(value):
+    if not isinstance(value,str) or len(value)>2000:raise RuntimeError('The sign-in address could not be verified.')
+    parsed=urllib.parse.urlsplit(value)
+    if parsed.scheme!='https' or parsed.hostname!='opencode.ai' or parsed.port not in [None,443] or parsed.username or parsed.password or any(ord(c)<33 for c in value):
+        raise RuntimeError('The sign-in address could not be verified.')
+    return value
+
+class AccountServer:
+    """One short-lived authenticated loopback server owns an official OAuth attempt."""
+    def __init__(self,executable,sandbox):self.executable=executable;self.sandbox=sandbox;self.process=None
+    def __enter__(self):
+        with socket.socket()as listener:listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
+        self.origin=f'http://127.0.0.1:{port}';secret=secrets.token_hex(32)
+        self.authorization='Basic '+base64.b64encode(('opencode:'+secret).encode()).decode()
+        env=environment(self.sandbox);env['OPENCODE_PASSWORD']=secret;env['OPENCODE_SERVER_PASSWORD']=secret
+        self.opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        flags=getattr(subprocess,'CREATE_NO_WINDOW',0)|getattr(subprocess,'BELOW_NORMAL_PRIORITY_CLASS',0)
+        self.process=subprocess.Popen([str(self.executable),'serve','--hostname','127.0.0.1','--port',str(port)],cwd=self.sandbox,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=flags)
+        deadline=time.monotonic()+15
+        try:
+            while time.monotonic()<deadline and self.process.poll()is None:
+                try:self.call('GET','/api/integration/opencode',timeout=1);return self
+                except (OSError,RuntimeError):time.sleep(.15)
+            raise RuntimeError('The installed AI sign-in service did not start. Please try again.')
+        except BaseException:self.__exit__(None,None,None);raise
+    def call(self,method,path,value=None,timeout=12):
+        if not path.startswith('/api/') or '..'in path:raise RuntimeError('Invalid account operation.')
+        data=json.dumps(value).encode()if value is not None else None
+        req=urllib.request.Request(self.origin+path,data=data,method=method,headers={'Authorization':self.authorization,'Content-Type':'application/json','Accept':'application/json'})
+        try:
+            with self.opener.open(req,timeout=timeout)as response:raw=response.read(200001)
+        except urllib.error.HTTPError as error:
+            error.close();raise RuntimeError('AI account sign-in could not be completed. Please try again.')from None
+        if len(raw)>200000:raise RuntimeError('The AI account response exceeded the limit.')
+        if not raw:return None
+        try:return json.loads(raw).get('data')
+        except (ValueError,AttributeError):raise RuntimeError('The AI account response was unreadable.')from None
+    def __exit__(self,*args):
+        if self.process is not None and self.process.poll()is None:
+            self.process.terminate()
+            try:self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:self.process.kill();self.process.wait(timeout=5)
+
+def account_connections(server):
+    # The list endpoint awaits built-in provider activation; get alone can return
+    # the base catalog before the Console OAuth method has been registered.
+    entries=server.call('GET','/api/integration')
+    info=next((row for row in entries if isinstance(row,dict)and row.get('id')=='opencode'),None)if isinstance(entries,list)else None
+    if not isinstance(info,dict)or info.get('id')!='opencode':raise RuntimeError('The installed runtime does not support account sign-in.')
+    return [c for c in info.get('connections',[])if isinstance(c,dict)and c.get('type')=='credential'],info
+
+def account_job(job,executable,sandbox,directory,job_path,server_factory=AccountServer,sleeper=time.sleep):
+    state_path=directory/'account.json'
+    with server_factory(executable,sandbox)as server:
+        connections,info=account_connections(server)
+        owner=job.get('account_owner','');previous=read_json(state_path,{})
+        same_owner=previous.get('owner','')==owner
+        def save_state(connected,identity=owner):atomic(state_path,{'connected':connected,'owner':identity,'updated_at':time.time()})
+        if job['kind']=='account_disconnect' or (job['kind']=='account_connect'and not same_owner):
+            for connection in connections:
+                identity=connection.get('id')
+                if not isinstance(identity,str)or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}',identity):raise RuntimeError('The saved AI account could not be verified.')
+                server.call('DELETE','/api/credential/'+identity)
+            remaining,_=account_connections(server)
+            if remaining:raise RuntimeError('The AI account could not be disconnected. Please try again.')
+            save_state(False);connections=[];same_owner=True
+            if job['kind']=='account_disconnect':return
+        save_state(bool(connections)and same_owner,owner if same_owner else previous.get('owner',''))
+        if job['kind']=='account_status' or connections:return
+        if job_path.with_suffix('.cancel').exists():raise RuntimeError('AI account sign-in cancelled.')
+        methods=info.get('methods',[])
+        if not any(m.get('id')=='device'and m.get('type')=='oauth'for m in methods if isinstance(m,dict)):raise RuntimeError('The installed runtime does not support secure account sign-in.')
+        attempt=server.call('POST','/api/integration/opencode/connect/oauth',{'methodID':'device','answer':{'server':'https://opencode.ai/console'},'label':'LifeOS personal AI'})
+        if not isinstance(attempt,dict)or attempt.get('mode')!='auto':raise RuntimeError('This AI sign-in method is not supported by LifeOS.')
+        identity=attempt.get('attemptID')
+        if not isinstance(identity,str)or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}',identity):raise RuntimeError('The AI sign-in attempt could not be verified.')
+        endpoint='/api/integration/opencode/connect/oauth/'+identity
+        expires=min(time.time()+300,float(attempt.get('time',{}).get('expires',0))/1000)
+        job['authorization']={'url':authorization_url(attempt.get('url')),'instructions':str(attempt.get('instructions',''))[:1000],'expires_at':expires}
+        atomic(job_path,job)
+        try:
+            while time.time()<expires:
+                if job_path.with_suffix('.cancel').exists():raise RuntimeError('AI account sign-in cancelled.')
+                status=server.call('GET',endpoint)
+                if isinstance(status,dict)and status.get('status')=='complete':
+                    connections,_=account_connections(server)
+                    if not connections:raise RuntimeError('Sign-in completed without a usable AI account.')
+                    save_state(True)
+                    # Refresh metadata without clearing provider quota cooldowns.
+                    atomic(directory/'models.json',{'adapter':ADAPTER_VERSION,'fetched_at':0,'models':[]})
+                    return
+                if not isinstance(status,dict)or status.get('status')!='pending':raise RuntimeError('AI account sign-in expired or was declined. Please try again.')
+                sleeper(1)
+            raise RuntimeError('AI account sign-in expired. Please try again.')
+        finally:
+            try:server.call('DELETE',endpoint)
+            except (RuntimeError,OSError):pass
+            job.pop('authorization',None)
 def atomic(path,value):
-    temporary=path.with_suffix('.tmp');temporary.write_text(json.dumps(value,ensure_ascii=False),encoding='utf-8');temporary.replace(path)
+    temporary=path.with_suffix('.tmp');temporary.write_text(json.dumps(value,ensure_ascii=False),encoding='utf-8')
+    # Windows readers/antivirus may briefly hold a handle without delete sharing.
+    # Keep atomic replacement, but tolerate a bounded sharing-violation window.
+    for attempt in range(21):
+        try:temporary.replace(path);return
+        except PermissionError:
+            if attempt==20:raise
+            time.sleep(.05)
 def environment(sandbox,model=''):
     keep={'PATH','SystemRoot','WINDIR','TEMP','TMP','LOCALAPPDATA','APPDATA','USERPROFILE','HOMEDRIVE','HOMEPATH','HTTP_PROXY','HTTPS_PROXY','NO_PROXY','SSL_CERT_FILE','SSL_CERT_DIR','COMSPEC','PATHEXT'}
     env={k:v for k,v in os.environ.items() if k.upper() in {x.upper() for x in keep}}
@@ -145,6 +255,14 @@ def catalog(directory,executable,sandbox,runner=run,refresh=False,timeout=25):
     return list(dict.fromkeys(m['id'] for m in models if isinstance(m,dict) and type(m.get('input_cost'))in(int,float) and m['input_cost']==0 and type(m.get('output_cost'))in(int,float) and m['output_cost']==0 and re.fullmatch(r'opencode/[A-Za-z0-9_.:-]+',m.get('id',''))))
 def chat(job,executable,sandbox,directory,runner=run):
     deadline=time.monotonic()+CHAT_TIMEOUT
+    if job.get('require_account'):
+        metadata=json.loads(runner(executable,['api','--standalone','GET','/api/integration'],sandbox,timeout=15))
+        entries=metadata.get('data',[])if isinstance(metadata,dict)else []
+        info=next((m for m in entries if isinstance(m,dict)and m.get('id')=='opencode'),{})
+        previous=read_json(directory/'account.json',{})
+        connected=previous.get('owner','')==job.get('account_owner','')and any(c.get('type')=='credential'for c in info.get('connections',[])if isinstance(c,dict))
+        atomic(directory/'account.json',{'connected':connected,'owner':previous.get('owner',''),'updated_at':time.time()})
+        if not connected:raise RuntimeError('Your AI account is not connected. Open Settings to connect your own account.')
     availability_path=directory/'availability.json';availability=read_json(availability_path,{})
     if availability.get('adapter')!=ADAPTER_VERSION:availability={'adapter':ADAPTER_VERSION}
     if availability.get('quota_until',0)>time.time():raise RuntimeError('The free AI quota is exhausted. Try later or select another free model.')
@@ -199,8 +317,7 @@ def chat(job,executable,sandbox,directory,runner=run):
 def execute(job_path,executable):
     job_path=job_path.resolve();job=json.loads(job_path.read_text(encoding='utf-8'))
     if job.get('status')!='queued':return
-    identity=hashlib.sha256(str(job_path.parent.parent).encode()).hexdigest()[:24]
-    sandbox=Path(os.environ.get('LOCALAPPDATA',str(job_path.parent.parent)))/'LifeOS'/'ai-sandbox'/identity
+    sandbox=sandbox_for(job_path.parent.parent)
     sandbox.mkdir(parents=True,exist_ok=True)
     lock=job_path.with_suffix('.lock')
     try:descriptor=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY);os.close(descriptor)
@@ -212,12 +329,14 @@ def execute(job_path,executable):
             atomic(job_path.parent.parent/'models.json',{'adapter':ADAPTER_VERSION,'fetched_at':time.time(),'models':models});job['models']=models
         elif job['kind']=='chat':
             job['answer']=chat(job,executable,sandbox,job_path.parent.parent)
+        elif job['kind']in ['account_connect','account_status','account_disconnect']:
+            account_job(job,executable,sandbox,job_path.parent.parent,job_path)
         else:raise RuntimeError('Unsupported AI request.')
         job['status']='complete'
     except Exception as error:
         job['status']='failed';job['error']=str(error) if isinstance(error,RuntimeError) else 'AI setup is unavailable. Refresh the model list or check the desktop runtime.'
     finally:
-        job['finished_at']=time.time();atomic(job_path,job);lock.unlink(missing_ok=True)
+        job.pop('authorization',None);job['finished_at']=time.time();atomic(job_path,job);lock.unlink(missing_ok=True);job_path.with_suffix('.cancel').unlink(missing_ok=True)
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--job',type=Path,required=True);parser.add_argument('--executable',type=Path,required=True);args=parser.parse_args()
     if not args.executable.is_file() or args.executable.suffix.lower() not in ['.exe','']:raise SystemExit('An installed native executable is required.')

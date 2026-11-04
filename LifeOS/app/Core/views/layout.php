@@ -7,7 +7,15 @@ $visibleMenu=array_values(array_filter($menu,fn($m)=>empty($m['hidden'])));
 $current=parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH);
 $labels=['/'=>t('Today'),'/planner'=>t('Planner'),'/work'=>t('Work management'),'/salary'=>t('Money'),'/investments'=>t('Investments'),'/uni'=>t('University'),'/growth'=>t('Goals'),'/freedom'=>t('Your freedom')];
 $groups=['Every day'=>['/','/planner','/work'],'Your money'=>['/salary','/investments'],'Learning & life'=>['/uni','/growth','/freedom']];
-if (PersonaService::profile()) $groups=[t('Your workspace')=>array_column($visibleMenu,'route')];
+if (PersonaService::profile()) $groups=[
+    'Every day'=>['/','/planner','/focus'],
+    'School'=>['/school'],
+    'University'=>['/uni','/study'],
+    'Work'=>['/employee','/work','/roles','/career'],
+    'Your money'=>['/salary','/investments','/small-business'],
+    'Learning & life'=>['/growth','/lessons','/freedom','/life','/life-admin','/documents'],
+];
+if (PersonaService::profile()) $groups=array_map(fn($routes)=>array_values(array_intersect(array_column($visibleMenu,'route'),$routes)),$groups);
 $primaryRoutes=array_merge(...array_values($groups));
 $secondaryMenu=array_values(array_filter($visibleMenu,fn($m)=>!in_array($m['route'],$primaryRoutes,true)));
 $isActive=fn($route)=>$route==='/' ? $current==='/' : str_starts_with($current,$route);
@@ -19,6 +27,8 @@ $actions=[
     ['label'=>t('Plan salary'),'description'=>t('Bills, savings and investments'),'route'=>'/salary/plan','icon'=>'wallet','keywords'=>'monthly income budget loan money'],
     ['label'=>t('Add goal'),'description'=>t('Something you want to achieve'),'route'=>'/growth#new-goal','icon'=>'target','keywords'=>'growth milestone future'],
     ['label'=>t('Add assignment'),'description'=>t('A university deadline'),'route'=>'/uni/add/assignment','icon'=>'book','keywords'=>'study homework coursework'],
+    ['label'=>t('Add homework'),'description'=>t('School subjects and homework'),'route'=>'/school?page=homework','icon'=>'book','keywords'=>'school homework subject'],
+    ['label'=>t('Work timesheet'),'description'=>t('Record work hours and overtime'),'route'=>'/employee?page=attendance','icon'=>'clock','keywords'=>'employee work attendance hours'],
     ['label'=>t('Start focus'),'description'=>t('Make time to study'),'route'=>'/focus','icon'=>'clock','keywords'=>'pomodoro timer study'],
     ['label'=>t('Add document'),'description'=>t('Save a certificate, CV or file'),'route'=>'/documents#add-document','icon'=>'folder','keywords'=>'upload file certificate cv']
 ];
