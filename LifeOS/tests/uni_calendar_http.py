@@ -71,7 +71,7 @@ with tempfile.TemporaryDirectory(prefix='lifeos-uni-calendar-http-') as temporar
                     pass
                 time.sleep(.1)
             csrf = token(request('/')[1])
-            check(request('/welcome', {'_csrf': csrf, 'name': 'Calendar QA owner', 'institution': 'QA', 'areas[]': 'study'})[0] == 200,
+            check(request('/welcome', {'_csrf': csrf, 'name': 'Calendar QA owner', 'institution': 'QA', 'areas[]': 'study', 'roles[]': 'uni'})[0] == 200,
                   'Disposable workspace onboarding succeeds')
             code, page, _, _ = request('/uni/calendar')
             check(code == 200 and b'calendar' in page.lower(), 'University calendar setup page renders')

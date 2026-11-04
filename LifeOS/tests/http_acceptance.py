@@ -66,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix="lifeos-http-") as data:
                 check(asset_code == 200 and asset_body.startswith(b'\x89PNG\r\n\x1a\n') and 'image/png' in asset_headers.get('Content-Type',''), 'Brand image served correctly: ' + asset)
             check(headers.get('Referrer-Policy') == 'same-origin', 'Same-origin form POSTs preserve the browser Origin header')
             csrf = token(page)
-            check(request('/welcome', {'_csrf':csrf,'name':'Acceptance student','institution':'Test university','areas[]':['study','money']})[0] == 200, 'Onboarding creates a personal workspace')
+            check(request('/welcome', {'_csrf':csrf,'name':'Acceptance student','institution':'Test university','areas[]':['study','money'],'roles[]':['uni','business']})[0] == 200, 'Onboarding creates a personal workspace')
             website_ids = []
             for index in range(10):
                 site_code, site_page, _, site_url = request('/websites/profile', {'_csrf':csrf,'name':f'Owner website {index}', 'business_name':f'Business {index}', 'base_url':f'https://site{index}.example.com'})
@@ -94,7 +94,7 @@ with tempfile.TemporaryDirectory(prefix="lifeos-http-") as data:
             check(b'Across your websites' in activity_page and b'Owner website 0' in activity_page and b'Owner website 1' in activity_page, 'Owner can review actual activity across business websites')
 
             code, page, _, _ = request('/')
-            check(code == 200 and b"Your day, in perspective." in page and b'No data yet' in page, "Empty dashboard after onboarding")
+            check(code == 200 and b"Today" in page and b'No data yet' in page, "Empty dashboard after onboarding")
             check(b'/assets/comfort.css' in page and b'data-quick-add' in page and b'More tools' in page and b'Your daily progress' in page, 'Task-first dashboard and quick action navigation available')
             check(b'/assets/brand/lifeos-mark.png' in page and b'/assets/motion.css' in page and request('/assets/motion.css')[0] == 200, 'Branded application shell loads motion styles')
             check(request('/?date=2026-02-30')[0] == 422 and request('/?date='+(datetime.now(APP_TIMEZONE)+timedelta(days=1)).strftime('%Y-%m-%d'))[0] == 422, 'Daily review rejects invalid and invented future activity dates')
