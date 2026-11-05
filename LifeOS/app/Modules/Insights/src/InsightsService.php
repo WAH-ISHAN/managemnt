@@ -64,7 +64,6 @@ final class InsightsService {
         if ((module_enabled('Focus') && class_exists('FocusService')) && ($focus=FocusService::active()) && $focus['status']==='running' && FocusService::elapsed($focus)>=$focus['target_minutes']*60) $add('focus:'.$focus['id'],'Your focus block is complete',$focus['subject'].' · Save your session and take a break.','/focus');
         if ((module_enabled('Work') && class_exists('WorkPlanningService'))) foreach (WorkPlanningService::dueIssues(2) as $issue) $add('work-issue:'.$issue['id'],$issue['due_date']<$today?'Work item overdue':'Work item due soon',$issue['identifier'].'-'.$issue['sequence'].' ? '.$issue['title'].' ? '.$issue['due_date'],'/work/issue/'.$issue['id'],$issue['due_date']<$today?'overdue':'upcoming');
         if (module_enabled('Automation') && class_exists('AutomationService')) $items=[...$items,...AutomationService::alerts()];
-        if (module_enabled('School') && class_exists('SchoolService')) $items=[...$items,...SchoolService::alerts()];
         foreach(['LifePlanning'=>LifePlanningReports::class,'Employee'=>EmployeeService::class,'StudyTools'=>StudyService::class]as $module=>$service)if(module_enabled($module)&&class_exists($service))$items=[...$items,...$service::alerts()];
         $dismissed=array_column(Db::all('SELECT key FROM notification_dismissals'),'key');
         $readKeys=in_array('notification_reads',$tables,true) ? array_column(Db::all('SELECT key FROM notification_reads'),'key') : [];

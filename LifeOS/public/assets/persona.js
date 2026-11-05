@@ -22,8 +22,8 @@
       for (const option of pack.options) option.hidden = option.disabled = !!option.dataset.persona && !roles.includes(option.dataset.persona);
       if (pack.selectedOptions[0]?.disabled) pack.value = '';
       const institution = form.querySelector('[data-persona-institution]');
-      if (institution) institution.textContent = window.lifeosT(roles.length !== 1 ? 'School, university or workplace (optional)' :
-        roles[0] === 'school' ? 'School (optional)' : roles[0] === 'uni' ? 'University / institution (optional)' : 'Workplace / organization (optional)');
+      if (institution) institution.textContent = window.lifeosT(roles.length !== 1 ? 'University or workplace (optional)' :
+        roles[0] === 'uni' ? 'University / institution (optional)' : 'Workplace / organization (optional)');
     };
     form.addEventListener('change', event => { if (event.target.name === 'roles[]') update(); });
     const steps = [...form.querySelectorAll('[data-wizard-step]')];

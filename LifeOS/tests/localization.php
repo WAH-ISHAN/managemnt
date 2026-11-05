@@ -6,7 +6,7 @@ Migrator::run(array_merge([ROOT.'/app/Core/migrations'],array_map(fn($m)=>$m['pa
 $checks=0;
 function lc(bool $ok,string $label):void{global $checks;if(!$ok)throw new RuntimeException($label);$checks++;}
 $catalogs=[];
-foreach([EmployeeService::class,StudyService::class,SchoolService::class,LifePlanningService::class] as $service){if(method_exists($service,'catalog'))$catalogs[$service]=$service::catalog();}
+foreach([EmployeeService::class,StudyService::class,LifePlanningService::class] as $service){if(method_exists($service,'catalog'))$catalogs[$service]=$service::catalog();}
 foreach(['en','si','ta'] as $language){
     Db::set('locale',$language);
     foreach($catalogs as $service=>$catalog)lc($service::catalog()===$catalog,'Catalog types and persisted values stay invariant: '.$service.' '.$language);

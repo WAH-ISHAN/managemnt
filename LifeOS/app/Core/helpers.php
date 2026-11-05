@@ -2,7 +2,7 @@
 declare(strict_types=1);
 function module_enabled(string $id): bool {
     if(class_exists('LicenseService')){
-        $permission=match($id){'Intelligence'=>'ai','Planner','Focus','Growth','Freedom','Lessons','LifeAdmin','LifePlanning','Insights'=>'planner','Salary','Investments'=>'money','Work','WorkRoles','Employee','Career','SmallBusiness'=>'work','School','Uni','StudyTools'=>'study','Documents'=>'documents','Connectivity','Websites','WebAdmin','Automation'=>'connections',default=>null};
+        $permission=match($id){'Intelligence'=>'ai','Planner','Focus','Growth','Freedom','Lessons','LifeAdmin','LifePlanning','Insights'=>'planner','Salary','Investments'=>'money','Work','WorkRoles','Employee','Career','SmallBusiness'=>'work','Uni','StudyTools'=>'study','Documents'=>'documents','Connectivity','Websites','WebAdmin','Automation'=>'connections',default=>null};
         if($permission!==null&&!LicenseService::allowed($permission))return false;
     }
     return !class_exists('PersonaService') || PersonaService::enabled($id);

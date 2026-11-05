@@ -30,7 +30,7 @@ try:
         browser=pw.chromium.launch(headless=True)
         page=browser.new_page(viewport={'width':1365,'height':900},reduced_motion='reduce')
         page.on('pageerror',lambda error:errors.append(str(error)))
-        roles=['school','uni','employee']
+        roles=['uni','employee']
         for length in range(1,4):
             for selection in itertools.combinations(roles,length):
                 db.execute('DELETE FROM local_profiles')
@@ -58,22 +58,20 @@ try:
                 expect(page.locator('.sidebar')).to_be_attached()
                 saved={r[0]for r in db.execute('SELECT role FROM profile_roles')}
                 check(saved==set(selection),'First-start stores '+'+'.join(selection))
-                for role,route,module in [('school','/school','School'),('uni','/uni','Uni'),('employee','/employee','Employee')]:
+                for role,route,module in [('uni','/uni','Uni'),('employee','/employee','Employee')]:
                     shown=page.locator(f'.sidebar a[href="{route}"]').count()>0
                     check(shown==(role in selection),module+' sidebar relevance for '+'+'.join(selection))
-                if selection==('school',):
-                    check(page.locator('a[href^="/salary"],a[href^="/uni"],a[href^="/employee"]').count()==0,'School-only dashboard has no salary, university or employee links')
                 page.goto(base+'/settings')
                 check(page.locator('form[action="/settings/grades"]').count()==int('uni'in selection),'Grade settings match roles '+'+'.join(selection))
-                check(page.locator('form[action="/settings/rules"]').count()==int(selection!=('school',)),'Money settings match roles '+'+'.join(selection))
+                check(page.locator('form[action="/settings/rules"]').count()==1,'Money settings match roles '+'+'.join(selection))
                 expect(page.locator('form[action="/settings/pin"]')).to_be_visible()
                 expect(page.locator('#updates')).to_be_visible()
                 page.goto(base+'/settings/workspace/packs')
                 packs=set(page.locator('input[name=pack]').evaluate_all('items=>items.map(input=>input.value)'))
-                expected_packs={pack for role,pack in [('school','grade_11'),('uni','hnd'),('employee','software_engineer')]if role in selection}
+                expected_packs={pack for role,pack in [('uni','hnd'),('employee','software_engineer')]if role in selection}
                 check(packs==expected_packs,'Only starter plans for selected roles are offered: '+'+'.join(selection))
                 page.goto(base+'/settings/workspace')
-                for role,module in [('school','School'),('uni','Uni'),('employee','Employee')]:
+                for role,module in [('uni','Uni'),('employee','Employee')]:
                     check(page.locator(f'input[name="enabled[]"][value={module}]').count()==int(role in selection),'Only eligible tool switches shown for '+'+'.join(selection))
                 for width in [1365,390]:
                     page.set_viewport_size({'width':width,'height':900})

@@ -34,8 +34,7 @@ try {
     life_check(count(Db::all('SELECT * FROM life_health_logs'))===1 && count(Db::all('SELECT * FROM life_groceries'))===1 && count(Db::all('SELECT * FROM life_contacts'))===1,'Health, household and people records persist');
     life_check(count(Db::all('SELECT * FROM life_debts'))===1,'Debt strategy records persist');
     life_request($router,'POST','/planner/holidays/holiday',['year'=>'2027','date'=>'2027-04-14','title_en'=>'New Year','title_si'=>'අලුත් අවුරුදු','title_ta'=>'புத்தாண்டு','jurisdiction'=>'Sri Lanka','is_public'=>'1','is_bank'=>'1']);
-    life_request($router,'POST','/planner/holidays/term',['year'=>'2027','authority'=>'Test school','label'=>'Term 1','starts_on'=>'2027-01-01','ends_on'=>'2027-03-31','source_url'=>'']);
-    $calendar=SriLankaCalendarService::listing(2027); life_check(count($calendar['holidays'])===1 && count($calendar['school_terms'])===1,'Holiday and school-term entries persist for a new year');
+    $calendar=SriLankaCalendarService::listing(2027); life_check(count($calendar['holidays'])===1,'Holiday entries persist for a new year');
     Db::close();
 } finally { Db::close(); foreach([$file,$file.'-wal',$file.'-shm'] as $temporary) if(is_file($temporary)) unlink($temporary); }
 echo "$checks life planning checks passed.\n";

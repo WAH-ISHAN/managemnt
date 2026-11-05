@@ -5,7 +5,6 @@ final class TemplatePackService {
     public static function catalog(): array {
         return [
             'hnd'=>['name'=>'HND student','persona'=>'uni','goal'=>'Complete this semester with a consistent study plan','tasks'=>['Enter your real modules, credits and timetable','Add assignment deadlines from your course portal','Plan this week’s study sessions'],'habits'=>['Review lecture notes','Practise one course problem'],'steps'=>['Enter semester deadlines','Break the first assignment into steps','Review progress each week'],'modules'=>['Programming foundations','Database fundamentals','Professional practice']],
-            'grade_11'=>['name'=>'Grade 11','persona'=>'school','goal'=>'Prepare for exams one small step at a time','tasks'=>['Write down this week’s homework','Choose one topic to revise today','Pack tomorrow’s school bag'],'habits'=>['Read for 15 minutes','Revise one topic'],'steps'=>['List subjects and topics to practise','Choose weekly revision times','Review mistakes after practice'],'modules'=>[]],
             'software_engineer'=>['name'=>'Software engineer employee','persona'=>'employee','goal'=>'Build a sustainable work and learning routine','tasks'=>['Choose this week’s three work priorities','Break the next work item into small steps','Plan one learning session'],'habits'=>['Write a short work log','Take a screen break'],'steps'=>['Choose one skill to improve','Complete a small practice project','Review work and learning each week'],'modules'=>[]],
         ];
     }

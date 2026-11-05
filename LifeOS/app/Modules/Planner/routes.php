@@ -24,13 +24,6 @@ return function (Router $r) {
         Db::run('INSERT INTO holidays(dataset_id,date,title_en,title_si,title_ta,is_public,is_bank,is_mercantile,is_poya,jurisdiction) VALUES (?,?,?,?,?,?,?,?,?,?)',[$id,$date,text_input('title_en'),text_input('title_si',200,false),text_input('title_ta',200,false),isset($_POST['is_public'])?1:0,isset($_POST['is_bank'])?1:0,isset($_POST['is_mercantile'])?1:0,isset($_POST['is_poya'])?1:0,text_input('jurisdiction',120,false)]);
         return redirect('/planner/holidays?year='.$year,'Holiday saved.');
     });
-    $r->post('/planner/holidays/term',function () {
-        $year=int_range($_POST['year']??'',2000,2100); $start=valid_date(text_input('starts_on')); $end=valid_date(text_input('ends_on')); if ((int)substr($start,0,4)!==$year || (int)substr($end,0,4)!==$year) throw new InvalidArgumentException(t('School term dates must be inside the selected year.'));
-        $dataset=Db::one('SELECT id FROM school_term_datasets WHERE authority=? AND year=?',[text_input('authority'),$year]);
-        if (!$dataset) $id=Db::run('INSERT INTO school_term_datasets(authority,year,revision,source_title,source_url,published_on) VALUES (?,?,?,?,?,?)',[text_input('authority'),$year,'user-'.$year,'User-entered local school calendar',text_input('source_url',500,false),date('Y-m-d')]); else $id=(int)$dataset['id'];
-        Db::run('INSERT INTO school_terms(dataset_id,label,starts_on,ends_on) VALUES (?,?,?,?)',[$id,text_input('label'),$start,$end]);
-        return redirect('/planner/holidays?year='.$year,'School term saved.');
-    });
     $r->get('/planner',function () {
         $date=PlannerService::dateInput($_GET['date'] ?? date('Y-m-d')); $tab=$_GET['view'] ?? 'today'; if (!in_array($tab,['today','tasks','habits','routines','appointments'],true)) throw new InvalidArgumentException(t('Choose a planner page.'));
         $taskList=PlannerService::taskList($_GET['filter'] ?? 'all',$_GET['q'] ?? '',$date); $tasks=$taskList['rows'];

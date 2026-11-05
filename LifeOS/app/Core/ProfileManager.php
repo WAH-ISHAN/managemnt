@@ -89,13 +89,7 @@ final class ProfileManager {
         return ['name'=>(string)self::query('SELECT name FROM profiles WHERE id=?',[$child])->fetchColumn(),'tasks'=>$read('SELECT title,due,status FROM tasks ORDER BY id DESC LIMIT 100'),'habits'=>$read('SELECT h.title,(SELECT COUNT(*) FROM planner_habit_checks c WHERE c.habit_id=h.id) checkins FROM planner_habits h WHERE active=1'),'focus'=>$read("SELECT substr(completed_at,1,10) day,SUM(elapsed_seconds)/60 minutes FROM focus_sessions WHERE status='complete' AND completed_at IS NOT NULL GROUP BY day ORDER BY day DESC LIMIT 30")];
     }
     public static function kidAllowed(string $method,string $path): bool {
-        if($method==='GET'&&$path==='/family')return true;
-        if($method==='POST'&&preg_match('#^/family/[0-9]+/done$#D',$path))return true;
-        if($method==='POST'&&in_array($path,['/school/xp/settings','/school/reward/redeem','/school/calendar'],true))return true;
         if(in_array($path,['/idle-lock','/session/activity','/unlock/hello'],true))return true;
-        if($method==='POST'&&preg_match('#^/school/bag/[0-9]+/pack$#D',$path))return true;
-        if($method==='GET'&&in_array($path,['/school','/school/report'],true))return true;
-        if($method==='POST'&&preg_match('#^/school/(?:[a-z]+/save|[a-z]+/[0-9]+/(?:complete|archive)|rewards/[0-9]+/request|requests/[0-9]+/decision)$#D',$path))return true;
         if(in_array($path,['/unlock','/lock','/profiles','/profiles/switch','/profiles/revoke','/kid','/settings/workspace/language'],true)) return true;
         if($method==='GET') return $path==='/planner'||$path==='/focus'||str_starts_with($path,'/insights/alerts');
         return (bool)preg_match('#^/(?:planner/tasks(?:/[0-9]+/(?:edit|status))?|planner/habits/[0-9]+/check|planner/routines/[0-9]+/check|focus/start|focus/[0-9]+/action)$#D',$path);
@@ -107,10 +101,6 @@ final class ProfileManager {
         });
     }
     public static function register(Router $router): void {
-        $router->get('/family',fn()=>View::render(ROOT.'/app/Modules/School/views/family.php',['title'=>t('Family board'),'items'=>self::familyItems()],'lock'));
-        $router->post('/family',function(){self::familyAdd(text_input('child',40),text_input('title',200),valid_date(text_input('due')),text_input('pin',12));return redirect('/family','Family chore assigned.');});
-        $router->post('/family/{id}/done',function($p){self::familyDone(record_id($p['id']));return redirect('/family','Shared chore completed.');});
-        $router->get('/profiles/child/{id}/school',function($p){return View::render(ROOT.'/app/Modules/School/views/guardian.php',['title'=>t('Weekly school report'),'report'=>self::schoolReport($p['id'],valid_date((string)($_GET['date']??date('Y-m-d'))))],'lock');});
         $router->get('/profiles',fn()=>View::render(ROOT.'/app/Core/views/profiles.php',['title'=>t('Profiles & family')],'lock'));
         $router->post('/profiles/switch',function() { self::switchTo(text_input('profile',40),text_input('pin',12,false)); return redirect('/'); });
         $router->post('/profiles/create',function() { $id=self::create(text_input('name',100),text_input('pin',12)); return redirect('/profiles',t('Profile created. Select it and enter its PIN to begin.')); });
@@ -123,10 +113,4 @@ final class ProfileManager {
     public static function familyItems():array{return self::query('SELECT f.*,p.name child_name FROM family_board f JOIN guardian_links g ON g.guardian_id=f.guardian_id AND g.child_id=f.child_id JOIN profiles p ON p.id=f.child_id WHERE f.guardian_id=? OR f.child_id=? ORDER BY f.done,f.due,f.id',[self::$current,self::$current])->fetchAll();}
     public static function familyAdd(string $child,string $title,string $due,string $pin):void{if(!self::canView($child))throw new InvalidArgumentException(t('No guardian permission for this child.'));self::verify(self::$current,$pin,true);valid_date($due);if(trim($title)===''||mb_strlen($title)>200)throw new InvalidArgumentException(t('Enter a chore title.'));self::query('INSERT INTO family_board(guardian_id,child_id,title,due) VALUES(?,?,?,?)',[self::$current,$child,trim($title),$due]);self::audit($child,'family-chore-created');}
     public static function familyDone(int $id):void{$item=null;foreach(self::familyItems()as $row)if((int)$row['id']===$id)$item=$row;if(!$item)throw new InvalidArgumentException(t('No access to this family chore.'));self::query('UPDATE family_board SET done=1 WHERE id=?',[$id]);self::audit($item['child_id'],'family-chore-completed');}
-    public static function schoolReport(string $child,string $date):array{
-        if(!self::canView($child))throw new InvalidArgumentException(t('No guardian permission for this profile.'));valid_date($date);$db=self::database($child);$start=(new DateTimeImmutable($date))->modify('monday this week')->format('Y-m-d');$end=(new DateTimeImmutable($start))->modify('+6 days')->format('Y-m-d');$out=['start'=>$start,'end'=>$end,'completed'=>0,'reading_pages'=>0,'shared_moods'=>[]];
-        $module=$db->query("SELECT enabled FROM modules WHERE module_id='School'")->fetchColumn();if($module!==false&&!(bool)$module)throw new InvalidArgumentException(t('School tools are disabled for this child.'));
-        foreach($db->query("SELECT kind,data,status,completed_on FROM school_records WHERE status<>'archived'")as $row){$d=json_decode($row['data'],true);if($row['completed_on']!==null&&$row['completed_on']>=$start&&$row['completed_on']<=$end)$out['completed']++;$day=$d['date']??'';if($day<$start||$day>$end)continue;if($row['kind']==='reading')$out['reading_pages']+=(int)$d['pages'];if($row['kind']==='mood'&&$d['share']==='guardian')$out['shared_moods'][]=['date'=>$day,'mood'=>$d['mood']];}
-        self::audit($child,'school-report-viewed');return $out;
-    }
 }

@@ -432,7 +432,7 @@ internal sealed partial class LifeWindow : Form
         if (!await WaitForHeading("Your workspace")) throw new InvalidOperationException("Workspace module settings did not open.");
         await Check("workspace-settings-route","location.pathname==='/settings/workspace' && !!document.querySelector('form[action=\"/settings/workspace/modules\"]')");
         await Act("(()=>{const f=document.querySelector('[data-role-picker]');for(const input of f.querySelectorAll('[name=\"roles[]\"]'))input.checked=true;f.requestSubmit()})()");
-        await Changed("workspace-roles-enable-full-smoke-surface","document.querySelector('#main h1')?.textContent==='Your workspace' && !!document.querySelector('.sidebar a[href=\"/uni\"]') && !!document.querySelector('.sidebar a[href=\"/school\"]')");
+        await Changed("workspace-roles-enable-full-smoke-surface","document.querySelector('#main h1')?.textContent==='Your workspace' && !!document.querySelector('.sidebar a[href=\"/uni\"]') && !!document.querySelector('.sidebar a[href=\"/employee\"]')");
         await Act("(()=>{const f=document.querySelector('form[action=\"/settings/workspace/modules\"]');for(const input of f.querySelectorAll('input[name=\"enabled[]\"]'))input.checked=true;f.requestSubmit()})()");
         await Changed("workspace-module-controls-enable-full-smoke-surface","document.querySelector('#main h1')?.textContent==='Your workspace' && !!document.querySelector('.sidebar a[href=\"/uni\"]') && !!document.querySelector('.sidebar a[href=\"/automation\"]')");
         await Navigate("/");
@@ -555,7 +555,7 @@ internal sealed partial class LifeWindow : Form
         await web.CoreWebView2.ExecuteScriptAsync("[...document.querySelectorAll('#add-expense .date-shortcuts button')].find(b=>b.textContent==='Today').click()");
         await Check("date-today","document.querySelector('#add-expense input[name=date]').value===document.querySelector('meta[name=lifeos-today]').content");
         await web.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-quick-add]').click()");
-        await Check("quick-add-dialog","(()=>{const routes=['/salary#add-expense','/salary#add-income','/planner?view=tasks#new-task','/salary/plan','/growth#new-goal','/uni/add/assignment','/school?page=homework','/employee?page=attendance','/focus','/documents#add-document','/knowledge/new','/knowledge/daily'];const links=[...document.querySelectorAll('#quick-add-dialog [data-quick-result]')].map(a=>a.getAttribute('href'));return document.getElementById('quick-add-dialog').open && links.length===routes.length && routes.every(route=>links.includes(route))})()");
+        await Check("quick-add-dialog","(()=>{const routes=['/salary#add-expense','/salary#add-income','/planner?view=tasks#new-task','/salary/plan','/growth#new-goal','/uni/add/assignment','/employee?page=attendance','/focus','/documents#add-document','/knowledge/new','/knowledge/daily'];const links=[...document.querySelectorAll('#quick-add-dialog [data-quick-result]')].map(a=>a.getAttribute('href'));return document.getElementById('quick-add-dialog').open && links.length===routes.length && routes.every(route=>links.includes(route))})()");
         await VerifyModalWindowChrome(checks);
         await Capture("glass-controls-over-modal");
         await Capture("quick-add");

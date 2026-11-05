@@ -1,5 +1,5 @@
 <?php $catalog=LifePlanningService::catalog();$values=$editing??[]; ?>
-<header class="page-header"><div><h1><?= e(t('Life & Sri Lanka')) ?></h1><p class="muted"><?= e(t('Plan spending, look after your household and keep dated records.')) ?></p></div><a href="/planner/holidays"><?= e(t('Holidays & school terms')) ?></a></header><?php require ROOT.'/app/Core/views/notices.php'; ?>
+<header class="page-header"><div><h1><?= e(t('Life & Sri Lanka')) ?></h1><p class="muted"><?= e(t('Plan spending, look after your household and keep dated records.')) ?></p></div><a href="/planner/holidays"><?= e(t('Sri Lanka holidays')) ?></a></header><?php require ROOT.'/app/Core/views/notices.php'; ?>
 <section class="card"><form class="inline" method="get" action="/life"><label><?= e(t('Tool')) ?><select name="page"><?php foreach($catalog as $key=>[,$label]): ?><option value="<?= e($key) ?>" <?= $key===$kind?'selected':'' ?>><?= e(t($label)) ?></option><?php endforeach; ?></select></label><button><?= e(t('Open tool')) ?></button></form></section>
 <?php require __DIR__.'/summary.php'; ?>
 <section class="card"><h2><?= $editing?t('Edit'):t('Add') ?> <?= e($catalog[$kind][1]) ?></h2><form class="form-grid" method="post" action="/life/manage/<?= e($kind) ?>/save"><?= csrf_field() ?><input type="hidden" name="id" value="<?= e($editing['id']??'') ?>">

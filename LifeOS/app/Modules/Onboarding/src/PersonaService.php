@@ -7,23 +7,22 @@ final class PersonaService {
         return [
             'employee'=>['name'=>'Employee','description'=>t('Work, salary, goals and time for yourself.'),'layout'=>'work','modules'=>['Employee','Work','Salary','Investments','Career','Growth','Freedom','Focus','Documents','LifeAdmin','LifePlanning','Lessons']],
             'uni'=>['name'=>'University student','description'=>t('Modules, assignments, study and a student budget.'),'layout'=>'study','modules'=>['Uni','StudyTools','Salary','Focus','Growth','Documents','Lessons','Career','Freedom','LifePlanning']],
-            'school'=>['name'=>'School student','description'=>t('A simple space for tasks, study and goals.'),'layout'=>'simple','modules'=>['Focus','Growth','Lessons','School']],
             'freelancer'=>['name'=>'Freelancer','description'=>t('Projects, income, clients and career growth.'),'layout'=>'work','modules'=>['Work','Salary','Investments','Career','Documents','Growth','Freedom','Websites','Focus']],
             'business'=>['name'=>'Business owner','description'=>t('Business projects, money and your websites.'),'layout'=>'money','modules'=>['Work','Salary','Investments','SmallBusiness','Websites','WebAdmin','Documents','LifeAdmin','Growth']],
             'job_seeker'=>['name'=>'Job seeker','description'=>t('Applications, skills, focus and your next step.'),'layout'=>'career','modules'=>['Career','Growth','Documents','Focus','Salary','Freedom','Lessons']],
         ];
     }
     public static function templates(): array {
-        return ['hnd'=>['name'=>'HND student','persona'=>'uni'],'grade_11'=>['name'=>'Grade 11','persona'=>'school'],'software_engineer'=>['name'=>'Software engineer employee','persona'=>'employee']];
+        return ['hnd'=>['name'=>'HND student','persona'=>'uni'],'software_engineer'=>['name'=>'Software engineer employee','persona'=>'employee']];
     }
     public static function catalog(): array {
-        return array_map(static function ($m) { $m['id']=basename($m['path']); return $m; },Modules::discover(ROOT.'/app/Modules'));
+        return array_map(static function ($m) { $m['id']=basename($m['path']); return $m; },array_values(array_filter(Modules::discover(ROOT.'/app/Modules'),fn($m)=>empty($m['retired']))));
     }
     public static function profile(): ?array { return Db::one('SELECT * FROM local_profiles WHERE id=?',[self::profileId()]); }
     public static function selectedRoles(): array {
         $roles=array_column(Db::all('SELECT role FROM profile_roles WHERE profile_id=? ORDER BY role',[self::profileId()]),'role');
         if (!$roles && isset(self::personas()[self::profile()['persona'] ?? ''])) $roles=[self::profile()['persona']];
-        return $roles;
+        return array_values(array_intersect($roles,array_keys(self::personas())));
     }
     public static function roles(string|array $selection): array {
         $roles=is_string($selection)?[$selection]:array_values($selection);
@@ -34,7 +33,7 @@ final class PersonaService {
         $roles??=self::selectedRoles();
         if (!$roles) return true; // Retain legacy/custom installations until explicitly configured.
         $requirements=[
-            'Uni'=>['uni'],'StudyTools'=>['uni'],'School'=>['school'],'Employee'=>['employee'],
+            'Uni'=>['uni'],'StudyTools'=>['uni'],'Employee'=>['employee'],
             'Work'=>['employee','freelancer','business'],'WorkRoles'=>['employee','freelancer','business'],
             'SmallBusiness'=>['business'],'WebAdmin'=>['business'],'Websites'=>['freelancer','business'],
             'Career'=>['uni','employee','freelancer','business','job_seeker'],
@@ -50,6 +49,7 @@ final class PersonaService {
         return t('Your tasks, study and money in one place.');
     }
     public static function enabled(string $moduleId): bool {
+        if ($moduleId==='School') return false;
         if (!preg_match('/^[A-Za-z][A-Za-z0-9]*$/D',$moduleId) || !is_file(ROOT.'/app/Modules/'.$moduleId.'/module.json')) return false;
         if (in_array($moduleId,['Dashboard','Planner','Settings','Onboarding','Insights'],true)) return true;
         if (!self::eligible($moduleId)) return false;
@@ -67,7 +67,7 @@ final class PersonaService {
             Db::run('INSERT INTO local_profiles(id,name,persona,locale,template,dashboard_layout) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,persona=excluded.persona,locale=excluded.locale,template=excluded.template,dashboard_layout=excluded.dashboard_layout,updated_at=CURRENT_TIMESTAMP',[self::profileId(),Db::setting('name'),$persona,$locale,$template,count($roles)>1?'balanced':$definition['layout']]);
             Db::run('DELETE FROM profile_roles WHERE profile_id=?',[self::profileId()]);
             foreach($roles as $role)Db::run('INSERT INTO profile_roles(profile_id,role) VALUES (?,?)',[self::profileId(),$role]);
-            $common=$roles===['school']?[]:['LifePlanning','Platform','Intelligence'];
+            $common=['LifePlanning','Platform','Intelligence'];
             if(array_intersect($roles,['employee','freelancer','business']))$common[]='WorkRoles';
             $enabled=array_merge(['Dashboard','Planner','Settings','Onboarding','Insights','Automation'],$common);
             foreach($roles as $role)$enabled=array_merge($enabled,self::personas()[$role]['modules']);
@@ -88,7 +88,7 @@ final class PersonaService {
         });
     }
     public static function menu(array $catalog): array {
-        if (class_exists('ProfileManager') && ProfileManager::isKid()) return array_values(array_filter($catalog,fn($m)=>in_array(basename($m['path']),['Planner','Focus','School'],true)&&self::enabled(basename($m['path']))));
+        if (class_exists('ProfileManager') && ProfileManager::isKid()) return array_values(array_filter($catalog,fn($m)=>in_array(basename($m['path']),['Planner','Focus'],true)&&self::enabled(basename($m['path']))));
 
         $rows=Db::all('SELECT module_id,enabled,sort_order FROM modules WHERE profile_id=?',[self::profileId()]);
         if (!$rows && !self::profile()) return $catalog;

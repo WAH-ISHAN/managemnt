@@ -126,7 +126,7 @@ try {
             Write-QaLog ($files.Count.ToString()+' JavaScript files passed syntax checks.')
         }
         Invoke-QaStage 'phpunit' { Invoke-CheckedNative $phpCommand @('vendor/bin/phpunit','--no-progress') }
-        foreach($suite in @('module_loading','fresh_workspace','services','finance_planning','planner_growth_career','planner_search','documents_encryption','freedom','daily_progress','modern_tools','knowledge','life_planning','websites','website_accounts','website_costs','website_gateway','admin_studio','work_management','cloud_hub','wordpress_adapter','uni_calendar','uni_calendar_upgrade','persona','automation','expense_category_rules','sri_lanka_calendar','profiles_packs','capture_planning_trends','focus_intelligence','connectivity','calendar_completion','localization','work_roles','ai_provider','school','school_guardian','employee_study','platform','workspace_exchange')) {
+        foreach($suite in @('module_loading','fresh_workspace','services','finance_planning','planner_growth_career','planner_search','documents_encryption','freedom','daily_progress','modern_tools','knowledge','life_planning','websites','website_accounts','website_costs','website_gateway','admin_studio','work_management','cloud_hub','wordpress_adapter','uni_calendar','uni_calendar_upgrade','persona','automation','expense_category_rules','sri_lanka_calendar','profiles_packs','capture_planning_trends','focus_intelligence','connectivity','calendar_completion','localization','work_roles','ai_provider','employee_study','platform','workspace_exchange')) {
             $suiteName=$suite
             Invoke-QaStage ('service-'+$suiteName) { Invoke-CheckedNative $phpCommand @('tests/'+$suiteName+'.php') }
         }

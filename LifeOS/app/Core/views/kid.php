@@ -1,6 +1,5 @@
 <div class="kid-day"><h1><?= e(t('My day')) ?> ☀</h1><p><?= e(t('Choose one small thing to do.')) ?></p><p><a class="btn" href="/planner"><?= e(t('My tasks')) ?></a> <a class="btn" href="/focus"><?= e(t('Focus time')) ?></a> <a class="btn" href="/profiles"><?= e(t('Profiles & family')) ?></a></p>
 <?php require ROOT.'/app/Core/views/notices.php'; ?>
-<?php if(module_enabled('School')): ?><p><a class="btn" href="/school"><?= e(t('School & family 📚')) ?></a></p><?php endif; ?>
 <section><h2><?= e(t('My tasks')) ?></h2><?php $kidTasks=Db::all("SELECT id,title FROM tasks WHERE status='open' ORDER BY due IS NULL,due,id LIMIT 8"); if(!$kidTasks): ?><p><?= e(t('All done for now!')) ?> 🌟</p><?php endif; ?>
 <?php foreach($kidTasks as $task): ?><form method="post" action="/planner/tasks/<?= (int)$task['id'] ?>/status" class="kid-task"><?= csrf_field() ?><input type="hidden" name="status" value="done"><input type="hidden" name="view" value="today"><span><?= e($task['title']) ?></span><button><?= e(t('Done')) ?> ✓</button></form><?php endforeach; ?>
 <form action="/planner/tasks" method="post" class="stack"><?= csrf_field() ?><label><?= e(t('Add a task')) ?><input name="title" maxlength="200" required></label><input type="hidden" name="due" value="<?= e(ui_date('Y-m-d')) ?>"><button><?= e(t('Add task')) ?></button></form></section>

@@ -1,7 +1,6 @@
 <h1><?= e(t('Profiles & family')) ?></h1>
 <p class="muted"><?= e(t('Each profile has its own records, files, backups and PIN.')) ?></p>
 <?php require ROOT.'/app/Core/views/notices.php'; ?>
-<?php if(Auth::unlocked()): ?><p><a href="/family"><?= e(t('Family board & weekly school reports')) ?></a></p><?php endif; ?>
 <form method="post" action="/profiles/switch" class="stack" hx-boost="false"><?= csrf_field() ?><label><?= e(t('Profile')) ?><select name="profile"><?php foreach(ProfileManager::profiles() as $item): ?><option value="<?= e($item['id']) ?>" <?= ProfileManager::id()===$item['id']?'selected':'' ?>><?= e($item['name']) ?><?= $item['kid_mode']?' · '.e(t('Kid mode')):'' ?></option><?php endforeach; ?></select></label><label><?= e(t('PIN')) ?><input type="password" name="pin" inputmode="numeric" maxlength="12" autocomplete="off"></label><button><?= e(t('Open profile')) ?></button></form>
 <p><a href="<?= Auth::unlocked()?'/':'/unlock' ?>"><?= e(t('Back')) ?></a></p>
 <?php if(Auth::unlocked()): ?>

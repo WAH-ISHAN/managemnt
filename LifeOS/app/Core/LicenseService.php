@@ -109,7 +109,7 @@ final class LicenseService {
     }
     public static function permission(string $path): ?string {
         foreach(['/settings/accounts','/settings/categories','/settings/budgets','/settings/rules','/settings/grades']as $prefix)if($path===$prefix||str_starts_with($path,$prefix.'/'))return $prefix==='/settings/grades'?'study':'money';
-        $groups=['ai'=>['assistant','intelligence'],'planner'=>['planner','growth','focus','freedom','lessons','tasks','review','life','life-admin','desktop','insights'],'money'=>['salary','expenses','investments','goals'],'work'=>['work','roles','employee','career','small-business'],'study'=>['uni','school','study'],'documents'=>['documents'],'connections'=>['connectivity','websites','web-admin','automation','api']];
+        $groups=['ai'=>['assistant','intelligence'],'planner'=>['planner','growth','focus','freedom','lessons','tasks','review','life','life-admin','desktop','insights'],'money'=>['salary','expenses','investments','goals'],'work'=>['work','roles','employee','career','small-business'],'study'=>['uni','study'],'documents'=>['documents'],'connections'=>['connectivity','websites','web-admin','automation','api']];
         $prefix=explode('/',trim($path,'/'))[0];foreach($groups as $permission=>$prefixes)if(in_array($prefix,$prefixes,true))return $permission;return null;
     }
     public static function guard(Router $router): void {

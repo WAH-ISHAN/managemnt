@@ -44,23 +44,26 @@ try {
     $expected=[
         'employee'=>['Employee','Work','Salary','Investments','Career','Growth','Freedom','Focus','Documents','LifeAdmin','Lessons','LifePlanning','Platform'],
         'uni'=>['Uni','StudyTools','Salary','Focus','Growth','Documents','Lessons','Career','Freedom','LifePlanning','Platform'],
-        'school'=>['Focus','Growth','Lessons','School'],
         'freelancer'=>['Work','Salary','Investments','Career','Documents','Growth','Freedom','Websites','Focus','LifePlanning','Platform'],
         'business'=>['Work','Salary','Investments','SmallBusiness','Websites','WebAdmin','Documents','LifeAdmin','Growth','LifePlanning','Platform'],
         'job_seeker'=>['Career','Growth','Documents','Focus','Salary','Freedom','Lessons','LifePlanning','Platform'],
     ];
-    $layouts=['employee'=>'work','uni'=>'study','school'=>'simple','freelancer'=>'work','business'=>'money','job_seeker'=>'career'];
+    $layouts=['employee'=>'work','uni'=>'study','freelancer'=>'work','business'=>'money','job_seeker'=>'career'];
     $required=['Dashboard','Planner','Settings','Onboarding','Insights','Automation'];
     $personalCounts=[]; foreach (['tasks','income','expenses','accounts','uni_modules','planner_habits','focus_sessions','career_applications','automation_rules'] as $table) $personalCounts[$table]=(int)Db::one('SELECT COUNT(*) n FROM '.$table)['n'];
     foreach ($expected as $persona=>$on) {
-        if($persona!=='school')$on[]='Intelligence';if(in_array($persona,['employee','freelancer','business'],true))$on[]='WorkRoles';
+        $on[]='Intelligence';if(in_array($persona,['employee','freelancer','business'],true))$on[]='WorkRoles';
         PersonaService::apply($persona,'si'); $profile=PersonaService::profile();
         persona_check($profile['persona']===$persona && $profile['locale']==='si' && $profile['dashboard_layout']===$layouts[$persona] && $profile['name']==='Legacy caller','Persona identity, locale and dashboard choice are saved: '.$persona);
         foreach (PersonaService::catalog() as $module) persona_check(PersonaService::enabled($module['id'])===in_array($module['id'],array_merge($required,$on),true),'Relevant modules selected for '.$persona.': '.$module['id']);
         persona_check(count(Db::all('SELECT * FROM local_profiles'))===1 && count(Db::all('SELECT * FROM modules'))===count(PersonaService::catalog()),'Persona switching updates current profile instead of creating duplicates: '.$persona);
     }
     foreach ($personalCounts as $table=>$count) persona_check((int)Db::one('SELECT COUNT(*) n FROM '.$table)['n']===$count,'Persona defaults do not invent or delete personal records: '.$table);
-    foreach (['hnd'=>'uni','grade_11'=>'school','software_engineer'=>'employee'] as $pack=>$persona) { PersonaService::apply($persona,'ta',$pack); persona_check(PersonaService::profile()['template']===$pack && LocaleService::language()==='ta','Matching starter pack persists: '.$pack); }
+    foreach (['hnd'=>'uni','software_engineer'=>'employee'] as $pack=>$persona) { PersonaService::apply($persona,'ta',$pack); persona_check(PersonaService::profile()['template']===$pack && LocaleService::language()==='ta','Matching starter pack persists: '.$pack); }
+    persona_check(!PersonaService::enabled('School') && !class_exists('SchoolService'),'Retired School module cannot load or run');
+    persona_check(!in_array('School',array_column(PersonaService::catalog(),'id'),true),'Retired schema is absent from module settings');
+    persona_rejects(fn()=>PersonaService::apply('school'),'Removed School role rejected');
+    persona_rejects(fn()=>TemplatePackService::install('grade_11'),'Removed Grade 11 starter pack rejected');
     $before=persona_snapshot();
     persona_rejects(fn()=>PersonaService::apply('employee','en','hnd'),'Mismatched starter pack rejected');
     persona_check(persona_snapshot()===$before,'Mismatched pack leaves profile, modules and language unchanged');
@@ -73,10 +76,7 @@ try {
     foreach([
         [['uni'],['Uni','StudyTools','Salary'],['School','Employee','WorkRoles']],
         [['employee'],['Employee','Work','WorkRoles'],['Uni','StudyTools','School']],
-        [['school'],['School','Focus','Growth'],['Uni','Employee','Salary','Work']],
         [['uni','employee'],['Uni','StudyTools','Employee','Work','WorkRoles'],['School']],
-        [['school','uni'],['School','Uni','StudyTools'],['Employee','WorkRoles']],
-        [['school','uni','employee'],['School','Uni','Employee','WorkRoles'],[]],
     ]as [$roles,$enabledRoles,$disabledRoles]) {
         PersonaService::apply($roles,'en');$stored=PersonaService::selectedRoles();$expectedRoles=$roles;sort($expectedRoles);
         persona_check($stored===$expectedRoles,'Every selected role is stored: '.implode('+',$roles));
@@ -126,6 +126,11 @@ try {
     $upgrade->exec(file_get_contents(ROOT.'/app/Core/migrations/007_workspace_roles.sql'));
     persona_check($upgrade->query('SELECT role FROM profile_roles ORDER BY role')->fetchAll(PDO::FETCH_COLUMN)===['employee','school','uni'],'Role migration carries existing single selections forward and leaves custom installations unclassified');
     persona_check($priorProfiles===$upgrade->query('SELECT * FROM local_profiles ORDER BY id')->fetchAll(PDO::FETCH_ASSOC)&&$priorModules===$upgrade->query('SELECT * FROM modules')->fetchAll(PDO::FETCH_ASSOC),'Role migration preserves saved profile fields and module choices exactly');
+    $upgrade->exec("CREATE TABLE school_records(id INTEGER PRIMARY KEY,data TEXT); INSERT INTO school_records(data) VALUES ('preserved homework'); INSERT INTO modules(profile_id,module_id,enabled,sort_order) VALUES ('school','School',1,24)");
+    $upgrade->exec(file_get_contents(ROOT.'/app/Core/migrations/008_retire_school.sql'));
+    persona_check($upgrade->query("SELECT COUNT(*) FROM profile_roles WHERE role='school'")->fetchColumn()==0 && $upgrade->query("SELECT persona FROM local_profiles WHERE id='school'")->fetchColumn()==='custom','School-only profiles retire to a valid generic workspace');
+    persona_check($upgrade->query("SELECT enabled FROM modules WHERE module_id='School'")->fetchColumn()==0 && $upgrade->query('SELECT data FROM school_records')->fetchColumn()==='preserved homework','Retirement disables School without deleting existing records');
+    persona_check($upgrade->query("SELECT enabled FROM modules WHERE module_id='Employee'")->fetchColumn()==1,'Retirement preserves unrelated module preferences');
 } finally {
     Db::close(); foreach ([$file,$file.'-wal',$file.'-shm'] as $temporary) if (is_file($temporary)) unlink($temporary);
     foreach ($oldMigrations as $migration) if (is_file($directory.'/Core/migrations/'.$migration)) unlink($directory.'/Core/migrations/'.$migration);

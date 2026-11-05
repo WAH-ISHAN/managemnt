@@ -129,3 +129,5 @@ node tests/ui_lifecycle.cjs
 ---
 
 LifeOS කියන්නේ ඔබ දාපු තොරතුරු පිළිවෙළට තියාගන්න පුද්ගලික මෙවලමක්. අධ්‍යාපන, ආයෝජන, බදු, ණය හෝ වෙනත් වෘත්තීය තීරණ සඳහා අවශ්‍ය නම් අදාළ පුද්ගලයාගෙන් වෘත්තීය උපදෙස් ලබාගෙන, app එකට ඇතුළත් කරලා තියෙන තොරතුරු නිවැරදිද කියලා ඔබම පරීක්ෂා කරන්න.
+
+School module එක ඉවත් කර ඇත. School role, Grade 11 starter pack, homework, school timetable, rewards, parent school reports සහ school screen-time workflows තවදුරටත් නොමැත. පැරණි records මකා නොදමයි; migrations upgrade compatibility සඳහා පමණක් තබා ඇත. University tools සහ profile/PIN controls පවතී.

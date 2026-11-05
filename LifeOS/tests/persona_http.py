@@ -104,8 +104,9 @@ with tempfile.TemporaryDirectory(prefix='lifeos-persona-http-') as temporary:
             check(ready, 'Disposable PHP server starts')
             code, page, _, _ = request('/welcome')
             check(code == 200, 'Fresh persona onboarding renders')
-            for persona in ['employee', 'uni', 'school', 'freelancer', 'business', 'job_seeker']:
+            for persona in ['employee', 'uni', 'freelancer', 'business', 'job_seeker']:
                 check(f'value="{persona}"'.encode() in page, f'Onboarding offers {persona}')
+            check(b'value="school"' not in page and b'value="grade_11"' not in page, 'School role and starter pack are absent')
             token = csrf(page)
             for invalid in [{}, {'roles':'uni'}, {'roles[]':['uni','unknown']}]:
                 malformed={'_csrf':token,'name':'Invalid setup','institution':'','locale':'en','template':'',**invalid}
@@ -114,6 +115,8 @@ with tempfile.TemporaryDirectory(prefix='lifeos-persona-http-') as temporary:
                       'persona': 'employee', 'locale': 'en', 'template': 'software_engineer'}
             code, page, _, url = request('/welcome', fields)
             check(code == 200 and not url.endswith('/welcome'), 'Employee onboarding creates a workspace')
+            for removed in ['/school', '/school/report', '/family', '/profiles/child/default/school']:
+                check(request(removed)[0] == 404, f'Removed School route returns 404: {removed}')
             db = sqlite3.connect(data / 'lifeos.db')
             db.row_factory = sqlite3.Row
             profile = db.execute('SELECT * FROM local_profiles WHERE id=?', ('default',)).fetchone()

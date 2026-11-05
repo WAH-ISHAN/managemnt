@@ -1,5 +1,5 @@
 <div class="dashboard-home">
-<nav class="tabs" aria-label="<?= e(t('Your workspace tools')) ?>"><?php foreach(['Employee'=>['/employee','Employee workspace'],'StudyTools'=>['/study','University study tools'],'School'=>['/school','School & family']]as $module=>[$route,$label]):if(!module_enabled($module))continue; ?><a href="<?= e($route) ?>"><?= e(t($label)) ?></a><?php endforeach; ?></nav>
+<nav class="tabs" aria-label="<?= e(t('Your workspace tools')) ?>"><?php foreach(['Employee'=>['/employee','Employee workspace'],'StudyTools'=>['/study','University study tools']]as $module=>[$route,$label]):if(!module_enabled($module))continue; ?><a href="<?= e($route) ?>"><?= e(t($label)) ?></a><?php endforeach; ?></nav>
 <header class="page-header dashboard-header">
     <div>
         <p class="dashboard-date"><?= e(ui_date('l, j F Y')) ?><?= $name ? ' | '.e($name) : '' ?></p>
@@ -53,9 +53,9 @@
 <?php endif; ?>
 </div>
 
-<details class="dashboard-details"><summary><?= e(t(module_enabled('Uni')||module_enabled('School')?'Study, goals & reviews':'Focus, goals & reviews')) ?> <span><?= e(t('Open your longer-term progress')) ?></span></summary><div class="two-col dashboard-secondary">
+<details class="dashboard-details"><summary><?= e(t(module_enabled('Uni')?'Study, goals & reviews':'Focus, goals & reviews')) ?> <span><?= e(t('Open your longer-term progress')) ?></span></summary><div class="two-col dashboard-secondary">
     <?php if ($hasUni || $hasFocus): ?><section class="card">
-        <div class="section-heading"><h2><?= e(t($hasUni||module_enabled('School')?'Study':'Focus')) ?></h2><?php if ($hasUni): ?><a href="/uni"><?= e(t('Open University →')) ?></a><?php endif; ?></div>
+        <div class="section-heading"><h2><?= e(t($hasUni?'Study':'Focus')) ?></h2><?php if ($hasUni): ?><a href="/uni"><?= e(t('Open University →')) ?></a><?php endif; ?></div>
         <dl class="dashboard-summary">
             <?php if ($hasUni): ?><div><dt><?= e(t('University GPA')) ?></dt><dd><?= $gpa===null ? ui_markup('<span class="muted">No data yet</span>') : e(number_format($gpa,2)) ?></dd></div><?php endif; ?>
             <div><dt><?= e(t('Focus this month')) ?></dt><dd><?= ($lifeSummary['focus_minutes'] ?? 0)>0 ? e($lifeSummary['focus_minutes']).' min' : ui_markup('<span class="muted">No sessions yet</span>') ?></dd></div>

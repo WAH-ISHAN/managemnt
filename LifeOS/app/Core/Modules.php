@@ -20,6 +20,7 @@ final class Modules {
     public static function register(array $modules, Router $r): void {
         $services = [];
         foreach ($modules as $m) {
+            if (!empty($m['retired'])) continue;
             $files = [];
             foreach (glob($m['path'] . '/src/*.php') ?: [] as $file) {
                 $files[basename($file)] = $file;
@@ -42,6 +43,6 @@ final class Modules {
             });
             self::$autoloadRegistered = true;
         }
-        foreach ($modules as $m) if (is_file($m['path'] . '/routes.php')) (require $m['path'] . '/routes.php')($r);
+        foreach ($modules as $m) if (empty($m['retired']) && is_file($m['path'] . '/routes.php')) (require $m['path'] . '/routes.php')($r);
     }
 }

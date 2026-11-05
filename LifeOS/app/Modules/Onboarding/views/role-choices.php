@@ -1,7 +1,6 @@
 <?php
 $selectedRoles??=[];
 $roleFeatures=[
-    'school'=>['Subjects and homework','School timetable and exams','Revision and learning goals'],
     'uni'=>['Modules, assignments and GPA','Lectures and study planning','Student budget and career preparation'],
     'employee'=>['Work priorities and projects','Work hours and responsibilities','Salary and personal finances'],
     'freelancer'=>['Client projects and deadlines','Income and expenses','Documents and websites'],

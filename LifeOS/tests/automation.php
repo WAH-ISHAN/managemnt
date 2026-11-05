@@ -95,9 +95,10 @@ try {
     automation_rejects(function () use ($router): void { ob_start(); try { $router->dispatch('POST','/automation/rules'); } finally { ob_end_clean(); } },'Builder rejects duplicate action types');
     automation_check(AutomationService::rule($multi)===$edited,'Rejected builder update preserves the complete saved rule');
     if (class_exists('PersonaService')) {
-        PersonaService::apply('school');
-        // School persona keeps Planner enabled and turns Salary off.
-        $after=AutomationService::save(null,'School weekly','weekly',['time'=>'18:00','weekdays'=>[7]],[['type'=>'weekly_report']],true);
+        PersonaService::apply('uni');
+        Db::run("UPDATE modules SET enabled=0 WHERE profile_id='default' AND module_id='Salary'");
+        // Explicitly disable Money while retaining Planner and routine execution.
+        $after=AutomationService::save(null,'Study weekly','weekly',['time'=>'18:00','weekdays'=>[7]],[['type'=>'weekly_report']],true);
         AutomationService::tick($now->modify('+7 days')->setTime(18,0));
         $school=AutomationService::reportById((int)Db::one('SELECT id FROM automation_reports ORDER BY id DESC LIMIT 1')['id']);
         automation_check($school['summary']['income']===null && $school['summary']['expenses']===null,'Disabled money module is excluded from reports');
