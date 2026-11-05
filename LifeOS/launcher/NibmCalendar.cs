@@ -228,7 +228,7 @@ internal sealed class NibmCalendarWindow : Form
 
     internal NibmCalendarWindow()
     {
-        Text = "NIBM calendar — Sign in securely";
+        Text = NativeLocale.Text("NIBM calendar — Sign in securely");
         Width = 1160; Height = 800; MinimumSize = new Size(720, 600);
         StartPosition = FormStartPosition.CenterParent;
         Controls.Add(portal);

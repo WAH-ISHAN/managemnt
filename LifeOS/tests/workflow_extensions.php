@@ -1,0 +1,83 @@
+<?php
+declare(strict_types=1);
+require __DIR__.'/bootstrap.php';
+$dir=sys_get_temp_dir().'/lifeos-extension-'.bin2hex(random_bytes(6));mkdir($dir,0700);define('DATA',$dir);
+Db::init(':memory:');Migrator::run(array_merge([ROOT.'/app/Core/migrations'],array_map(fn($m)=>$m['path'].'/migrations',Modules::discover(ROOT.'/app/Modules'))));
+$checks=0;
+function xcheck(bool $ok,string $label):void{global $checks;if(!$ok)throw new RuntimeException($label);$checks++;}
+function xreject(callable $fn,string $label):void{try{$fn();}catch(InvalidArgumentException){xcheck(true,$label);return;}throw new RuntimeException($label);}
+function completeJob(OpenCodeCliProvider $provider,string $id,array $actions):array{$job=$provider->result($id);$job['status']='complete';$job['answer']=json_encode(['answer'=>'Reviewed summary','actions'=>$actions],JSON_THROW_ON_ERROR);file_put_contents(OpenCodeCliProvider::directory().'/jobs/'.$id.'.json',json_encode($job,JSON_THROW_ON_ERROR));return $job;}
+try{
+ $now=new DateTimeImmutable('2026-11-08 07:00:00',new DateTimeZone('Asia/Colombo'));
+ $action=[['type'=>'notify','title'=>'Same reminder','body'=>'Same body']];
+ $first=AutomationService::save(null,'First','daily',['time'=>'07:00'],$action,true);$second=AutomationService::save(null,'Second','daily',['time'=>'07:00'],$action,true);
+ xcheck(AutomationService::tick($now)['ran']===2,'Both rules claim their schedule slots');
+ xcheck((int)Db::one('SELECT COUNT(*) n FROM automation_messages')['n']===1,'Identical cross-rule effects produce one message');
+ xcheck(AutomationService::tick($now)['ran']===0,'Repeated tick does not duplicate effects');
+ AutomationService::toggle($first,false);AutomationService::toggle($second,false);
+ $zone=AutomationService::save(null,'New York','daily',['time'=>'07:00','timezone'=>'America/New_York'],[['type'=>'notify','title'=>'New York','body'=>'Local morning']],true);
+ xcheck(AutomationService::tick(new DateTimeImmutable('2026-11-09T11:59:00Z'))['ran']===0,'Timezone routine waits for local time after DST');
+ xcheck(AutomationService::tick(new DateTimeImmutable('2026-11-09T12:00:00Z'))['ran']===1,'Timezone routine runs at its local wall clock');AutomationService::toggle($zone,false);
+ xreject(fn()=>AutomationService::save(null,'Invalid','daily',['timezone'=>'invalid/zone'],$action),'Invalid timezone rejected');
+ $catch=AutomationService::save(null,'Catch up','daily',['time'=>'07:00','catch_up_days'=>2],[['type'=>'notify','title'=>'Catch up','body'=>'Missed days']],true);
+ Db::run("UPDATE automation_rules SET created_at='2026-11-01 00:00:00' WHERE id=?",[$catch]);
+ xcheck(AutomationService::tick($now)['ran']===3,'Bounded catch-up processes two missed days and today');AutomationService::toggle($catch,false);
+ $retry=AutomationService::save(null,'Retry','daily',['time'=>'07:00','retry_limit'=>1,'retry_minutes'=>5],[['type'=>'notify','title'=>'Retry','body'=>'Recoverable']],true);
+ Db::run("CREATE TRIGGER reject_test_message BEFORE INSERT ON automation_messages WHEN NEW.title='Retry' BEGIN SELECT RAISE(ABORT,'Injected failure'); END");
+ xcheck(AutomationService::tick($now)['failed']===1,'Failure recorded after atomic action rollback');
+ xcheck(AutomationService::tick($now->modify('+4 minutes'))['failed']===0,'Retry waits for its configured delay');Db::run('DROP TRIGGER reject_test_message');
+ xcheck(AutomationService::tick($now->modify('+5 minutes'))['ran']===1,'Failed slot retries after delay');
+ xcheck((int)Db::one('SELECT attempts FROM automation_runs WHERE rule_id=?',[$retry])['attempts']===2,'Retry attempts recorded');AutomationService::toggle($retry,false);
+ $task=PlannerService::saveTask(null,['title'=>'Event task']);
+ $event=AutomationService::save(null,'After task','daily',['event'=>'task_completed'],[['type'=>'notify','title'=>'Well done','body'=>'Choose your next step']],true);
+ Db::run("UPDATE tasks SET status='done' WHERE id=?",[$task]);
+ xcheck(AutomationService::tick()['ran']===1,'Task completion emits a durable event');xcheck(AutomationService::tick()['ran']===0,'Activity processed once');
+ AutomationService::toggle($event,false);Db::run("UPDATE tasks SET status='open' WHERE id=?",[$task]);Db::run("UPDATE tasks SET status='done' WHERE id=?",[$task]);AutomationService::toggle($event,true);
+ xcheck(AutomationService::tick()['ran']===0,'Paused activity history is not replayed when enabled');
+ for($i=0;$i<105;$i++){Db::run("UPDATE tasks SET status='open' WHERE id=?",[$task]);Db::run("UPDATE tasks SET status='done' WHERE id=?",[$task]);}
+ xcheck(AutomationService::tick()['ran']===100&&AutomationService::tick()['ran']===5,'Completed activity pages do not starve newer events');AutomationService::toggle($event,false);
+ $ics="BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:weekly-test\r\nSUMMARY:Weekly\r\nDTSTART;TZID=America/New_York:20261025T090000\r\nDTEND;TZID=America/New_York:20261025T100000\r\nRRULE:FREQ=WEEKLY;COUNT=4\r\nEXDATE;TZID=America/New_York:20261108T090000\r\nEND:VEVENT\r\nEND:VCALENDAR";
+ $events=ConnectivityIcs::preview($ics,'2026-10-01','2026-12-01');xcheck(count($events)===3,'Weekly recurrence excludes EXDATE');
+ xcheck($events[0]['starts_at']==='2026-10-25 18:30'&&$events[1]['starts_at']==='2026-11-01 19:30','Recurrence preserves source wall time across DST');
+ $single=preg_replace('/(?:RRULE|EXDATE)[^\r\n]+\r\n/','',$ics);ConnectivityIcs::import($single,'2026-10-01','2026-12-01');
+ ConnectivityIcs::import($ics,'2026-10-01','2026-12-01');ConnectivityIcs::import($ics,'2026-10-01','2026-12-01');
+ $reviewHash=ConnectivityIcs::reviewHash($ics,'2026-10-01','2026-12-01');Db::run("UPDATE planner_appointments SET notes='Local edit after review' WHERE id=(SELECT appointment_id FROM connectivity_events WHERE provider='ics' LIMIT 1)");
+ xreject(fn()=>ConnectivityIcs::import($ics,'2026-10-01','2026-12-01',$reviewHash),'Calendar edits invalidate an outstanding import review');
+ xcheck((int)Db::one("SELECT COUNT(*) n FROM connectivity_events WHERE provider='ics'")['n']===3,'Recurring imports retain stable identities');
+ $excluded=str_replace('20261108T090000','20261108T090000,20261115T090000',$ics);$preview=ConnectivityIcs::preview($excluded,'2026-10-01','2026-12-01');
+ xcheck(count(array_filter($preview,fn($e)=>$e['status']==='cancelled'))===1,'New exclusions explicitly preview cancellation of existing occurrences');
+ ConnectivityIcs::import($excluded,'2026-10-01','2026-12-01');
+ $override="BEGIN:VEVENT\r\nUID:weekly-test\r\nRECURRENCE-ID;TZID=America/New_York:20261101T090000\r\nDTSTART;TZID=America/New_York:20261102T110000\r\nDTEND;TZID=America/New_York:20261102T120000\r\nSUMMARY:Moved instance\r\nEND:VEVENT\r\n";
+ $moved=ConnectivityIcs::preview(str_replace('END:VCALENDAR',$override.'END:VCALENDAR',$ics),'2026-10-01','2026-12-01');
+ xcheck(count(array_filter($moved,fn($e)=>$e['title']==='Moved instance'&&$e['starts_at']==='2026-11-02 21:30'))===1,'RECURRENCE-ID overrides one instance');
+ $ranged=str_replace('RECURRENCE-ID;TZID','RECURRENCE-ID;RANGE=THISANDFUTURE;TZID',$override);
+ $future=ConnectivityIcs::preview(str_replace('END:VCALENDAR',$ranged.'END:VCALENDAR',$ics),'2026-10-01','2026-12-01');
+ xcheck(count(array_filter($future,fn($e)=>$e['title']==='Moved instance'))===2,'THISANDFUTURE updates subsequent recurrence times and content');
+ $hourly=str_replace(['FREQ=WEEKLY;COUNT=4','EXDATE;TZID=America/New_York:20261108T090000'],['FREQ=HOURLY;COUNT=3',''],$ics);
+ xcheck(count(ConnectivityIcs::preview($hourly,'2026-10-25','2026-10-25'))===3,'Bounded subdaily recurrence expands');
+ $monthly=str_replace(['FREQ=WEEKLY;COUNT=4','EXDATE;TZID=America/New_York:20261108T090000'],['FREQ=MONTHLY;COUNT=3;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1',''],$ics);
+ xcheck(count(ConnectivityIcs::preview($monthly,'2026-10-01','2027-02-01'))>=3,'Monthly ordinal weekday rules expand');
+ xreject(fn()=>ConnectivityIcs::preview($ics,'2026-01-01','2030-01-01'),'Unbounded import ranges rejected');
+ $allDay="BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:all-day-series\nSUMMARY:All-day\nDTSTART;VALUE=DATE:20261101\nDTEND;VALUE=DATE:20261103\nRRULE:FREQ=DAILY;COUNT=3\nRDATE;VALUE=DATE:20261110\nEXDATE;VALUE=DATE:20261102\nEND:VEVENT\nEND:VCALENDAR";
+ $allDays=ConnectivityIcs::preview($allDay,'2026-11-01','2026-11-30');xcheck(count($allDays)===3&&$allDays[2]['starts_at']==='2026-11-10 00:00'&&$allDays[2]['ends_at']==='2026-11-12 00:00'&&$allDays[2]['all_day']===1,'All-day recurrence preserves duration, RDATE and exclusions');
+ xreject(fn()=>ConnectivityIcs::preview(str_replace('END:VCALENDAR','',$allDay),'2026-11-01','2026-11-30'),'Malformed recurring envelope rejected');
+ $provider=new OpenCodeCliProvider();$source=IntelligenceService::source('note','We agreed to send the design after lunch.');
+ $jobId=$provider->understand(IntelligenceService::sourceRow($source)['body'],'notes',$source);$queued=$provider->result($jobId);
+ xcheck(!isset($queued['context']['open_tasks'])&&$queued['workflow']['source']===$source,'Only selected source is queued without sharing task records');
+ $job=completeJob($provider,$jobId,[['action'=>'add_task','title'=>'Send the design','due'=>null],['action'=>'bash','command'=>'bad']]);
+ xcheck(count(OpenCodeCliProvider::proposals($job))===1,'Untrusted AI actions are allowlisted');
+ $before=(int)Db::one('SELECT COUNT(*) n FROM tasks')['n'];$provider->apply($jobId,0,['title'=>'Reviewed design task']);
+ xcheck((int)Db::one('SELECT COUNT(*) n FROM tasks')['n']===$before+1&&Db::one('SELECT source_id FROM intelligence_task_links WHERE source_id=?',[$source])!==null,'Confirmed summary task keeps its source link');
+ xreject(fn()=>$provider->apply($jobId,0,[]),'Duplicate AI confirmation rejected');
+ $stale=$provider->understand('Selected note','notes',$source);completeJob($provider,$stale,[['action'=>'add_task','title'=>'Stale proposal','due'=>null]]);Db::run('UPDATE intelligence_sources SET body=? WHERE id=?',['Changed note',$source]);
+ xreject(fn()=>$provider->apply($stale,0,[]),'Changed note invalidates AI proposals');
+ $moveTask=PlannerService::saveTask(null,['title'=>'Move me','due'=>'2026-11-10']);$move=$provider->understand('Move this task to next Friday','capture',null,true);$moveJob=completeJob($provider,$move,[['action'=>'move_task','task_id'=>$moveTask,'due'=>'2026-11-13'],['action'=>'move_task','task_id'=>999999,'due'=>'2026-11-13']]);
+ xcheck(count(OpenCodeCliProvider::proposals($moveJob))===1,'AI may move only deliberately shared tasks');$provider->apply($move,0,[]);
+ xcheck(PlannerService::task($moveTask)['due']==='2026-11-13','Confirmed AI move uses guarded move preview');$draft=Db::one("SELECT id FROM intelligence_drafts WHERE kind='move' ORDER BY id DESC LIMIT 1");IntelligenceService::undo((int)$draft['id']);xcheck(PlannerService::task($moveTask)['due']==='2026-11-10','AI move can be undone');
+ $staleMove=$provider->understand('Move that task','capture',null,true);completeJob($provider,$staleMove,[['action'=>'move_task','task_id'=>$moveTask,'due'=>'2026-11-20']]);Db::run('UPDATE tasks SET deadline=? WHERE id=?',['2026-11-30',$moveTask]);xreject(fn()=>$provider->apply($staleMove,0,[]),'Changed task constraints invalidate AI move preview');
+ foreach([['Uni','I was distracted by phone notifications'],['Business','Phone distractions interrupted a deadline']]as [$area,$cause])LessonService::add(['area'=>$area,'what_happened'=>'Work was interrupted','root_cause'=>$cause]);
+ $patterns=FailurePatternService::related(date('Y-m-d',strtotime('+1 day')));xcheck((bool)array_filter($patterns,fn($p)=>count($p['areas'])===2&&count($p['evidence'])===2),'Related failure themes show cross-area evidence');
+ xcheck(Db::all('PRAGMA foreign_key_check')===[],'Extension workflows retain reference integrity');
+ xreject(fn()=>$provider->understand(str_repeat('😀',20000),'capture'),'Oversized UTF-8 context is rejected before queueing instead of creating an unreadable result');
+ echo $checks." workflow extension checks passed.\n";
+}finally{Db::close();foreach(glob($dir.'/ai/jobs/*')?:[]as $f)unlink($f);foreach(glob($dir.'/ai/*')?:[]as $f)if(is_file($f))unlink($f);if(is_dir($dir.'/ai/jobs'))rmdir($dir.'/ai/jobs');if(is_dir($dir.'/ai'))rmdir($dir.'/ai');rmdir($dir);}

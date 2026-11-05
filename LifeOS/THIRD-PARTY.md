@@ -1,5 +1,7 @@
 # Bundled dependencies
 
+- php-rrule 3.0.0 — MIT, Rémi Lanvin. Pinned upstream source (93a083db12dcb6f58e4840392a22e158ce96f1ff) and license in `app/Core/libraries/rrule`. Source: https://github.com/rlanvin/php-rrule/tree/v3.0.0 . Used locally for RFC5545 recurrence expansion; no upstream development dependencies or runtime downloads.
+
 All browser dependencies are served from `public/assets`; the app makes no external requests.
 
 - htmx 2.0.4 — Zero-Clause BSD. Source and license: https://github.com/bigskysoftware/htmx/tree/v2.0.4

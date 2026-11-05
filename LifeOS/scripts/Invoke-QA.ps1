@@ -139,6 +139,9 @@ try {
             Invoke-QaStage $extensionName { Invoke-CheckedNative $pythonCommand @('tests/'+$extensionName+'.py') }
         }
         Invoke-QaStage 'extensions-ui' { Invoke-CheckedNative $pythonCommand @('tests/extensions_ui.py') }
+        Invoke-QaStage 'localization-source-coverage' { Invoke-CheckedNative $pythonCommand @('scripts/audit_localization.py') }
+        Invoke-QaStage 'workflow-extensions' { Invoke-CheckedNative $phpCommand @('tests/workflow_extensions.php') }
+        Invoke-QaStage 'workflow-extensions-ui' { Invoke-CheckedNative $pythonCommand @('tests/workflow_extensions_ui.py') }
         Invoke-QaStage 'roles-ai-ui' { Invoke-CheckedNative $pythonCommand @('tests/roles_ai_ui.py') }
         Invoke-QaStage 'voice-recording-ui' { Invoke-CheckedNative $pythonCommand @('tests/voice_recording_ui.py') }
         Invoke-QaStage 'calendar-completion-ui' { Invoke-CheckedNative $pythonCommand @('tests/calendar_completion_ui.py') }

@@ -19,5 +19,5 @@
 <?php if($error=($deliveryError?:Db::setting('workspace_exchange_error'))): ?><p class="error-text" role="status"><?= e($error) ?></p><?php endif; ?>
 <h3><?= e(t('Received workspaces')) ?></h3>
 <?php if(!$received): ?><p><?= e(t('No received snapshots in the selected shared folder.')) ?></p><?php endif; ?>
-<?php foreach($received as $item): ?><article class="lesson-entry"><p><strong><?= e($item['peer']) ?></strong> · <?= e(number_format($item['bytes']/1048576,1)) ?> MiB</p><form method="post" action="/platform/workspace/preview" hx-boost="false"><?= csrf_field() ?><input type="hidden" name="file" value="<?= e($item['file']) ?>"><button class="secondary"><?= e(t('Review received workspace')) ?></button></form></article><?php endforeach; ?>
+<?php foreach($received as $item): ?><article class="lesson-entry"><p><strong><?= e($item['peer']) ?></strong> · <?= e(number_format($item['bytes']/1048576,1)) ?> <?= e(t('MiB')) ?></p><form method="post" action="/platform/workspace/preview" hx-boost="false"><?= csrf_field() ?><input type="hidden" name="file" value="<?= e($item['file']) ?>"><button class="secondary"><?= e(t('Review received workspace')) ?></button></form></article><?php endforeach; ?>
 </section>

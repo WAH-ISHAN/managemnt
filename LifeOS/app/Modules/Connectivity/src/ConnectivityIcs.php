@@ -18,8 +18,10 @@ final class ConnectivityIcs {
         if (!$d || ($errors && ($errors['warning_count'] || $errors['error_count']))) throw new InvalidArgumentException(t('Calendar contains an invalid date.'));
         return $d->setTimezone(new DateTimeZone('Asia/Colombo'))->format('Y-m-d H:i');
     }
-    public static function preview(string $ics): array {
+    public static function preview(string $ics,?string $from=null,?string $until=null): array {
         if (strlen($ics)>2*1024*1024 || str_contains($ics,"\0")) throw new InvalidArgumentException(t('Choose a calendar smaller than 2 MiB.'));
+        if (!str_contains($ics,'BEGIN:VCALENDAR') || !str_contains($ics,'END:VCALENDAR')) throw new InvalidArgumentException(t('Choose a valid ICS calendar.'));
+        $ics=ConnectivityRecurrence::expand($ics,$from,$until);
         $ics=preg_replace('/\r?\n[ \t]/','',$ics);
         if (!str_contains($ics,'BEGIN:VCALENDAR') || !str_contains($ics,'END:VCALENDAR')) throw new InvalidArgumentException(t('Choose a valid ICS calendar.'));
         $events=[]; $event=null;
@@ -35,6 +37,9 @@ final class ConnectivityIcs {
                 if (count($events)>=500) throw new InvalidArgumentException(t('Import at most 500 events at a time.'));
                 $row=['uid'=>PlannerService::title($event['UID'][0],500),'title'=>PlannerService::title(self::unescape($event['SUMMARY'][0])),'starts_at'=>self::date(...$event['DTSTART']),'ends_at'=>self::date(...$event['DTEND']),'location'=>mb_substr(self::unescape($event['LOCATION'][0] ?? ''),0,200),'notes'=>mb_substr(self::unescape($event['DESCRIPTION'][0] ?? ''),0,2000),'status'=>($event['STATUS'][0] ?? '')==='CANCELLED' ? 'cancelled' : 'scheduled','all_day'=>$allDay ? 1 : 0];
                 if ($row['ends_at']<=$row['starts_at']) throw new InvalidArgumentException(t('Event end must follow its start.'));
+                $row['series_uid']=$event['X-LIFEOS-SERIES'][0] ?? null;
+                $row['occurrence_at']=$event['X-LIFEOS-OCCURRENCE'][0] ?? null;
+                if($row['series_uid']!==null && (!preg_match('/^[a-f0-9]{64}$/D',$row['series_uid']) || !preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D',(string)$row['occurrence_at'])))throw new InvalidArgumentException(t('Invalid recurring instance metadata.'));
                 $events[]=$row; $event=null; continue;
             }
             if ($event===null || !str_contains($line,':')) continue;
@@ -48,9 +53,18 @@ final class ConnectivityIcs {
         if (count(array_unique(array_column($events,'uid')))!==count($events)) throw new InvalidArgumentException(t('Duplicate calendar UIDs in this import.'));
         return $events;
     }
-    public static function import(string $ics): int {
-        $events=self::preview($ics);
-        return Db::tx(function () use ($events) {
+    public static function reviewHash(string $ics,?string $from=null,?string $until=null): string {
+        $rows=self::preview($ics,$from,$until);$current=[];
+        foreach($rows as $row)$current[]=Db::one("SELECT c.appointment_id,p.* FROM connectivity_events c JOIN planner_appointments p ON p.id=c.appointment_id WHERE c.provider='ics' AND c.remote_id=?",[$row['uid']]);
+        return hash('sha256',json_encode([$rows,$current],JSON_THROW_ON_ERROR));
+    }
+    public static function import(string $ics,?string $from=null,?string $until=null,?string $expectedHash=null): int {
+        $events=self::preview($ics,$from,$until);
+        return Db::tx(function () use ($events,$ics,$from,$until,$expectedHash) {
+            // Claim SQLite's writer before checking the reviewed local state.
+            Db::run("UPDATE connectivity_events SET local_hash=local_hash WHERE provider='ics'");
+            if($expectedHash!==null&&!hash_equals($expectedHash,self::reviewHash($ics,$from,$until)))throw new InvalidArgumentException(t('The calendar changed after review. Preview it again.'));
+            $events=self::preview($ics,$from,$until);
             $count=0;
             foreach ($events as $row) {
                 $link=Db::one("SELECT * FROM connectivity_events WHERE provider='ics' AND remote_id=?",[$row['uid']]);
@@ -58,6 +72,7 @@ final class ConnectivityIcs {
                 $id=PlannerService::saveAppointment($link['appointment_id'] ?? null,$row);
                 $hash=hash('sha256',json_encode($row));
                 Db::run("INSERT INTO connectivity_events(provider,remote_id,appointment_id,local_hash) VALUES ('ics',?,?,?) ON CONFLICT(provider,remote_id) DO UPDATE SET appointment_id=excluded.appointment_id,local_hash=excluded.local_hash",[$row['uid'],$id,$hash]);
+                Db::run("UPDATE connectivity_events SET series_uid=?,occurrence_at=? WHERE provider='ics' AND remote_id=?",[$row['series_uid'],$row['occurrence_at'],$row['uid']]);
                 $count++;
             }
             return $count;

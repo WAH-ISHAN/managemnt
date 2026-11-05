@@ -205,6 +205,7 @@ internal sealed partial class LifeWindow : Form
                 if(navigation.IsSuccess) { startupPageReady=true; startupWelcome?.Ready(); }
                 if (IsDisposed) return;
                 try {
+                    await RefreshNativeLocaleAsync();
                     bool ready=await web.CoreWebView2.ExecuteScriptAsync("!!document.getElementById('desktop-titlebar')")=="true";
                     if (!IsDisposed) SetCustomChrome(ready);
                     appReady=ready;if(ready&&pendingQuickCapture)ShowQuickCapture();if(ready&&pendingAssistant)ShowAssistantPanel();if(ready&&pendingPanelToggle){pendingPanelToggle=false;ToggleDesktopPanel();}if(ready)WriteResidentState();

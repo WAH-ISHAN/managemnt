@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 return function (Router $r): void {
+    $r->post('/intelligence/understand',function(){
+        $source=optional_id($_POST['source'] ?? '');
+        if($source!==null){if(($_POST['share_source'] ?? '')!=='yes')throw new InvalidArgumentException(t('Choose to share this selected text before sending.'));$text=IntelligenceService::sourceRow($source)['body'];}
+        else $text=text_input('text',20000);
+        $id=(new OpenCodeCliProvider())->understand($text,$source!==null?'notes':'capture',$source,($_POST['share_tasks'] ?? '')==='yes');
+        return redirect('/intelligence/understand/'.$id);
+    });
+    $r->get('/intelligence/understand/{id}',function($p){$job=(new OpenCodeCliProvider())->result($p['id']);if(!isset($job['workflow']))throw new InvalidArgumentException(t('Assistant review not found.'));return View::render(__DIR__.'/views/understand.php',['title'=>t('Review with LifeOS AI'),'job'=>$job]);});
+    $r->post('/intelligence/understand/{id}/apply',function($p){$provider=new OpenCodeCliProvider();$job=$provider->result($p['id']);if(!isset($job['workflow']))throw new InvalidArgumentException(t('Assistant review not found.'));$provider->apply($p['id'],int_range($_POST['index'] ?? '',0,4),$_POST);return redirect('/intelligence/understand/'.$p['id'],t('Reviewed action applied.'));});
     $r->get('/account/ai',fn()=>View::render(__DIR__.'/views/account.php',['title'=>'Your AI account'],'lock'));
     $r->get('/account/ai/state',function(){header('Content-Type: application/json; charset=utf-8');return json_encode(AiAccountService::state(),JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);});
     $r->post('/account/ai/{action}',function($p){

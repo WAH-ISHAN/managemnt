@@ -28,7 +28,7 @@ return function (Router $r): void {
             if ($action['type']==='notify') $action+=['title'=>text_input('title',150),'body'=>text_input('body',1000)];
             $actions=[$action];
         }
-        AutomationService::save(optional_id($_POST['id'] ?? ''),text_input('name',150),text_input('trigger',20),['time'=>text_input('time',5),'weekdays'=>$days,'min_open_tasks'=>$_POST['min_open_tasks'] ?? 0],$actions,isset($_POST['enabled']));
+        AutomationService::save(optional_id($_POST['id'] ?? ''),text_input('name',150),text_input('trigger',20),['time'=>text_input('time',5),'weekdays'=>$days,'min_open_tasks'=>$_POST['min_open_tasks'] ?? 0,'timezone'=>$_POST['timezone'] ?? 'Asia/Colombo','event'=>$_POST['event'] ?? '','catch_up_days'=>$_POST['catch_up_days'] ?? 0,'retry_limit'=>$_POST['retry_limit'] ?? 0,'retry_minutes'=>$_POST['retry_minutes'] ?? 5],$actions,isset($_POST['enabled']));
         return redirect('/automation','Automation saved.');
     });
     $r->post('/automation/templates',function (): string { AutomationService::install(text_input('template',30)); return redirect('/automation','Automation enabled. Existing schedule and action edits are kept; repeated clicks add no duplicate routine.'); });

@@ -55,7 +55,7 @@ internal sealed partial class LifeWindow
         } catch(Exception error) {
             LogStartup("profile-switch",error);
             allowExitForMaintenance=true;
-            MessageBox.Show(this,"The workspace browser could not reopen. Restart LifeOS. Your records are preserved.","LifeOS",MessageBoxButtons.OK,MessageBoxIcon.Error);
+            MessageBox.Show(this,NativeLocale.Text("The workspace browser could not reopen. Restart LifeOS. Your records are preserved."),"LifeOS",MessageBoxButtons.OK,MessageBoxIcon.Error);
             Close(); return true;
         } finally { switchingBrowser=false;if(platformLockPending)QueuePlatformLock(); }
     }

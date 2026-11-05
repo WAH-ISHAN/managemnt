@@ -4,7 +4,7 @@ declare(strict_types=1);
 final class TrendService {
     public static function summarize(string $month): array {
         valid_month($month); $start=$month.'-01'; $end=(new DateTimeImmutable($start))->modify('+1 month')->format('Y-m-d'); $previous=(new DateTimeImmutable($start))->modify('-1 month')->format('Y-m-d');
-        $out=['period'=>[$start,$end],'spending'=>null,'habits'=>[],'patterns'=>[],'overload'=>[]];
+        $out=['period'=>[$start,$end],'spending'=>null,'habits'=>[],'patterns'=>[],'related_patterns'=>[],'overload'=>[]];
         if (module_enabled('Salary')) {
             $current=Db::one('SELECT COUNT(*) n,COALESCE(SUM(amount),0) total,COUNT(DISTINCT date) days FROM expenses WHERE date>=? AND date<?',[$start,$end]);
             $prior=Db::one('SELECT COUNT(*) n,COALESCE(SUM(amount),0) total,COUNT(DISTINCT date) days FROM expenses WHERE date>=? AND date<?',[$previous,$start]);
@@ -20,6 +20,7 @@ final class TrendService {
             $h['comparable']=$previous>=$created && $end<=date('Y-m-d'); $out['habits'][]=$h;
         }
         if (module_enabled('Lessons')) {
+            $out['related_patterns']=FailurePatternService::related($end);
             // Exact normalized causes avoid presenting speculative correlations as discoveries.
             $groups=[];
             foreach (Db::all("SELECT id,area,root_cause,created_at FROM lessons WHERE created_at>=datetime(?,'-90 days') AND created_at<datetime(?) AND trim(COALESCE(root_cause,''))!='' ORDER BY created_at",[$end,$end]) as $row) {

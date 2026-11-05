@@ -29,7 +29,7 @@ internal sealed class DesktopPanelWindow : Form
     {
         this.home=home; this.environment=environment; this.profile=profile;
         FormBorderStyle=FormBorderStyle.None; Padding=Padding.Empty; MinimumSize=new Size(320,360); ShowInTaskbar=false; TopMost=true;
-        Text="LifeOS desktop panel";
+        Text=NativeLocale.Text("LifeOS desktop panel");
         BackColor=Color.Black; Width=420;
         StartPosition=FormStartPosition.Manual;
         LoadLayout();

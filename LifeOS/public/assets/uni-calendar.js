@@ -28,7 +28,7 @@
   });
   if (desktop) window.chrome.webview.addEventListener('message', event => {
     if (event.data?.type!=='lifeos-nibm-state' || typeof event.data.message!=='string') return;
-    status(event.data.message);
+    status(window.lifeosT(event.data.message));
     if (event.data.status==='synced' && location.pathname==='/uni/calendar' && document.getElementById('uni-calendar-events')) {
       window.htmx?.ajax('GET',location.pathname+location.search,{target:'#uni-calendar-events',select:'#uni-calendar-events',swap:'outerHTML'});
     }

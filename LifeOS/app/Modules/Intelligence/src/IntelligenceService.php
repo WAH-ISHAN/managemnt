@@ -80,7 +80,7 @@ final class IntelligenceService {
         if ($due!==null && $task['deadline']!==null && $due>$task['deadline']) throw new InvalidArgumentException(t('The requested due date exceeds the task deadline.'));
         if ($due!==null && Db::one("SELECT 1 FROM planner_blocks WHERE task_id=? AND substr(starts_at,1,10)>?",[$id,$due])) throw new InvalidArgumentException(t('This task has a later scheduled block. Resolve its blocks in Time planning before moving the due date earlier.'));
     }
-    public static function apply(int $id,array $edits=[]): void {
+    public static function apply(int $id,array $edits=[],bool $inTransaction=false): void {
         $draft=self::draft($id); self::available($draft['kind']==='receipt' ? 'Salary' : 'Planner');
         if ($draft['status']!=='preview') throw new InvalidArgumentException(t('This preview has already been handled.'));
         $data=json_decode($draft['payload'],true,32,JSON_THROW_ON_ERROR);
@@ -95,7 +95,7 @@ final class IntelligenceService {
                 if ((int)Db::one('SELECT changes() n')['n']!==1) throw new InvalidArgumentException(t('This receipt source already has a posted expense. Review it in Money before making a correction.'));
             }); return;
         }
-        Db::tx(function () use ($id,$edits): void {
+        $apply=function () use ($id,$edits): void {
             // Acquire SQLite's writer lock before reading the preview or records.
             Db::run("UPDATE intelligence_drafts SET status='applied' WHERE id=? AND status='preview'",[$id]);
             if ((int)Db::one('SELECT changes() n')['n']!==1) throw new InvalidArgumentException(t('This preview has already been handled.'));
@@ -120,7 +120,8 @@ final class IntelligenceService {
                 $result=$data;
             }
             Db::run("UPDATE intelligence_drafts SET status='applied',result=? WHERE id=?",[json_encode($result,JSON_THROW_ON_ERROR),$id]);
-        });
+        };
+        if($inTransaction)$apply();else Db::tx($apply);
     }
     public static function undo(int $id): void {
         $draft=self::draft($id); if ($draft['status']!=='applied' || $draft['kind']!=='move') throw new InvalidArgumentException(t('Only applied task moves can be undone here.')); self::available('Planner');

@@ -39,6 +39,11 @@ internal sealed partial class LifeWindow
             Check(await WaitForExpression("location.pathname==='/'"),"Profile opens authenticated home: "+id);
         }
         try {
+            foreach(string language in new[]{"si","ta"}){
+                NativeLocale.Select(language);
+                Check(NativeLocale.Text("Open LifeOS")!="Open LifeOS","Native captions load selected language: "+language);
+            }
+            NativeLocale.Select("en");
             foreach(var work in new[]{new Rectangle(0,0,1920,1040),new Rectangle(0,0,1366,728),new Rectangle(0,0,800,600),new Rectangle(-1280,0,1280,984)}) {
                 var upper=new Rectangle(work.Right-458,work.Top+18,440,Math.Min(760,work.Height-36));
                 var preferred=new Rectangle(work.Right-468,work.Top+18,450,720);
