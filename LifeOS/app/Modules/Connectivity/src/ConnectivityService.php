@@ -2,11 +2,11 @@
 declare(strict_types=1);
 final class ConnectivityService {
     public static function config(): array {
-        return json_decode(Db::setting('connections_config','{}'),true,32,JSON_THROW_ON_ERROR)+['backup_enabled'=>false,'backup_destination'=>'','backup_time'=>'20:00','backup_keep'=>14,'mail_enabled'=>false,'mail_host'=>'','mail_port'=>993,'mail_user'=>'','mail_folder'=>'INBOX','mail_sender'=>'','mail_subject'=>'[task]','mail_interval'=>15,'python'=>'','tracking_enabled'=>false,'tracking_exclusions'=>'KeePass,1Password,Bitwarden','tracking_retention'=>30,'calendar_enabled'=>false,'calendar_provider'=>'google','calendar_id'=>'primary','calendar_client_id'=>'','calendar_tenant'=>'common','calendar_push'=>false];
+        return json_decode(Db::setting('connections_config','{}'),true,32,JSON_THROW_ON_ERROR)+['backup_enabled'=>false,'backup_destination'=>'','backup_time'=>'20:00','backup_keep'=>14,'mail_enabled'=>false,'mail_host'=>'','mail_port'=>993,'mail_user'=>'','mail_folder'=>'INBOX','mail_sender'=>'','mail_subject'=>'[task]','mail_interval'=>15,'python'=>'','tracking_enabled'=>false,'tracking_exclusions'=>'KeePass,1Password,Bitwarden','tracking_retention'=>30,'calendar_enabled'=>false,'calendar_provider'=>'google','calendar_id'=>'primary','calendar_client_id'=>'','calendar_tenant'=>'common','calendar_push'=>false,'calendar_delete'=>false];
     }
     public static function saveConfig(array $d): void {
         $old=self::config(); $c=$old;
-        foreach (['backup_enabled','mail_enabled','tracking_enabled','calendar_enabled','calendar_push'] as $k) $c[$k]=!empty($d[$k]);
+        foreach (['backup_enabled','mail_enabled','tracking_enabled','calendar_enabled','calendar_push','calendar_delete'] as $k) $c[$k]=!empty($d[$k]);
         foreach (['backup_destination','mail_host','mail_user','mail_folder','mail_sender','mail_subject','python','tracking_exclusions','calendar_id','calendar_client_id','calendar_tenant'] as $k) { $v=$d[$k] ?? ''; if (!is_string($v) || strlen($v)>1000 || preg_match('/[\r\n\x00]/',$v)) throw new InvalidArgumentException(t('Invalid connection setting.')); $c[$k]=trim($v); }
         $c['backup_time']=PlannerService::validTime($d['backup_time'] ?? '20:00');
         foreach (['backup_keep'=>[2,90],'mail_port'=>[1,65535],'mail_interval'=>[5,1440],'tracking_retention'=>[1,365]] as $k=>$bounds) $c[$k]=int_range($d[$k] ?? $old[$k],...$bounds);

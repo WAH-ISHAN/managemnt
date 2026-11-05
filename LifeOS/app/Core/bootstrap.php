@@ -45,7 +45,7 @@ try {
         $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
     }
     header('Cache-Control: no-store'); header('X-Content-Type-Options: nosniff'); header('X-Frame-Options: DENY'); header('Referrer-Policy: same-origin');
-    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     Db::init(DATA . '/lifeos.db'); $mods = Modules::discover(ROOT . '/app/Modules');
     $dirs = array_merge([__DIR__ . '/migrations'],array_map(fn($m)=>$m['path'] . '/migrations',$mods));
     Migrator::run($dirs); View::share('menu',$mods); View::share('title','LifeOS'); View::share('migrationDirs',$dirs);
@@ -59,8 +59,9 @@ try {
         if(LicenseService::config()['required']&&LicenseService::state()['claims']===null){echo json_encode(['ran'=>0,'skipped'=>1,'reason'=>'activation_required']);exit;}
         $result=LicenseService::allowed('connections') && class_exists('AutomationService') && module_enabled('Automation') ? AutomationService::tick() : ['ran'=>0,'skipped'=>1,'failed'=>0];
         if (!ProfileManager::isKid()) {
-            foreach (['PlanningService','ConnectivityService','LifePlanningService'] as $backgroundService) {
-                if(!LicenseService::allowed($backgroundService==='ConnectivityService'?'connections':'planner'))continue;
+            foreach (['PlanningService','ConnectivityService','LifePlanningService','WorkspaceExchange'] as $backgroundService) {
+                if(!LicenseService::allowed(in_array($backgroundService,['ConnectivityService','WorkspaceExchange'],true)?'connections':'planner'))continue;
+                if($backgroundService==='WorkspaceExchange'&&!module_enabled('Platform'))continue;
                 if($backgroundService==='LifePlanningService'&&!module_enabled('LifePlanning'))continue;
                 if (!class_exists($backgroundService) || ($backgroundService==='ConnectivityService' && !module_enabled('Connectivity'))) continue;
                 try { $result[$backgroundService]=$backgroundService::tick(); }

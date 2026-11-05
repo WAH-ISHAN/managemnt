@@ -7,7 +7,6 @@ using Microsoft.Win32;
 // https://learn.microsoft.com/windows/win32/api/dwmapi/nf-dwmapi-dwmextendframeintoclientarea
 internal static class PanelGlass
 {
-    internal const int NativeFrameStyles = 0x00C00000 | 0x00040000; // WS_CAPTION | WS_THICKFRAME
     internal const int NcCalcSizeMessage = 0x0083;
     internal const int CompositionChangedMessage = 0x031E;
 
@@ -21,8 +20,9 @@ internal static class PanelGlass
     private const int NoBorderColor = unchecked((int)0xFFFFFFFE);
 
     // Apply after HandleCreated, and again if composition or the app theme changes.
-    // For native corners on a custom frame, keep NativeFrameStyles in CreateParams
-    // and return zero for WM_NCCALCSIZE. Do not use Form.Opacity, TransparencyKey,
+    // Custom frames return zero for WM_NCCALCSIZE. Recalculate the frame so
+    // Windows does not retain an initial non-client resize border.
+    // Do not use Form.Opacity, TransparencyKey,
     // or a WS_EX_LAYERED window: those change the whole WebView's composition path.
     internal static PanelGlassResult Apply(Form window, bool? darkMode = null, bool forceRoundedClip = false)
     {
@@ -30,6 +30,9 @@ internal static class PanelGlass
         bool dark = darkMode ?? ReadDarkMode();
         if (!OperatingSystem.IsWindows() || !window.IsHandleCreated || window.IsDisposed)
             return new(false, false, false, dark, "handle-unavailable", null, null, null);
+
+        SetWindowPos(window.Handle, IntPtr.Zero, 0, 0, 0, 0,
+            0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020); // NOSIZE | NOMOVE | NOZORDER | NOACTIVATE | FRAMECHANGED
 
         bool composition = false;
         int? frameResult = null, backdropResult = null, cornerResult = null;
@@ -100,6 +103,7 @@ internal static class PanelGlass
         if (!OperatingSystem.IsWindows() || !window.IsHandleCreated || window.IsDisposed || window.Width < 2 || window.Height < 2)
             return false;
         int diameter = Math.Clamp((int)Math.Round(radiusAt96Dpi * 2d * window.DeviceDpi / 96d), 2, Math.Min(window.Width, window.Height));
+        // GDI excludes the final row/column of this rounded region.
         IntPtr region = CreateRoundRectRgn(0, 0, window.Width + 1, window.Height + 1, diameter, diameter);
         if (region == IntPtr.Zero) return false;
         if (SetWindowRgn(window.Handle, region, true) != 0) return true; // Windows now owns the region.
@@ -135,6 +139,7 @@ internal static class PanelGlass
     [DllImport("dwmapi.dll")] private static extern int DwmExtendFrameIntoClientArea(IntPtr window, ref Margins margins);
     [DllImport("gdi32.dll")] private static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int ellipseWidth, int ellipseHeight);
     [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr window, IntPtr region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWindowPos(IntPtr window, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
     [DllImport("gdi32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool DeleteObject(IntPtr handle);
 }
 

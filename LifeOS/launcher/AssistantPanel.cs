@@ -24,7 +24,7 @@ internal sealed class AssistantPanelWindow : Form
     internal AssistantPanelWindow(Uri home,CoreWebView2Environment environment,string profile)
     {
         this.home=home;this.environment=environment;this.profile=profile;
-        Text="LifeOS AI";FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;
+        Text="LifeOS AI";FormBorderStyle=FormBorderStyle.None;Padding=Padding.Empty;ShowInTaskbar=false;TopMost=true;
         StartPosition=FormStartPosition.Manual;MinimumSize=new Size(360,460);Size=new Size(450,720);BackColor=Color.FromArgb(246,249,254);
         var work=Screen.FromPoint(Cursor.Position).WorkingArea;Size=new Size(Math.Min(Width,work.Width),Math.Min(Height,work.Height-24));Location=new Point(work.Right-Width-18,work.Top+Math.Max(12,(work.Height-Height)/2));
         Controls.Add(browser);Load+=async(_,_)=>await InitializeAsync();
@@ -39,6 +39,10 @@ internal sealed class AssistantPanelWindow : Form
         try{
             await browser.EnsureCoreWebView2Async(environment,LifeWindow.BrowserOptions(environment,profile));
             var core=browser.CoreWebView2;core.Settings.AreDevToolsEnabled=false;core.Settings.IsStatusBarEnabled=false;core.Settings.AreDefaultContextMenusEnabled=false;
+            // The native region supplies the outer curve. Mark the document as
+            // soon as its root exists so CSS does not cut a second curve into it.
+            await core.AddScriptToExecuteOnDocumentCreatedAsync("(()=>{const clip="+(glass.RoundedClipApplied?"'true'":"'false'")+";const apply=()=>{if(!document.documentElement)return false;document.documentElement.dataset.nativeClip=clip;return true;};if(!apply()){const observer=new MutationObserver(()=>{if(apply())observer.disconnect()});observer.observe(document,{childList:true})}})()");
+            core.NavigationCompleted+=async(_,_)=>{try{await core.ExecuteScriptAsync("document.documentElement.dataset.nativeClip="+(glass.RoundedClipApplied?"'true'":"'false'"));}catch(InvalidOperationException){}};
             core.NewWindowRequested+=(_,e)=>e.Handled=true;core.PermissionRequested+=(_,e)=>e.State=CoreWebView2PermissionState.Deny;
             core.NavigationStarting+=(_,e)=>{
                 if(!Uri.TryCreate(e.Uri,UriKind.Absolute,out var uri)||uri.GetLeftPart(UriPartial.Authority)!=home.GetLeftPart(UriPartial.Authority)){e.Cancel=true;return;}

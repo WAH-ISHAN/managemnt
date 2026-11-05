@@ -7,3 +7,4 @@
 *.cs text eol=lf
 *.csproj text eol=lf
 *.ps1 text eol=crlf
+*.iss text eol=crlf

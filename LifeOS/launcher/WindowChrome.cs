@@ -5,7 +5,7 @@ internal sealed partial class LifeWindow
 {
     private bool customChrome;
     private bool chromeCloseRequested;
-    private int lastChromeResizeHit;
+    private volatile int lastChromeResizeHit;
     private const int ChromeHeaderHeight=48; // Matches --window-chrome-height.
     private int ResizeRing => Math.Max(6,(int)Math.Round(6*DeviceDpi/96d));
     private Rectangle? VisibleChromeBounds=>Visible&&customChrome&&WindowState!=FormWindowState.Minimized
@@ -217,17 +217,45 @@ internal sealed partial class LifeWindow
     {
         var originalBounds=Bounds;
         var originalCursor=Cursor.Position;
-        Activate();
-        await Task.Delay(150,lifetime.Token);
+        bool originalTopMost=TopMost;
+        Show(); BringToFront(); Activate();
+        ChromeSetForegroundWindow(Handle);
+        for(int attempt=0;attempt<40 && ChromeGetForegroundWindow()!=Handle;attempt++)await Task.Delay(50,lifetime.Token);
         var start=PointToScreen(new Point(ClientSize.Width-3,ClientSize.Height/2));
         lastChromeResizeHit=0;
+        string gestureEvidence=Path.Combine(Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR")!,name+".json");
+        object Geometry() => new { visible=Visible,nativeVisible=ChromeIsWindowVisible(Handle),bounds=Bounds,client=ClientSize,dpi=DeviceDpi,start,cursor=Cursor.Position,foreground=ChromeGetForegroundWindow().ToInt64(),window=Handle.ToInt64(),target=ChromeWindowFromPoint(start).ToInt64(),targetRoot=ChromeGetAncestor(ChromeWindowFromPoint(start),2).ToInt64(),work=Screen.FromHandle(Handle).WorkingArea,hit=lastChromeResizeHit };
+        var before=Geometry();
         try {
+            if(ChromeGetForegroundWindow()!=Handle) {
+                // Windows can deny background activation while another application
+                // owns input. Attach only during this diagnostic activation; avoid
+                // clicking the draggable header to establish the test precondition.
+                uint foregroundThread=ChromeGetWindowThreadProcessId(ChromeGetForegroundWindow(),out _);
+                uint currentThread=ChromeGetCurrentThreadId();
+                bool attached=foregroundThread!=0 && foregroundThread!=currentThread && ChromeAttachThreadInput(currentThread,foregroundThread,true);
+                try { TopMost=true; BringToFront(); Activate(); ChromeSetForegroundWindow(Handle); }
+                finally { if(attached)ChromeAttachThreadInput(currentThread,foregroundThread,false); }
+                for(int attempt=0;attempt<40 && ChromeGetForegroundWindow()!=Handle;attempt++)await Task.Delay(50,lifetime.Token);
+                TopMost=originalTopMost;
+            }
+            Bounds=originalBounds;
+            await Task.Delay(100,lifetime.Token);
+            start=PointToScreen(new Point(ClientSize.Width-3,ClientSize.Height/2));
+            if(!ChromeIsWindowVisible(Handle) || ChromeGetForegroundWindow()!=Handle || ChromeGetAncestor(ChromeWindowFromPoint(start),2)!=Handle)
+                throw new InvalidOperationException("Native resize diagnostic could not target the foreground LifeOS WebView: "+name);
             await Task.Run(async () => {
                 Cursor.Position=start;
                 await Task.Delay(150);
                 try {
                     ChromeMouseEvent(0x0002,0,0,0,UIntPtr.Zero);
-                    await Task.Delay(300);
+                    // WebView pointer messages cross an asynchronous process/bridge.
+                    // Hold the real mouse button until native sizing actually starts,
+                    // rather than releasing it after an arbitrary render deadline.
+                    var entered=System.Diagnostics.Stopwatch.StartNew();
+                    while(lastChromeResizeHit!=11 && entered.Elapsed<TimeSpan.FromSeconds(5))await Task.Delay(20);
+                    if(lastChromeResizeHit!=11)throw new InvalidOperationException("The WebView edge did not enter native sizing while the mouse was held: "+name);
+                    await Task.Delay(100);
                     Cursor.Position=new Point(start.X-32,start.Y);
                     await Task.Delay(200);
                 } finally { ChromeMouseEvent(0x0004,0,0,0,UIntPtr.Zero); }
@@ -236,12 +264,23 @@ internal sealed partial class LifeWindow
             if (lastChromeResizeHit!=11 || Math.Abs(Width-(originalBounds.Width-32))>3 || Height!=originalBounds.Height)
                 throw new InvalidOperationException($"The WebView edge did not perform a native resize: {name}; hit={lastChromeResizeHit}; width={Width}; expected={originalBounds.Width-32}; height={Height}; expectedHeight={originalBounds.Height}");
             checks[name]=true;
-        } finally { Bounds=originalBounds; Cursor.Position=originalCursor; }
+        } finally {
+            File.WriteAllText(gestureEvidence,JsonSerializer.Serialize(new{before,after=Geometry()}));
+            TopMost=originalTopMost; Bounds=originalBounds; Cursor.Position=originalCursor;
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)] private struct ChromeMinMax { public Point Reserved,MaxSize,MaxPosition,MinTrackSize,MaxTrackSize; }
     [DllImport("user32.dll")] private static extern bool ReleaseCapture();
     [DllImport("user32.dll",EntryPoint="mouse_event")] private static extern void ChromeMouseEvent(uint flags,uint x,uint y,uint data,UIntPtr extra);
+    [DllImport("user32.dll",EntryPoint="GetForegroundWindow")] private static extern IntPtr ChromeGetForegroundWindow();
+    [DllImport("user32.dll",EntryPoint="SetForegroundWindow")] private static extern bool ChromeSetForegroundWindow(IntPtr handle);
+    [DllImport("user32.dll",EntryPoint="GetWindowThreadProcessId")] private static extern uint ChromeGetWindowThreadProcessId(IntPtr handle,out uint process);
+    [DllImport("user32.dll",EntryPoint="AttachThreadInput")] private static extern bool ChromeAttachThreadInput(uint first,uint second,bool attach);
+    [DllImport("kernel32.dll",EntryPoint="GetCurrentThreadId")] private static extern uint ChromeGetCurrentThreadId();
+    [DllImport("user32.dll",EntryPoint="WindowFromPoint")] private static extern IntPtr ChromeWindowFromPoint(Point point);
+    [DllImport("user32.dll",EntryPoint="GetAncestor")] private static extern IntPtr ChromeGetAncestor(IntPtr handle,uint flags);
+    [DllImport("user32.dll",EntryPoint="IsWindowVisible")] private static extern bool ChromeIsWindowVisible(IntPtr handle);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr handle,int message,IntPtr wParam,IntPtr lParam);
     [DllImport("user32.dll")] private static extern IntPtr GetSystemMenu(IntPtr handle,bool revert);
     [DllImport("user32.dll")] private static extern uint EnableMenuItem(IntPtr menu,uint item,uint enable);

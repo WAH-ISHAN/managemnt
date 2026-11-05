@@ -1,0 +1,1 @@
+CREATE TABLE platform_workspace_receipts(hash TEXT PRIMARY KEY,peer TEXT NOT NULL,applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);

@@ -30,11 +30,13 @@ final class PlannerService {
         $title=self::title($d['title'] ?? ''); $due=self::dateInput($d['due'] ?? '',true);
         $current=$id ? self::task($id) : []; $priority=$d['priority'] ?? $current['priority'] ?? 'normal';
         if (!is_string($priority) || !in_array($priority,['low','normal','high'],true)) throw new InvalidArgumentException(t('Choose a valid priority.'));
+        $category=array_key_exists('category',$d) ? $d['category'] : ($current['category'] ?? 'task');
+        if (!is_string($category) || !in_array($category,['task','exam','todo'],true)) throw new InvalidArgumentException(t('Choose a valid task category.'));
         $estimate=int_range($d['estimate_minutes'] ?? $current['estimate_minutes'] ?? 30,5,480);
         $deadline=self::dateInput($d['deadline'] ?? $current['deadline'] ?? '',true);
         if ($deadline && $due && $due>$deadline) throw new InvalidArgumentException(t('Due date must not be after the deadline.'));
-        if ($id) { $task=self::task($id); Db::tx(function () use ($id,$title,$due,$task,$priority,$estimate,$deadline) { Db::run('UPDATE tasks SET title=?,due=?,priority=?,estimate_minutes=?,deadline=? WHERE id=?',[$title,$due,$priority,$estimate,$deadline,$id]); if ($task['source']==='lesson' && class_exists('LessonService')) Db::run('UPDATE lessons SET action=? WHERE task_id=?',[$title,$id]); }); return $id; }
-        return Db::run('INSERT INTO tasks(title,due,source,priority,estimate_minutes,deadline) VALUES (?,?,?,?,?,?)',[$title,$due,'planner',$priority,$estimate,$deadline]);
+        if ($id) { $task=$current; Db::tx(function () use ($id,$title,$due,$task,$priority,$estimate,$deadline,$category) { Db::run('UPDATE tasks SET title=?,due=?,priority=?,estimate_minutes=?,deadline=?,category=? WHERE id=?',[$title,$due,$priority,$estimate,$deadline,$category,$id]); if ($task['source']==='lesson' && class_exists('LessonService')) Db::run('UPDATE lessons SET action=? WHERE task_id=?',[$title,$id]); }); return $id; }
+        return Db::run('INSERT INTO tasks(title,due,source,priority,estimate_minutes,deadline,category) VALUES (?,?,?,?,?,?,?)',[$title,$due,'planner',$priority,$estimate,$deadline,$category]);
     }
     public static function taskStatus(int $id,string $status): void {
         self::task($id); if (!in_array($status,['open','done'],true)) throw new InvalidArgumentException(t('Invalid task status.'));
@@ -72,14 +74,27 @@ final class PlannerService {
         else Db::run('INSERT INTO planner_routine_checks(routine_id,date) VALUES (?,?)',[$id,$date]);
     }
     public static function saveAppointment(?int $id,array $d): int {
-        $title=self::title($d['title'] ?? ''); $start=self::validDateTime($d['starts_at'] ?? ''); $end=self::validDateTime($d['ends_at'] ?? '');
+        $current=$id ? self::requireRow('planner_appointments',$id) : [];
+        $allDay=self::flag(['all_day'=>$d['all_day'] ?? $current['all_day'] ?? 0],'all_day');
+        $title=self::title($d['title'] ?? '');
+        if ($allDay && array_key_exists('starts_on',$d)) {
+            // The form asks for the inclusive last day; stored/provider ends are exclusive.
+            $start=self::dateInput($d['starts_on']).' 00:00';
+            $last=self::dateInput($d['ends_on'] ?? $d['starts_on']);
+            if ($last<substr($start,0,10)) throw new InvalidArgumentException(t('Appointment end must be after its start.'));
+            $end=(new DateTimeImmutable($last))->modify('+1 day')->format('Y-m-d').' 00:00';
+        } else {
+            $start=self::validDateTime($d['starts_at'] ?? ''); $end=self::validDateTime($d['ends_at'] ?? '');
+            if ($allDay && (substr($start,11)!=='00:00' || substr($end,11)!=='00:00')) throw new InvalidArgumentException(t('All-day appointments must begin and end at midnight.'));
+        }
         if ($end<=$start) throw new InvalidArgumentException(t('Appointment end must be after its start.'));
         $location=self::text($d['location'] ?? '',200); $notes=self::text($d['notes'] ?? '',2000);
         $status=$d['status'] ?? 'scheduled'; if (!is_string($status) || !in_array($status,['scheduled','done','cancelled'],true)) throw new InvalidArgumentException(t('Invalid appointment status.'));
-        $values=[$title,$start,$end,$location,$notes,int_range($d['reminder_minutes'] ?? 15,0,10080),$status];
-        if ($id) { self::requireRow('planner_appointments',$id); Db::run('UPDATE planner_appointments SET title=?,starts_at=?,ends_at=?,location=?,notes=?,reminder_minutes=?,status=? WHERE id=?',[...$values,$id]); return $id; }
-        return Db::run('INSERT INTO planner_appointments(title,starts_at,ends_at,location,notes,reminder_minutes,status) VALUES (?,?,?,?,?,?,?)',$values);
+        $values=[$title,$start,$end,$location,$notes,int_range($d['reminder_minutes'] ?? 15,0,10080),$status,$allDay];
+        if ($id) { Db::run('UPDATE planner_appointments SET title=?,starts_at=?,ends_at=?,location=?,notes=?,reminder_minutes=?,status=?,all_day=? WHERE id=?',[...$values,$id]); return $id; }
+        return Db::run('INSERT INTO planner_appointments(title,starts_at,ends_at,location,notes,reminder_minutes,status,all_day) VALUES (?,?,?,?,?,?,?,?)',$values);
     }
+    public static function appointmentWhen(array $row): string { return !empty($row['all_day']) ? t('All day').' · '.substr($row['starts_at'],0,10).' → '.(new DateTimeImmutable($row['ends_at']))->modify('-1 day')->format('Y-m-d') : $row['starts_at'].' → '.$row['ends_at']; }
     public static function validTime(mixed $time): string { if (!is_string($time) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/',$time)) throw new InvalidArgumentException(t('Choose a valid time.')); return $time; }
     public static function validDateTime(mixed $value): string { if (!is_string($value)) throw new InvalidArgumentException(t('Choose a valid date and time.')); $value=str_replace('T',' ',$value); $date=DateTimeImmutable::createFromFormat('!Y-m-d H:i',$value); if (!$date || $date->format('Y-m-d H:i')!==$value) throw new InvalidArgumentException(t('Choose a valid date and time.')); return $value; }
     public static function requireRow(string $table,int $id): array { if (!in_array($table,['planner_habits','planner_routines','planner_appointments'],true)) throw new InvalidArgumentException(t('Invalid planner record.')); $row=Db::one('SELECT * FROM '.$table.' WHERE id=?',[$id]); if (!$row) throw new InvalidArgumentException(t('Planner record not found.')); return $row; }

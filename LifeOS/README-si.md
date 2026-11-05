@@ -1,4 +1,4 @@
-﻿# LifeOS 1.4.0 — සම්පූර්ණ පරිශීලක මාර්ගෝපදේශය
+# LifeOS 1.9.6 — සම්පූර්ණ පරිශීලක මාර්ගෝපදේශය
 
 මුල් setup එකේ **භූමිකා කිහිපයක්** තෝරන්න පුළුවන්: School + University, University + Employee හෝ තුනම එකවර. තෝරාගත් භූමිකාවලට අදාළ tools පමණක් navigation, dashboard සහ settings තුළ පෙන්වයි. පසුව **Settings → Modules & language → ඔබේ භූමිකා** තුළ වෙනස් කරන්න. සුරැකි records මැකෙන්නේ නැහැ. [භූමිකා සහ මෙවලම්](docs/WORKSPACE-ROLES.md).
 

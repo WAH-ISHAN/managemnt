@@ -77,6 +77,8 @@ internal sealed partial class LifeWindow : Form
         reminders.BalloonTipClicked += (_, _) => { ShowMainWindow(); GoRoute(reminderRoute); };
         InitializeResidency();
         InitializeSessionLifecycle();
+        Deactivate += (_,_) => StopVoiceCapture();
+        VisibleChanged += (_,_) => { if(!Visible)StopVoiceCapture(); };
         if (activationEvent is not null) _=Task.Run(WatchResidentSignals);
         InitializeAppUpdates();
         Controls.Add(web); Load += Start;
@@ -195,7 +197,7 @@ internal sealed partial class LifeWindow : Form
                 else if (uri.AbsolutePath is "/lock" or "/unlock" or "/idle-lock") ClosePrivateWindows();
             };
             web.CoreWebView2.NewWindowRequested += (_, e) => e.Handled=true;
-            web.CoreWebView2.PermissionRequested += (_, e) => e.State=CoreWebView2PermissionState.Deny;
+            web.CoreWebView2.PermissionRequested += RequestVoicePermission;
             web.CoreWebView2.NavigationCompleted += async (sender, navigation) => {
                 if(IsDisposed || web.IsDisposed || !ReferenceEquals(sender,web.CoreWebView2))return;
                 if (navigation.IsSuccess && await SwitchBrowserIfNeededAsync()) return;
@@ -406,7 +408,10 @@ internal sealed partial class LifeWindow : Form
         async Task StudioNavigate(string path) {
             string target=JsonSerializer.Serialize(path);
             await Act("(()=>{const a=document.createElement('a');a.href="+target+";document.getElementById('main').append(a);a.click()})()");
-            await Changed("studio-navigate:"+path,"location.pathname+location.search==="+target+" && !!document.querySelector('#main h1')");
+            // Dynamically appended links can perform a full navigation. app.js
+            // publishes LifeOS before later deferred workflow scripts initialize.
+            // Wait for those handlers before dispatching synthetic interactions.
+            await Changed("studio-navigate:"+path,"document.readyState==='complete' && location.pathname+location.search==="+target+" && !!document.querySelector('#main h1')");
         }
         bool onboarding=await web.CoreWebView2.ExecuteScriptAsync("location.pathname==='/welcome'")=="true";
         await VerifyWindowChrome(checks);
@@ -550,7 +555,7 @@ internal sealed partial class LifeWindow : Form
         await web.CoreWebView2.ExecuteScriptAsync("[...document.querySelectorAll('#add-expense .date-shortcuts button')].find(b=>b.textContent==='Today').click()");
         await Check("date-today","document.querySelector('#add-expense input[name=date]').value===document.querySelector('meta[name=lifeos-today]').content");
         await web.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-quick-add]').click()");
-        await Check("quick-add-dialog","document.getElementById('quick-add-dialog').open && document.querySelectorAll('[data-quick-result]').length===8");
+        await Check("quick-add-dialog","(()=>{const routes=['/salary#add-expense','/salary#add-income','/planner?view=tasks#new-task','/salary/plan','/growth#new-goal','/uni/add/assignment','/school?page=homework','/employee?page=attendance','/focus','/documents#add-document','/knowledge/new','/knowledge/daily'];const links=[...document.querySelectorAll('#quick-add-dialog [data-quick-result]')].map(a=>a.getAttribute('href'));return document.getElementById('quick-add-dialog').open && links.length===routes.length && routes.every(route=>links.includes(route))})()");
         await VerifyModalWindowChrome(checks);
         await Capture("glass-controls-over-modal");
         await Capture("quick-add");

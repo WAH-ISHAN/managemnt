@@ -14,6 +14,16 @@ internal static class ResidentLifecycle
         if (args[0] == "--probe") return ProbeInstalled(int.Parse(args[1]), Path.GetFullPath(args[2]));
         string data = Path.GetFullPath(args[0]);
         windowType = (args.Length > 1 ? Assembly.LoadFrom(Path.GetFullPath(args[1])) : Assembly.Load("LifeOS")).GetType("LifeWindow", true)!;
+        var microphonePolicy=windowType.Assembly.GetType("VoiceCapturePermission",true)!.GetMethod("Allows",BindingFlags.Static|BindingFlags.NonPublic)!;
+        bool Microphone(string page,string origin,bool gesture=true)=>(bool)microphonePolicy.Invoke(null,new object?[]{new Uri("http://127.0.0.1:17422"),page,origin,gesture})!;
+        Check(Microphone("http://127.0.0.1:17422/intelligence","http://127.0.0.1:17422"),"Microphone permitted for a clicked local recording action");
+        Check(!Microphone("http://127.0.0.1:17422/intelligence","http://127.0.0.1:17422",false),"Microphone refused without a user gesture");
+        Check(!Microphone("http://127.0.0.1:17422/unlock","http://127.0.0.1:17422"),"Microphone refused on unlock page");
+        Check(!Microphone("http://127.0.0.1:17422/assistant","http://127.0.0.1:17422"),"Microphone refused in online conversation");
+        Check(!Microphone("https://example.com/intelligence","http://127.0.0.1:17422"),"Microphone refused for an external document");
+        Check(!Microphone("http://127.0.0.1:17422/intelligence","https://example.com"),"Microphone refused for an external requester");
+        Check(!Microphone("http://127.0.0.1:17422/intelligence","http://127.0.0.1:17423"),"Microphone refused for a different local server");
+        Check(!Microphone("invalid","null"),"Microphone refused for invalid origins");
         Directory.CreateDirectory(data);
         Environment.SetEnvironmentVariable("LIFEOS_DATA_DIR", data);
         foreach (string mode in new[] { "LIFEOS_SMOKE_TEST", "LIFEOS_PROFILE_TEST", "LIFEOS_BROWSER_TEST", "LIFEOS_ACTIVATION_TEST" })

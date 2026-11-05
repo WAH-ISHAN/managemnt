@@ -2,7 +2,7 @@
 declare(strict_types=1);
 final class PluginTrustService {
     public const MODULE_API=1;
-    public const DEVELOPMENT_VERSION='1.9.0';
+    public const DEVELOPMENT_VERSION='1.9.6';
     public static function compatibility(array $manifest):void{
         $c=$manifest['compatibility']??null;if(!is_array($c)||($c['module_api']??null)!==self::MODULE_API)throw new InvalidArgumentException(t('Plugin must declare supported module_api 1.'));$version=self::DEVELOPMENT_VERSION;if(is_file(ROOT.'/lifeos-release.json')){$release=json_decode(file_get_contents(ROOT.'/lifeos-release.json'),true);if(is_string($release['version']??null))$version=ltrim($release['version'],'v');}
         foreach(['lifeos_min','lifeos_max_exclusive','php_min']as $key)if(!is_string($c[$key]??null)||!preg_match('/^\d+\.\d+\.\d+$/D',$c[$key]))throw new InvalidArgumentException(t('Declare LifeOS/PHP compatibility version bounds.'));if(version_compare($version,$c['lifeos_min'],'<')||version_compare($version,$c['lifeos_max_exclusive'],'>=')||version_compare(PHP_VERSION,$c['php_min'],'<'))throw new InvalidArgumentException(t('Plugin version bounds do not support this LifeOS/PHP runtime.'));$requires=$manifest['requires']??[];if(!is_array($requires))throw new InvalidArgumentException(t('Invalid module dependencies.'));$mods=[];foreach(Modules::discover(ROOT.'/app/Modules')as $m)$mods[basename($m['path'])]=$m;foreach($requires as $id=>$min){if(!is_string($id)||!is_string($min)||!isset($mods[$id])||version_compare($mods[$id]['version']??'0.0.0',$min,'<'))throw new InvalidArgumentException(t('A required module is missing or too old.'));}

@@ -64,4 +64,5 @@ if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 $setupPath=Join-Path $projectRoot 'Output/LifeOS-Setup.exe'
 $setupHash=(Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText($setupPath+'.sha256',$setupHash+'  LifeOS-Setup.exe'+[Environment]::NewLine,[Text.Encoding]::ASCII)
+& (Join-Path $projectRoot 'scripts/Verify-ReleasePayload.ps1') -Distribution $distribution -Installer $setupPath -EvidencePath (Join-Path $projectRoot 'Output/LifeOS-release-verification.json') -AiExecutable $AiExecutable -Commercial:$Commercial -WithoutAiRuntime:$WithoutAiRuntime
 Write-Host "Built $(Join-Path $projectRoot 'Output/LifeOS-Setup.exe')"

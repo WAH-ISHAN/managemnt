@@ -38,6 +38,19 @@ return function (Router $r): void {
         finally { if (is_file($path)) unlink($path); }
         return redirect('/intelligence?source='.$source,'Local text is ready. Correct it before creating a preview.');
     });
+    $r->post('/intelligence/voice',function (): string {
+        header('Content-Type: application/json; charset=utf-8');
+        $path=null;
+        try {
+            $path=LocalMediaService::upload($_FILES['media'] ?? [],'voice');
+            $body=LocalMediaService::convert($path,'voice');
+            $source=IntelligenceService::source('voice',$body);
+            return json_encode(['review'=>'/intelligence?source='.$source],JSON_THROW_ON_ERROR);
+        } catch (InvalidArgumentException $error) {
+            http_response_code(422);
+            return json_encode(['error'=>$error->getMessage()],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
+        } finally { if ($path!==null && is_file($path)) unlink($path); }
+    });
     $r->post('/intelligence/source/{id}/preview',function (array $p): string {
         $id=record_id($p['id']); $source=IntelligenceService::sourceRow($id); $body=IntelligenceService::text(text_input('body',20000));
         Db::run('UPDATE intelligence_sources SET body=? WHERE id=?',[$body,$id]);

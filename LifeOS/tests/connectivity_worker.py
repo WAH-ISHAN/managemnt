@@ -64,15 +64,34 @@ class AdapterTests(unittest.TestCase):
         for url in ('http://www.googleapis.com/events', 'https://evil.example/events', 'https://www.googleapis.com@evil.example/events'):
             with self.assertRaises(ValueError): api.request('GET', url)
 
+    def test_delete_request_emits_exact_if_match_header_and_no_body(self):
+        requests = []
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return None
+            def read(self, size): return b''
+        class Opener:
+            def open(self, request, timeout):
+                requests.append(request)
+                return Response()
+        for host, path in [('www.googleapis.com', '/calendar/v3/calendars/primary/events/remote'), ('graph.microsoft.com', '/v1.0/me/events/remote'), ('graph.microsoft.com', '/v1.0/me/calendars/selected/events/remote')]:
+            with patch.object(worker.urllib.request, 'build_opener', return_value=Opener()):
+                self.assertEqual(worker.Api('test', host).request('DELETE', 'https://' + host + path, version='W/"exact-version"'), {})
+            self.assertEqual(requests[-1].method, 'DELETE')
+            self.assertEqual(requests[-1].get_header('If-match'), 'W/"exact-version"')
+            self.assertIsNone(requests[-1].data)
+
     def test_google_fetch_expands_instances_and_preserves_cancellation(self):
         calls = []
         def request(api, method, url, body=None, version=None):
             calls.append(url)
-            return {'items': [{'id': 'a', 'etag': 'v1', 'summary': 'Meeting', 'start': {'dateTime': '2026-12-05T03:00:00Z'}, 'end': {'dateTime': '2026-12-05T04:00:00Z'}}, {'id': 'b', 'etag': 'v2', 'status': 'cancelled'}, {'id': 'c', 'start': {'date': '2026-12-05'}}]}
+            return {'items': [{'id': 'a', 'etag': 'v1', 'summary': 'Meeting', 'start': {'dateTime': '2026-12-05T03:00:00Z'}, 'end': {'dateTime': '2026-12-05T04:00:00Z'}}, {'id': 'b', 'etag': 'v2', 'status': 'cancelled'}, {'id': 'c', 'start': {'date': '2026-12-05'}, 'end': {'date': '2026-12-07'}}]}
         with patch.object(worker.Api, 'request', request):
             result = worker.calendar_fetch({'provider': 'google', 'calendar': 'primary', 'token': 'test'})
-        self.assertEqual(len(result['events']), 2)
-        self.assertEqual(result['skipped_all_day'], 1)
+        self.assertEqual(len(result['events']), 3)
+        self.assertTrue(result['events'][2]['all_day'])
+        self.assertEqual(result['events'][2]['starts_at'], '2026-12-05 00:00')
+        self.assertEqual(result['events'][2]['ends_at'], '2026-12-07 00:00')
         self.assertTrue(result['events'][1]['cancelled'])
         self.assertIn('singleEvents=true', calls[0])
 
@@ -103,6 +122,66 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(calls[0]['transactionId'], calls[1]['transactionId'])
         self.assertEqual(calls[0]['start']['timeZone'], 'UTC')
         self.assertNotIn('attendees', calls[0])
+
+    def test_all_day_write_preserves_dates_for_both_providers(self):
+        calls = []
+        def request(api, method, url, body=None, version=None):
+            calls.append(body)
+            return {'id': 'remote', 'etag': 'v1', '@odata.etag': 'v1'}
+        config = {'calendar': 'primary', 'token': 'test', 'identity': 'profile:all-day', 'event': {'title': 'Leave', 'all_day': True, 'starts_at': '2026-12-05 00:00', 'ends_at': '2026-12-07 00:00'}}
+        with patch.object(worker.Api, 'request', request):
+            worker.calendar_write(dict(config, provider='google'))
+            worker.calendar_write(dict(config, provider='outlook'))
+        self.assertEqual(calls[0]['start'], {'date': '2026-12-05'})
+        self.assertEqual(calls[0]['end'], {'date': '2026-12-07'})
+        self.assertTrue(calls[1]['isAllDay'])
+        self.assertEqual(calls[1]['start'], {'dateTime': '2026-12-05T00:00:00', 'timeZone': 'Sri Lanka Standard Time'})
+        self.assertEqual(calls[1]['end']['dateTime'], '2026-12-07T00:00:00')
+
+    def test_outlook_all_day_fetch_uses_original_calendar_date(self):
+        calls = []
+        def request(api, method, url, body=None, version=None):
+            calls.append((url, api.timezone))
+            event = {'id': 'all-day', '@odata.etag': 'v1', 'subject': 'Day off', 'isAllDay': True, 'originalStartTimeZone': 'Sri Lanka Standard Time', 'start': {'dateTime': '2026-12-04T18:30:00', 'timeZone': 'UTC'}, 'end': {'dateTime': '2026-12-05T18:30:00', 'timeZone': 'UTC'}}
+            if '/calendarView?' in url:
+                return {'value': [event]}
+            event['start']['dateTime'], event['end']['dateTime'] = '2026-12-05T00:00:00', '2026-12-06T00:00:00'
+            return event
+        with patch.object(worker.Api, 'request', request):
+            result = worker.calendar_fetch({'provider': 'outlook', 'calendar': 'primary', 'token': 'test'})
+        self.assertEqual(result['events'][0]['starts_at'], '2026-12-05 00:00')
+        self.assertEqual(result['events'][0]['ends_at'], '2026-12-06 00:00')
+        self.assertEqual(calls[1][1], 'Sri Lanka Standard Time')
+
+    def test_deletion_is_version_guarded_idempotent_and_never_cancels_attendee_meetings(self):
+        for provider in ('google', 'outlook'):
+            calls = []
+            def request(api, method, url, body=None, version=None):
+                calls.append((method, body, version))
+                return {'id': 'remote', 'etag': 'v1', '@odata.etag': 'v1'} if method == 'GET' else {}
+            config = {'provider': provider, 'calendar': 'primary', 'token': 'test', 'remote_id': 'remote', 'version': 'v1', 'event': {'status': 'cancelled'}}
+            with patch.object(worker.Api, 'request', request):
+                self.assertTrue(worker.calendar_write(config)['deleted'])
+            self.assertEqual(calls, [('GET', None, None), ('DELETE', None, 'v1')])
+            with patch.object(worker.Api, 'request', return_value={'etag': 'v2', '@odata.etag': 'v2'}) as stale:
+                self.assertTrue(worker.calendar_write(config)['conflict'])
+                self.assertEqual(stale.call_count, 1)
+            with patch.object(worker.Api, 'request', return_value={'etag': 'v1', '@odata.etag': 'v1', 'attendees': [{'email': 'person@example.org'}]}) as attendees:
+                self.assertTrue(worker.calendar_write(config)['conflict'])
+                self.assertEqual(attendees.call_count, 1)
+            for status in (404, 410):
+                with patch.object(worker.Api, 'request', side_effect=urllib.error.HTTPError('https://provider.example', status, '', {}, None)):
+                    self.assertTrue(worker.calendar_write(config)['deleted'])
+            with patch.object(worker.Api, 'request', side_effect=urllib.error.HTTPError('https://provider.example', 412, '', {}, None)):
+                self.assertTrue(worker.calendar_write(config)['conflict'])
+            with patch.object(worker.Api, 'request') as missing:
+                self.assertTrue(worker.calendar_write(dict(config, version=''))['conflict'])
+                missing.assert_not_called()
+
+    def test_conditional_edit_conflict_has_no_success_version(self):
+        config = {'provider': 'google', 'calendar': 'primary', 'token': 'test', 'remote_id': 'remote', 'version': 'v1', 'event': {'title': 'Edited', 'starts_at': '2026-12-05 09:00', 'ends_at': '2026-12-05 10:00'}}
+        with patch.object(worker.Api, 'request', side_effect=urllib.error.HTTPError('https://provider.example', 412, '', {}, None)):
+            self.assertEqual(worker.calendar_write(config), {'conflict': True})
 
 
 if __name__ == '__main__': unittest.main()

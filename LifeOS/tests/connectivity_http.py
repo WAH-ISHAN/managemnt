@@ -116,6 +116,16 @@ with tempfile.TemporaryDirectory(prefix='connectivity-http-', dir=ROOT / 'tests/
             check(post('/connectivity/calendar/import', {})[0] == 200, 'explicit calendar import persists')
             code, body, headers = request('/connectivity/calendar/export')
             check(code == 200 and 'text/calendar' in headers['Content-Type'] and 'HTTP <event>' in body, 'calendar download exports real data')
+            all_day_ics = ics.replace('UID:http-1', 'UID:http-all-day').replace('DTSTART:20261205T030000Z', 'DTSTART;VALUE=DATE:20261205').replace('DTEND:20261205T040000Z', 'DTEND;VALUE=DATE:20261207')
+            code, page, _ = post('/connectivity/calendar/preview', {'ics': all_day_ics})
+            check(code == 200 and 'All day 2026-12-05' in page and '2026-12-06' in page, 'all-day review shows inclusive human calendar dates')
+            check(post('/connectivity/calendar/import', {})[0] == 200, 'all-day import requires explicit confirmation')
+            with contextlib.closing(sqlite3.connect(data / 'lifeos.db')) as db:
+                all_day_row = db.execute('SELECT all_day,starts_at,ends_at FROM planner_appointments WHERE all_day=1').fetchone()
+                check(all_day_row == (1, '2026-12-05 00:00', '2026-12-07 00:00'), 'all-day HTTP import persists date-only exclusive range')
+                check(not json.loads(db.execute("SELECT value FROM settings WHERE key='connections_config'").fetchone()[0]).get('calendar_delete', False), 'existing configuration does not authorize provider deletion')
+            code, body, _ = request('/connectivity/calendar/export')
+            check('DTSTART;VALUE=DATE:20261205' in body and 'DTEND;VALUE=DATE:20261207' in body, 'all-day HTTP export preserves date-only boundaries')
             code, page, _ = post('/connectivity/macros', {'name': 'Daily check', 'run_at': '00:00', 'actions': '[{"type":"task","title":"Scheduled integration","due_days":0}]', 'enabled': '1'})
             check(code == 200, 'scheduled macro configured through browser')
             for _ in range(2):

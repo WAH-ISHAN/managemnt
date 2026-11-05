@@ -1,0 +1,61 @@
+/* Final cross-page fit and finish. Component styles remain in their owning files. */
+.lecture-calendar-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.lecture-calendar-heading h2{margin-bottom:5px}
+.lecture-calendar-heading .muted{font-size:12px}
+.lecture-month-form{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin:0}
+.lecture-month-form label{min-width:180px;flex:1}
+.lecture-month-form button{flex:none;white-space:nowrap}
+.lecture-month-form .date-shortcuts{display:flex;gap:6px;flex-wrap:wrap}
+.lecture-agenda{display:grid;gap:9px;margin-top:22px}
+.lecture-day{font-size:13px;color:var(--muted);margin:20px 0 3px;font-weight:600}
+.lecture-day:first-child{margin-top:0}
+.lecture-session{display:grid;grid-template-columns:120px minmax(0,1fr) auto;align-items:center;gap:20px;padding:18px;border:1px solid var(--line);border-radius:16px;background:rgba(128,153,190,.035)}
+.lecture-session-time{display:grid;gap:3px;font-variant-numeric:tabular-nums}
+.lecture-session-time time{font-size:18px;font-weight:700}
+.lecture-session-time span,.lecture-session-details>span{font-size:12px;color:var(--muted)}
+.lecture-session-details{display:grid;gap:6px;overflow-wrap:anywhere}
+.lecture-status{font-size:11px;padding:6px 10px;border-radius:20px;background:var(--accent-soft);color:var(--accent);max-width:190px}
+.lecture-session.is-cancelled{opacity:.75}
+@media(max-width:600px){.lecture-month-form{width:100%}.lecture-session{grid-template-columns:90px minmax(0,1fr);gap:12px;padding:14px}.lecture-status{grid-column:2;justify-self:start}.lecture-calendar-heading{gap:16px}}
+.content,.content>*,.card>*,.task-row>*,.section-heading>*{min-width:0}
+.window-chrome-status{display:none}
+.sidebar-bottom .profile{padding-bottom:2px}
+.sidebar-bottom .profile>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.task-row{align-items:flex-start;gap:16px}
+.task-row>div:first-child{flex:1 1 auto;overflow-wrap:anywhere}
+.task-row>form,.task-row>.hero-actions{flex:0 0 auto}
+.task-row button,.section-heading button{white-space:nowrap;word-break:normal}
+.lesson-entry .section-heading>div{flex:1 1 auto;overflow-wrap:anywhere}
+.lesson-entry .section-heading form{flex:0 0 auto}
+.lesson-entry .section-heading button{min-width:max-content}
+
+input[type=file]{padding:7px;background:var(--panel,rgba(15,31,52,.5));border:1px solid var(--line);border-radius:12px;color:var(--muted)}
+input[type=file]::file-selector-button{margin:-2px 10px -2px -2px;padding:9px 14px;border:0;border-radius:9px;background:var(--accent);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+select{padding-right:42px}
+
+.record-workspace-results{display:grid;gap:18px}
+.record-workspace-search{display:grid;grid-template-columns:minmax(220px,1fr) auto;align-items:end;gap:10px;max-width:720px}
+.record-workspace-search label{min-width:0}
+
+.platform-hub-nav,.automation-benefits{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:18px 0 24px}
+.platform-hub-nav a,.platform-hub-nav>span,.automation-benefit{display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:18px;border:1px solid var(--line);border-radius:18px;background:var(--panel);color:inherit;text-decoration:none}
+.platform-hub-nav a:hover{border-color:var(--accent);transform:translateY(-1px)}
+.platform-hub-nav small,.automation-benefit p{color:var(--muted);line-height:1.45}
+.platform-section{scroll-margin-top:110px}
+.platform-advanced>summary,.automation-advanced>summary{font-weight:800;font-size:17px;cursor:pointer;list-style:none}
+.platform-advanced>summary::before,.automation-advanced>summary::before{content:'+';display:inline-grid;place-items:center;width:28px;height:28px;margin-right:9px;border-radius:9px;background:var(--surface-2);color:var(--accent)}
+.platform-advanced[open]>summary::before,.automation-advanced[open]>summary::before{content:'–'}
+.platform-advanced>*:not(summary),.automation-advanced>*:not(summary){margin-top:18px}
+.automation-benefit{justify-content:space-between}
+.automation-benefit h3,.automation-benefit p{margin:0}
+.automation-benefit form{margin-top:auto}
+.automation-benefit button{width:100%}
+
+@media(max-width:720px){
+  .task-row{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+  .task-row>form,.task-row>.hero-actions{justify-self:start}
+  .record-workspace-search{grid-template-columns:1fr}
+  .record-workspace-search button{width:100%}
+  .platform-hub-nav,.automation-benefits{grid-template-columns:1fr}
+}

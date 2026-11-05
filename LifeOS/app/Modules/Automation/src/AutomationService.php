@@ -118,7 +118,7 @@ final class AutomationService {
                     $lines[]='Tasks due or overdue: '.count($tasks).(count($tasks)===8 ? '+' : '').'.';
                     foreach ($tasks as $task) $lines[]=$task['title'].' ('.$task['due'].')';
                 }
-                if (self::available('Planner') && self::table('planner_appointments')) foreach (Db::all("SELECT title,starts_at FROM planner_appointments WHERE status='scheduled' AND starts_at>=? AND starts_at<? ORDER BY starts_at LIMIT 8",[$day.' 00:00',$now->modify('+1 day')->format('Y-m-d').' 00:00']) as $event) $lines[]=$event['title'].' · '.substr($event['starts_at'],11,5);
+                if (self::available('Planner') && self::table('planner_appointments')) foreach (Db::all("SELECT title,starts_at,all_day FROM planner_appointments WHERE status='scheduled' AND ends_at>? AND starts_at<? ORDER BY starts_at LIMIT 8",[$day.' 00:00',$now->modify('+1 day')->format('Y-m-d').' 00:00']) as $event) $lines[]=$event['title'].' · '.($event['all_day'] ? t('All day') : substr($event['starts_at'],11,5));
                 if (self::available('Uni') && self::table('timetable')) foreach (Db::all('SELECT m.name,t.start_time FROM timetable t JOIN uni_modules m ON m.id=t.module_id WHERE t.day=? ORDER BY t.start_time LIMIT 8',[(int)$now->format('N')]) as $class) $lines[]=$class['name'].' · '.$class['start_time'];
                 if (self::available('Salary') && self::table('financial_obligations')) foreach (self::bills($day,$day) as $bill) $lines[]='Payment: '.$bill['title'].' · '.money($bill['amount']);
                 if (($weather=WeatherService::brief())!==null) $lines[]=$weather;

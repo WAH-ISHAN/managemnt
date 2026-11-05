@@ -11,6 +11,10 @@ final class Auth {
                 catch (InvalidArgumentException $error) { http_response_code(401); echo json_encode(['error'=>$error->getMessage()],JSON_THROW_ON_ERROR); exit; }
                 return;
             }
+            // Reviewed whole-workspace replacement changes numeric record identities.
+            // Invalidate every old tab/session and its prepared writes/connections.
+            $generation=Db::setting('workspace_generation');
+            if (($_SESSION['workspace_generation']??'')!==$generation) { $_SESSION=[]; session_regenerate_id(true); $_SESSION['csrf']=bin2hex(random_bytes(32)); $_SESSION['workspace_generation']=$generation; }
             if (!in_array($method,['GET','POST'],true)) { http_response_code(405); exit('Method not allowed'); }
             if ($method === 'POST') {
                 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';

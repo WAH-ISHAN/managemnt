@@ -1,5 +1,7 @@
 # LifeOS persona update roadmap
 
+**1.9.6 follow-up:** the status rows are historical. Current calendar, recording, paired workspace delivery and release evidence are tracked in the [local completion report](../qa/completion-1.9.6.md). Account/device acceptance is deferred to the user.
+
 **2026-11-03 source update:** the historical status rows below describe the foundation baseline. See [current extensions and remaining acceptance](../qa/core-personas-automation-extensions.md) for profiles, planning, integrations and local tools. Bank SMS/email parsing was removed by explicit user request and is no longer a delivery target.
 
 This is the product scope for the next LifeOS development cycle, recorded from the 100-feature proposal. Persona-based setup, local automation, Sinhala/Tamil/English access and Sri Lankan daily needs are the core direction. A persona selects useful modules and templates; the person can change those choices later.

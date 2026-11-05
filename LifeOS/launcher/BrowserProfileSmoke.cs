@@ -11,6 +11,15 @@ internal sealed partial class LifeWindow
         var checks=new Dictionary<string,bool>();
         var skipped=new List<string>();
         void Check(bool valid,string label) { if(!valid)throw new InvalidOperationException(label);checks[label]=true; }
+        void CheckPanelGeometry(Form panel,bool contentFillsClient,string stage) {
+            Check(panel.Size==panel.ClientSize,stage+" has no nonclient frame inset");
+            Check(panel.PointToScreen(Point.Empty)==panel.Location,stage+" client origin reaches the window edge");
+            Check(contentFillsClient,stage+" WebView fills the entire native window");
+            var region=NativePanelRegionProbe.Inspect(panel);
+            Check(region.Exists&&region.FitsWindow,stage+$" rounded region follows the window bounds ({region.RegionWidth}x{region.RegionHeight} versus {panel.Width}x{panel.Height})");
+            Check(region.CornersExcluded&&region.EdgesIncluded,stage+" clips all four corners without clipping straight edges");
+            Check(region.SymmetricCurves,stage+" has matching curves at all four corners");
+        }
         async Task Wait(Func<bool> predicate,string label) { for(int i=0;i<200;i++){if(predicate())return;await Task.Delay(50);}throw new InvalidOperationException(label); }
         async Task Page(string route,string expression) { GoRoute(route); if(!await WaitForExpression($"location.pathname==={JsonSerializer.Serialize(route)} && ({expression})"))throw new InvalidOperationException("Page did not open: "+route); }
         async Task ExternalStorage(string? expected,string value) {
@@ -92,7 +101,12 @@ internal sealed partial class LifeWindow
             await Page("/intelligence","!!document.querySelector('[data-assistant-open]')");
             await web.CoreWebView2.ExecuteScriptAsync("window.chrome.webview.postMessage({type:'lifeos-ai-job',id:'"+probeId+"'})");
             await Wait(()=>{try{using var stream=new FileStream(probePath,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);using var result=JsonDocument.Parse(stream);return result.RootElement.GetProperty("status").GetString()=="failed";}catch(IOException){return false;}catch(JsonException){return false;}},"Native AI worker did not finish its local-only probe");
-            using(var result=JsonDocument.Parse(File.ReadAllText(probePath)))Check(result.RootElement.GetProperty("error").GetString()=="Unsupported AI request.","Native AI bridge starts the bounded worker without model downloads");
+            string? probeError=null;
+            await Wait(()=>{
+                try { using var stream=new FileStream(probePath,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);using var result=JsonDocument.Parse(stream);probeError=result.RootElement.GetProperty("error").GetString();return true; }
+                catch(IOException){return false;}catch(JsonException){return false;}
+            },"Native AI worker result remained locked");
+            Check(probeError=="Unsupported AI request.","Native AI bridge starts the bounded worker without model downloads");
             if(!reopened&&Environment.GetEnvironmentVariable("LIFEOS_AI_AUTH_TEST")=="1") {
                 await Page("/account/ai","!!document.querySelector('[data-ai-account]')");
                 await web.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-account-connect]').click()");
@@ -169,6 +183,9 @@ internal sealed partial class LifeWindow
                     Check(keys.AssistantRegistered||keys.AssistantIsoRegistered,"Windows registers the global assistant shortcut");
                     SendMessage(keys.OwnerHandle,0x0312,(IntPtr)(keys.AssistantRegistered?0x1A66:0x1A67),IntPtr.Zero);
                     Check(hotkeyCalls==1,"Registered shortcut dispatch invokes assistant callback");
+                    NativeShortcutProbe.Assistant(!keys.AssistantRegistered);
+                    await Wait(()=>hotkeyCalls==2,"Windows input did not dispatch the registered assistant shortcut");
+                    Check(hotkeyCalls==2,"Windows keyboard input dispatches the global assistant shortcut");
                 }
             }
             activeAssistant.Hide();Check(!activeAssistant.Visible,"Assistant hides without closing the app");
@@ -199,7 +216,9 @@ internal sealed partial class LifeWindow
             await Wait(()=>desktopPanel!.ProfileName!="","Desktop panel browser initialized");
             for(int n=0;n<200&&await desktopPanel!.EvaluateAsync("!!document.querySelector('.panel-header')")!="true";n++)await Task.Delay(50);
             Check(await desktopPanel!.EvaluateAsync("!!document.querySelector('.panel-header')")=="true","Desktop header is ready for layout checks");
-            Check(desktopPanel.ContentFillsClient&&activeAssistant.ContentFillsClient,"Floating WebViews fill their client rectangles without a pale border ring");
+            CheckPanelGeometry(desktopPanel,desktopPanel.ContentFillsClient,"Desktop initial reveal");
+            CheckPanelGeometry(activeAssistant,activeAssistant.ContentFillsClient,"Assistant initial reveal");
+            Check(await activeAssistant.EvaluateAsync("document.documentElement.dataset.nativeClip==='true' && getComputedStyle(document.querySelector('.assistant-shell')).borderTopLeftRadius==='0px' && getComputedStyle(document.querySelector('.assistant-shell')).borderBottomRightRadius==='0px'")=="true","Native assistant uses only the HWND corner curve");
             Check(desktopPanel.GlassResult.RoundedClipApplied&&activeAssistant.GlassResult.RoundedClipApplied,"Both floating windows have native rounded clipping");
             if(Screen.FromRectangle(desktopPanel.Bounds).WorkingArea.Width>=desktopPanel.Width+activeAssistant.Width+12)
                 Check(!desktopPanel.Bounds.IntersectsWith(activeAssistant.Bounds),"Two visible floating panels are separated");
@@ -209,10 +228,21 @@ internal sealed partial class LifeWindow
                 var available=Screen.FromRectangle(activeAssistant.Bounds).WorkingArea;
                 activeAssistant.Size=new Size(Math.Min(size.Width,available.Width),Math.Min(size.Height,available.Height));
                 await Task.Delay(100);
-                Check(activeAssistant.ContentFillsClient,"Assistant content follows native resize "+size);
+                CheckPanelGeometry(activeAssistant,activeAssistant.ContentFillsClient,"Assistant native resize "+size);
                 Check(await activeAssistant.EvaluateAsync("document.documentElement.scrollWidth<=innerWidth && document.querySelector('[data-assistant-composer]').getBoundingClientRect().bottom<=innerHeight")=="true","Assistant composer fits native resize "+size);
             }
+            var originalDesktopBounds=desktopPanel.Bounds;
+            foreach(var size in new[]{new Size(320,360),new Size(440,760),new Size(700,800)}) {
+                var available=Screen.FromRectangle(desktopPanel.Bounds).WorkingArea;
+                desktopPanel.Size=new Size(Math.Min(size.Width,available.Width),Math.Min(size.Height,available.Height));
+                await Task.Delay(100);
+                CheckPanelGeometry(desktopPanel,desktopPanel.ContentFillsClient,"Desktop native resize "+size);
+            }
+            desktopPanel.Bounds=originalDesktopBounds;
+            await Task.Delay(100);
+            CheckPanelGeometry(desktopPanel,desktopPanel.ContentFillsClient,"Desktop restored bounds");
             activeAssistant.Size=new Size(390,530);activeAssistant.Reveal(desktopPanel,VisibleChromeBounds);
+            CheckPanelGeometry(activeAssistant,activeAssistant.ContentFillsClient,"Assistant restored bounds");
             await activeAssistant.CaptureAsync(Path.Combine(data,"assistant-layout-native.png"));
             await desktopPanel.CaptureAsync(Path.Combine(data,"panel-layout"),false);
             await desktopPanel.CaptureAsync(Path.Combine(data,"panel-layout"),true);
@@ -220,9 +250,12 @@ internal sealed partial class LifeWindow
             await Wait(()=>!activeAssistant.Visible,"Assistant close control did not hide its window");
             ShowAssistantPanel();await AssistantReady();
             Check(activeAssistant.Visible,"Assistant reopens after its close control");
+            CheckPanelGeometry(activeAssistant,activeAssistant.ContentFillsClient,"Assistant close and reopen");
+            Check(await activeAssistant.EvaluateAsync("document.documentElement.dataset.nativeClip==='true' && getComputedStyle(document.querySelector('.assistant-shell')).borderTopLeftRadius==='0px'")=="true","Assistant keeps native-only corners after reopen");
             await desktopPanel.EvaluateAsync("document.querySelector('[data-close]').click()");
             await Wait(()=>!desktopPanel.Visible,"Desktop close control did not hide its window");
             ShowDesktopPanel();Check(desktopPanel.Visible,"Desktop panel reopens after its close control");
+            CheckPanelGeometry(desktopPanel,desktopPanel.ContentFillsClient,"Desktop close and reopen");
             QueuePlatformLock();
             Check(await WaitForExpression("location.pathname==='/unlock'"),"Server lock redirects to PIN");
             Check(desktopPanel is null,"Panel disposed at lock");

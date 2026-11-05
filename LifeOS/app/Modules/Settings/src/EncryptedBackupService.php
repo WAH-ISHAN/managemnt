@@ -9,19 +9,31 @@ final class EncryptedBackupService {
     private const MAX_ZIP=240*1024*1024;
     private const MAX_EXPANDED=512*1024*1024;
     private const MAX_FILES=5000;
-    public static function create(string $data,string $passphrase): string {
+    public static function create(string $data,string $passphrase,?callable $prepareDatabase=null): string {
         self::requirements(); self::passphrase($passphrase); $lock=self::lock($data);
         $stage=$data.'/.backup-stage-'.bin2hex(random_bytes(8)); self::mkdir($stage);
         $destination=$data.'/backups/lifeos-encrypted-'.date('Y-m-d-His').'-'.bin2hex(random_bytes(4)).'.lifeosbk';
         try {
             self::mkdir($data.'/backups');
-            $zip=$stage.'/content.zip'; self::pack($data,$stage,$zip);
+            $zip=$stage.'/content.zip'; self::pack($data,$stage,$zip,$prepareDatabase);
             self::encrypt($zip,$destination,$passphrase);
             return $destination;
         } catch (Throwable $e) { if (is_file($destination)) @unlink($destination); throw $e; }
         finally { self::cleanTree($stage,$data); flock($lock,LOCK_UN); fclose($lock); }
     }
-    public static function restore(string $encrypted,string $passphrase,string $data,array $migrationDirs): string {
+    /** Inspect authenticated contents without changing the live workspace. */
+    public static function inspect(string $encrypted,string $passphrase,string $data,array $migrationDirs,callable $reader): mixed {
+        self::requirements(); self::passphrase($passphrase); $lock=self::lock($data);
+        $stage=$data.'/.inspect-stage-'.bin2hex(random_bytes(8)); self::mkdir($stage);
+        try {
+            self::decrypt($encrypted,$stage.'/content.zip',$passphrase);
+            self::unpack($stage.'/content.zip',$stage.'/incoming');
+            Backup::validate($stage.'/incoming/database.db',$migrationDirs);
+            self::verifyDocumentReferences($stage.'/incoming/database.db',$stage.'/incoming/uploads');
+            return $reader($stage.'/incoming/database.db',$stage.'/incoming/uploads');
+        } finally { self::cleanTree($stage,$data); flock($lock,LOCK_UN); fclose($lock); }
+    }
+    public static function restore(string $encrypted,string $passphrase,string $data,array $migrationDirs,?callable $prepareDatabase=null): string {
         self::requirements(); self::passphrase($passphrase); $lock=self::lock($data);
         $stageName='.restore-stage-'.bin2hex(random_bytes(8)); $stage=$data.'/'.$stageName; self::mkdir($stage);
         $journal=$data.'/restore-journal.json'; $safetyName='before-encrypted-restore-'.date('Y-m-d-His').'-'.bin2hex(random_bytes(4)); $safety=$data.'/backups/'.$safetyName;
@@ -32,6 +44,7 @@ final class EncryptedBackupService {
             self::unpack($zip,$stage.'/incoming');
             Backup::validate($stage.'/incoming/database.db',$migrationDirs);
             self::verifyDocumentReferences($stage.'/incoming/database.db',$stage.'/incoming/uploads');
+            if ($prepareDatabase!==null) { $prepareDatabase($stage.'/incoming/database.db'); Backup::validate($stage.'/incoming/database.db',$migrationDirs); }
             self::mkdir($safety);
             Db::run('VACUUM INTO ?',[$safety.'/database.db']);
             Db::exec('PRAGMA wal_checkpoint(TRUNCATE)'); Db::close();
@@ -92,8 +105,9 @@ final class EncryptedBackupService {
         if (!$lock || !flock($lock,LOCK_EX)) throw new RuntimeException(t('Could not lock backup operations.')); return $lock;
     }
     private static function mkdir(string $path): void { if (!is_dir($path) && !mkdir($path,0700,true) && !is_dir($path)) throw new RuntimeException(t('Could not create a backup directory.')); }
-    private static function pack(string $data,string $stage,string $destination): void {
+    private static function pack(string $data,string $stage,string $destination,?callable $prepareDatabase=null): void {
         $db=Backup::create($stage,'encrypted-snapshot');
+        if ($prepareDatabase!==null) $prepareDatabase($db);
         if (filesize($db)>256*1024*1024) throw new InvalidArgumentException(t('The database exceeds the 256 MiB encrypted-restore limit.'));
         $files=['database.db'=>['path'=>$db,'bytes'=>filesize($db),'sha256'=>hash_file('sha256',$db)]];
         self::mkdir($data.'/uploads');

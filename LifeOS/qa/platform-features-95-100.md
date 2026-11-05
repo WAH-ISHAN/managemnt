@@ -1,5 +1,7 @@
 # Platform features 95–100
 
+**1.9.6 update:** opt-in automatic full-workspace snapshot delivery and reviewed replacement are now implemented separately from the manual task merge described below. See [workspace exchange](../docs/WORKSPACE-EXCHANGE.md) for sharing scope, retained local credentials, paused jobs, recovery, tests and the distinction from concurrent field-level merging.
+
 This slice is implemented at `/platform` (enable Devices & privacy in Modules & language). It does not publish a release or install over a personal copy.
 
 ## 95: local phone companion

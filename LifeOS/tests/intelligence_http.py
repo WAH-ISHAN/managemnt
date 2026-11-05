@@ -3,6 +3,8 @@
 Set LIFEOS_QA_PHP if PHP is not on PATH. Supports Windows PHP launched from WSL.
 """
 import http.cookiejar
+import io
+import json
 import os
 from pathlib import Path
 import re
@@ -15,6 +17,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import wave
 
 ROOT = Path(__file__).resolve().parents[1]
 checks = 0
@@ -45,8 +48,8 @@ with tempfile.TemporaryDirectory(prefix='intelligence-http-', dir=ROOT / 'tests/
         port = probe.getsockname()[1]
     base = f'http://127.0.0.1:{port}'
     client = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
-    def request(path, fields=None):
-        req = urllib.request.Request(base + path, urllib.parse.urlencode(fields, doseq=True).encode() if fields is not None else None)
+    def request(path, fields=None, raw=None, headers=None):
+        req = urllib.request.Request(base + path, raw if raw is not None else urllib.parse.urlencode(fields, doseq=True).encode() if fields is not None else None, headers or {})
         try:
             with client.open(req, timeout=20) as res:
                 return res.status, res.read().decode('utf-8'), res.url
@@ -88,6 +91,20 @@ with tempfile.TemporaryDirectory(prefix='intelligence-http-', dir=ROOT / 'tests/
             check(post(f'/intelligence/draft/{move_id}/apply', {})[0] == 200 and db.execute('SELECT due FROM tasks WHERE id=?', (task_id,)).fetchone()[0] == '2026-12-01', 'move applies via HTTP')
             check(post(f'/intelligence/draft/{move_id}/undo', {})[0] == 200 and db.execute('SELECT due FROM tasks WHERE id=?', (task_id,)).fetchone()[0] == '2026-11-04', 'undo restores due date via HTTP')
             check(post('/intelligence/ask', {'question': 'Monthly spending?'})[0] == 422, 'model opt-in enforced over HTTP')
+            check(request('/intelligence/voice', {})[0] == 419, 'microphone transcription requires CSRF')
+            check(post('/intelligence/voice', {})[0] == 422, 'microphone endpoint rejects missing audio')
+            audio = io.BytesIO()
+            with wave.open(audio, 'wb') as wav:
+                wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(16000); wav.writeframes(b'\0\0' * 16000)
+            csrf = re.search(r'name="_csrf" value="([a-f0-9]+)"', request('/intelligence')[1]).group(1)
+            boundary = 'lifeos-voice-http-fixture'
+            body = (f'--{boundary}\r\nContent-Disposition: form-data; name="_csrf"\r\n\r\n{csrf}\r\n'
+                    f'--{boundary}\r\nContent-Disposition: form-data; name="media"; filename="synthetic.wav"\r\nContent-Type: audio/wav\r\n\r\n').encode() + audio.getvalue() + f'\r\n--{boundary}--\r\n'.encode()
+            source_count = db.execute('SELECT COUNT(*) FROM intelligence_sources').fetchone()[0]
+            code, page, _ = request('/intelligence/voice', raw=body, headers={'Content-Type': f'multipart/form-data; boundary={boundary}'})
+            check(code == 422 and 'executable' in json.loads(page)['error'], 'real WAV upload reports unconfigured local recognizer as JSON')
+            check(db.execute('SELECT COUNT(*) FROM intelligence_sources').fetchone()[0] == source_count, 'failed conversion creates no transcript source')
+            check(not list((data / 'intelligence-tmp').glob('*')), 'failed microphone conversion deletes temporary audio')
             code, page, _ = request('/focus')
             check(code == 200 and 'Send reviewed report' in page, 'focus offers saved task links')
             code, _, _ = post('/focus/start', {'subject': 'HTTP focus', 'minutes': '25', 'kind': 'study', 'task_id': str(task_id), 'minimum_minutes': '25'})

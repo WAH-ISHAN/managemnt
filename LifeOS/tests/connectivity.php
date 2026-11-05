@@ -36,7 +36,7 @@ try {
     connection_check(str_contains(ConnectivityIcs::export(),'SUMMARY:Family\\, meeting'),'ICS export escapes special characters');
     connection_reject(fn()=>ConnectivityIcs::preview(str_replace('SUMMARY:','RRULE:FREQ=DAILY\r\nSUMMARY:',$ics)),'Recurring events explicitly rejected');
     connection_reject(fn()=>ConnectivityIcs::preview(str_replace('20261205T030000Z','20261399T030000Z',$ics)),'Malformed ICS date rejected');
-    connection_reject(fn()=>ConnectivityIcs::preview(str_replace('20261205T030000Z','20261205',$ics)),'All-day events explicitly rejected');
+    connection_reject(fn()=>ConnectivityIcs::preview(str_replace('20261205T030000Z','20261205',$ics)),'Mixed all-day/timed boundaries explicitly rejected');
     $long=PlannerService::saveAppointment(null,['title'=>str_repeat('ප',90),'starts_at'=>'2026-12-10 10:00','ends_at'=>'2026-12-10 11:00']);
     $export=ConnectivityIcs::export(); foreach (explode("\r\n",trim($export)) as $line) connection_check(strlen($line)<=75 && mb_check_encoding($line,'UTF-8'),'ICS folding retains valid UTF8 within 75 octets');
     $email=Db::run("INSERT INTO connectivity_mail(identity,sender,subject,body,received_at) VALUES ('mail-1','test@example.org','[task] Prepare report','Source text','2026-11-03')");

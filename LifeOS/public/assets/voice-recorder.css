@@ -1,0 +1,9 @@
+.voice-recorder .voice-actions{display:flex;flex-wrap:wrap;gap:.65rem;align-items:center}
+.voice-recorder .voice-status{margin:.8rem 0;font-weight:600}
+.voice-recorder .voice-clock{font-size:1.6rem;font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.voice-recorder[data-state=recording] .voice-status::before{content:'●';color:var(--danger,#c44040);margin-right:.5rem}
+.voice-recorder .voice-review{margin-top:1rem}
+.voice-recorder audio{display:block;width:100%;max-width:34rem;margin:0 0 1rem}
+.voice-recorder [hidden]{display:none!important}
+.voice-recorder[data-state=error] .voice-status{color:var(--danger,#c44040)}
+.voice-recorder button:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}

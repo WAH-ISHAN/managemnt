@@ -1,0 +1,10 @@
+<h1><?= e(t('Review workspace replacement')) ?></h1>
+<section class="card"><p><?= e(t('Replacing this workspace adds, changes and removes the records listed below. It also replaces document files. This is a complete snapshot handoff, not a merge. Keep working on one computer at a time.')) ?></p>
+<p><?= e(t('Snapshot created:')) ?> <?= e($preview['created_at']) ?></p>
+<p><?= e(t('Authenticated sender:')) ?> <strong><?= e($preview['sender_name']) ?></strong></p><p><?= e(t('Fingerprint:')) ?> <?= e($preview['from']) ?></p>
+<div class="table-wrap"><table><thead><tr><th><?= e(t('Record group')) ?></th><th><?= e(t('Added')) ?></th><th><?= e(t('Changed')) ?></th><th><?= e(t('Removed')) ?></th></tr></thead><tbody><?php foreach($preview['changes']as $change): ?><tr><th><?= e(t(ucfirst(str_replace('_',' ',$change['table'])))) ?></th><td><?= e($change['added']) ?></td><td><?= e($change['changed']) ?></td><td><?= e($change['removed']) ?></td></tr><?php endforeach; ?></tbody></table></div>
+<p><?= e(t('Local account connections, PIN, device pairings, trusted code and automations remain on this computer. Connection history, sync mappings and edit history are reset. A safety backup preserves the previous database and uploaded files.')) ?></p>
+<p><?= e(t('After replacement, automatic workspace sharing, calendar and email jobs, activity tracking, planning, financial recurrences and automation rules are paused. Review their targets before enabling them again.')) ?></p>
+<p><?= e(t('Open forms and prepared actions expire after replacement. Unlock this profile again if a PIN is set.')) ?></p>
+<p><?= e(t('Existing local API tokens expire after replacement. Create fresh tokens and reconnect phone or API clients before using them with the new records.')) ?></p>
+<form method="post" action="/platform/workspace/apply"><?= csrf_field() ?><label><?= e(t('Type REPLACE to use this snapshot')) ?><input name="confirmation" required pattern="REPLACE" autocomplete="off"></label><button><?= e(t('Replace with reviewed workspace')) ?></button> <a href="/platform#workspace-delivery"><?= e(t('Keep this workspace')) ?></a></form></section>

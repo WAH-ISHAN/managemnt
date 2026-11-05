@@ -1,5 +1,7 @@
 # LifeOS — Your Life, Your Freedom
 
+Version 1.9.6 completes all-day calendar workflows and separately approved cancellation/deletion publishing, adds local microphone recording with playback and reviewed transcription, and provides automatic encrypted workspace delivery to a paired device through a shared folder. Received workspaces require a replacement review and preserve local credentials; background jobs pause until reviewed again. Knowledge Hub and the latest native repairs are included in the rebuilt payload. See the [local completion and verification report](qa/completion-1.9.6.md).
+
 First-start setup now supports **multiple roles**: School, University and Employee can be combined, alongside Freelancer, Business owner and Job seeker. Navigation, quick actions, dashboard and settings show the matching tools. Change roles later in **Settings → Modules & language → Your roles**; saved records are retained. See the [role mapping, research and behavior](docs/WORKSPACE-ROLES.md).
 
 Version 1.9.3 adds a dedicated **LifeOS AI** chat panel (**Win + Shift + \\**) with automatic selection of currently available zero-cost online models. Model selection stays in the background. This laptop uses the explicitly approved OpenCode v2.2.5 CLI update; no model weights are downloaded. It preserves the startup, profile isolation, languages and Work Roles improvements from 1.9.1. See [verification and limits](qa/end-to-end-2026-11-03.md) and [Work Roles / AI guide](docs/PART-3-WORK-ROLES-AI.md).

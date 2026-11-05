@@ -13,3 +13,15 @@
 @media(max-width:520px){.notifications-drawer{inset:calc(var(--window-chrome-height,0px) + 6px) 6px 6px auto;width:calc(100vw - 12px);height:auto;border-radius:21px}.notifications-header{padding:22px 18px 18px}.notifications-toolbar{padding:0 18px 14px}.notifications-heading h2{font-size:20px}.notifications-list{padding:8px 8px 14px}.notifications-status{padding-left:18px;padding-right:18px}.notifications-footer{padding:15px 18px}.notification-item{padding:14px 10px}.notification-toast{right:16px;bottom:16px}}
 @media(prefers-reduced-motion:reduce){.notifications-drawer[open],.notification-toast{animation:none}}
 @media print{.notifications-drawer,.notification-toast{display:none!important}}
+/* Translucent surfaces retain readable text over the workspace beneath them. */
+:root{--notification-glass:rgba(249,252,255,.72);--notification-edge:rgba(255,255,255,.7);--notification-shadow:rgba(22,41,76,.22)}
+:root[data-theme=dark]{--notification-glass:rgba(24,38,61,.70);--notification-edge:rgba(186,213,255,.20);--notification-shadow:rgba(0,8,25,.42)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]):not([data-theme=dark]){--notification-glass:rgba(24,38,61,.70);--notification-edge:rgba(186,213,255,.20);--notification-shadow:rgba(0,8,25,.42)}}
+.notifications-drawer,.notification-toast{background:linear-gradient(135deg,rgba(190,216,255,.10),transparent 60%),var(--notification-glass);border-color:var(--notification-edge);backdrop-filter:blur(32px) saturate(150%);-webkit-backdrop-filter:blur(32px) saturate(150%);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 18px 60px -20px var(--notification-shadow)}
+.notifications-drawer{padding-top:0}
+.notifications-drawer::backdrop{background:rgba(12,23,43,.12);backdrop-filter:none}
+.notifications-footer{background:transparent}
+.notification-toast{border-left-color:var(--accent)}
+@supports not (backdrop-filter:blur(1px)){.notifications-drawer,.notification-toast{background:var(--glass-dialog,var(--input))}}
+@media(prefers-reduced-transparency:reduce){.notifications-drawer,.notification-toast{background:var(--glass-dialog,var(--input));backdrop-filter:none;-webkit-backdrop-filter:none}}
+@media(forced-colors:active){.notifications-drawer,.notification-toast{background:Canvas;color:CanvasText;border:1px solid CanvasText;box-shadow:none}}

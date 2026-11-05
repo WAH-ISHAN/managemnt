@@ -29,14 +29,10 @@
             <div class="dashboard-focus"><div><strong><?= e($focus['subject']) ?></strong><small><?= e(ucfirst($focus['kind'])) ?> <?= e(t('session |')) ?> <?= e($focus['status']) ?></small></div><a class="btn secondary" href="/focus"><?= e(t('Continue')) ?></a></div>
         <?php endif; ?>
         <h3><?= e(t('Your next actions')) ?></h3>
-        <?php if ($hasLessons): $returnTo='/'; require ROOT.'/app/Modules/Lessons/views/tasks.php'; elseif (!$tasks): ?>
-            <p class="muted dashboard-empty"><?= e(t('No unfinished tasks.')) ?> <a href="/planner?view=tasks#new-task"><?= e(t('Add your next task.')) ?></a></p>
-        <?php else: foreach ($tasks as $task): ?>
-            <div class="task-row"><div><strong><?= e($task['title']) ?></strong><small><?= e($task['due'] ?? t('No due date')) ?></small></div><a href="/planner?view=tasks"><?= e(t('Open')) ?></a></div>
-        <?php endforeach; endif; ?>
+        <?php require __DIR__.'/today-categories.php'; ?>
         <div class="section-heading"><h3><?= e(t('Your schedule')) ?></h3><a href="/planner?view=appointments"><?= e(t('Manage →')) ?></a></div>
         <?php foreach (array_slice($appointments,0,3) as $appointment): ?>
-            <div class="deadline"><strong><?= e($appointment['title']) ?></strong><small><?= e($appointment['starts_at']) ?></small></div>
+            <div class="deadline"><strong><?= e($appointment['title']) ?></strong><small><?= e(!empty($appointment['all_day']) ? PlannerService::appointmentWhen($appointment) : $appointment['starts_at']) ?></small></div>
         <?php endforeach; ?>
         <?php if (!$appointments): ?><p class="muted dashboard-empty"><?= e(t('No upcoming appointments recorded.')) ?></p><?php endif; ?>
     </section>

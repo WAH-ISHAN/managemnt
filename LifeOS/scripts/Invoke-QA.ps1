@@ -76,9 +76,13 @@ function Invoke-QaStage([string]$Name,[scriptblock]$Action) {
 function Get-SourceSnapshot {
     $files=@(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'app'),(Join-Path $projectRoot 'public') -Recurse -File)
     foreach($folder in @('launcher','scripts','tests')) {
-        $files+=@(Get-ChildItem -LiteralPath (Join-Path $projectRoot $folder) -File | Where-Object Extension -In @('.cs','.csproj','.ps1','.php','.py','.js','.cjs'))
+        $folderRoot=Join-Path $projectRoot $folder
+        $files+=@(Get-ChildItem -LiteralPath $folderRoot -Recurse -File | Where-Object {
+            $relative=$_.FullName.Substring($folderRoot.Length+1)
+            $relative -notmatch '(^|[\\/])(\.tmp|bin|obj|__pycache__)([\\/]|$)' -and $_.Extension -In @('.cs','.csproj','.ps1','.php','.py','.js','.cjs','.mjs')
+        })
     }
-    foreach($name in @('composer.json','composer.lock','phpunit.xml','php.ini','lifeos.iss')) {
+    foreach($name in @('composer.json','composer.lock','phpunit.xml','php.ini','lifeos.iss','build.ps1')) {
         if(Test-Path -LiteralPath (Join-Path $projectRoot $name)) { $files+=Get-Item -LiteralPath (Join-Path $projectRoot $name) }
     }
     return @($files | Sort-Object FullName -Unique | ForEach-Object {
@@ -107,18 +111,22 @@ try {
     if (-not $script:qaFailed) {
         Invoke-QaStage 'php-syntax' {
             $files=@(Get-ChildItem -LiteralPath app,public -Recurse -File -Filter '*.php')
-            $files+=@(Get-ChildItem -LiteralPath tests,integrations -Recurse -File -Filter '*.php')
+            $files+=@(Get-ChildItem -LiteralPath tests,integrations -Recurse -File -Filter '*.php' | Where-Object {
+                $_.FullName.Substring($projectRoot.Length+1) -notmatch '(^|[\\/])(\.tmp|node_modules|vendor)([\\/]|$)'
+            })
             foreach($file in $files) { Invoke-CheckedNative $phpCommand @('-l',$file.FullName) }
             Write-QaLog ($files.Count.ToString()+' PHP files passed syntax checks.')
         }
         Invoke-QaStage 'javascript-syntax' {
-            foreach($file in @('public/assets/app.js','public/assets/theme.js','public/assets/window-chrome.js','public/assets/websites.js','public/assets/admin-studio.js','public/assets/work.js','public/assets/progress.js','public/assets/cashflow3d.js','public/assets/uni-calendar.js','public/assets/persona.js','tests/ui_lifecycle.cjs','tests/nibm_bridge.cjs','tests/uni_calendar_ui.cjs')) {
+            $files=@(Get-ChildItem -LiteralPath 'public/assets' -File -Filter '*.js' | ForEach-Object FullName)
+            $files+=@('tests/ui_lifecycle.cjs','tests/nibm_bridge.cjs','tests/uni_calendar_ui.cjs')
+            foreach($file in $files) {
                 Invoke-CheckedNative $nodeCommand @('--check',$file)
             }
-            Write-QaLog '13 JavaScript files passed syntax checks.'
+            Write-QaLog ($files.Count.ToString()+' JavaScript files passed syntax checks.')
         }
         Invoke-QaStage 'phpunit' { Invoke-CheckedNative $phpCommand @('vendor/bin/phpunit','--no-progress') }
-        foreach($suite in @('module_loading','fresh_workspace','services','finance_planning','planner_growth_career','planner_search','documents_encryption','freedom','daily_progress','modern_tools','knowledge','life_planning','websites','website_accounts','website_costs','website_gateway','admin_studio','work_management','cloud_hub','wordpress_adapter','uni_calendar','uni_calendar_upgrade','persona','automation','expense_category_rules','sri_lanka_calendar','profiles_packs','capture_planning_trends','focus_intelligence','connectivity','localization','work_roles','ai_provider','school','school_guardian','employee_study','platform')) {
+        foreach($suite in @('module_loading','fresh_workspace','services','finance_planning','planner_growth_career','planner_search','documents_encryption','freedom','daily_progress','modern_tools','knowledge','life_planning','websites','website_accounts','website_costs','website_gateway','admin_studio','work_management','cloud_hub','wordpress_adapter','uni_calendar','uni_calendar_upgrade','persona','automation','expense_category_rules','sri_lanka_calendar','profiles_packs','capture_planning_trends','focus_intelligence','connectivity','calendar_completion','localization','work_roles','ai_provider','school','school_guardian','employee_study','platform','workspace_exchange')) {
             $suiteName=$suite
             Invoke-QaStage ('service-'+$suiteName) { Invoke-CheckedNative $phpCommand @('tests/'+$suiteName+'.php') }
         }
@@ -132,6 +140,9 @@ try {
         }
         Invoke-QaStage 'extensions-ui' { Invoke-CheckedNative $pythonCommand @('tests/extensions_ui.py') }
         Invoke-QaStage 'roles-ai-ui' { Invoke-CheckedNative $pythonCommand @('tests/roles_ai_ui.py') }
+        Invoke-QaStage 'voice-recording-ui' { Invoke-CheckedNative $pythonCommand @('tests/voice_recording_ui.py') }
+        Invoke-QaStage 'calendar-completion-ui' { Invoke-CheckedNative $pythonCommand @('tests/calendar_completion_ui.py') }
+        Invoke-QaStage 'workspace-exchange-http' { Invoke-CheckedNative $pythonCommand @('tests/workspace_exchange_http.py') }
         Invoke-QaStage 'localization-ui' { Invoke-CheckedNative $pythonCommand @('tests/localization_ui.py') }
         Invoke-QaStage 'opencode-worker' { Invoke-CheckedNative $pythonCommand @('tests/opencode_worker.py') }
         Invoke-QaStage 'ai-account-worker' { Invoke-CheckedNative $pythonCommand @('tests/ai_accounts.py') }

@@ -28,7 +28,7 @@ internal sealed class DesktopPanelWindow : Form
     internal DesktopPanelWindow(Uri home,CoreWebView2Environment environment,string profile="default")
     {
         this.home=home; this.environment=environment; this.profile=profile;
-        FormBorderStyle=FormBorderStyle.None; MinimumSize=new Size(320,360); ShowInTaskbar=false; TopMost=true;
+        FormBorderStyle=FormBorderStyle.None; Padding=Padding.Empty; MinimumSize=new Size(320,360); ShowInTaskbar=false; TopMost=true;
         Text="LifeOS desktop panel";
         BackColor=Color.Black; Width=420;
         StartPosition=FormStartPosition.Manual;
@@ -104,7 +104,10 @@ internal sealed class DesktopPanelWindow : Form
             browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled=false;
             browser.CoreWebView2.NewWindowRequested+=(_,e)=>e.Handled=true;
             browser.CoreWebView2.PermissionRequested+=(_,e)=>e.State=CoreWebView2PermissionState.Deny;
-            browser.CoreWebView2.NavigationCompleted+=async(_,_)=>{PublishLayout();try{await browser.CoreWebView2.ExecuteScriptAsync("document.documentElement.dataset.nativeGlass="+(glassResult.NativeBackdropConfigured?"'true'":"'false'"));}catch(InvalidOperationException){}};
+            // The native region owns all four outer corners. A second CSS
+            // curve exposes a different backdrop along its antialiased edge.
+            await browser.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync("document.addEventListener('DOMContentLoaded',()=>{document.documentElement.dataset.nativeClip="+(glassResult.RoundedClipApplied?"'true'":"'false'")+";document.documentElement.dataset.nativeGlass="+(glassResult.NativeBackdropConfigured?"'true'":"'false'")+";},{once:true})");
+            browser.CoreWebView2.NavigationCompleted+=async(_,_)=>{PublishLayout();try{await browser.CoreWebView2.ExecuteScriptAsync("document.documentElement.dataset.nativeClip="+(glassResult.RoundedClipApplied?"'true'":"'false'")+";document.documentElement.dataset.nativeGlass="+(glassResult.NativeBackdropConfigured?"'true'":"'false'"));}catch(InvalidOperationException){}};
             browser.CoreWebView2.NavigationStarting+=(_,e)=>{if(!Uri.TryCreate(e.Uri,UriKind.Absolute,out var uri)||uri.GetLeftPart(UriPartial.Authority)!=home.GetLeftPart(UriPartial.Authority))e.Cancel=true;};
             browser.CoreWebView2.WebMessageReceived+=(_,e)=>{try{if(!Uri.TryCreate(e.Source,UriKind.Absolute,out var source)||source.GetLeftPart(UriPartial.Authority)!=home.GetLeftPart(UriPartial.Authority))return;using var message=JsonDocument.Parse(e.WebMessageAsJson);if(!message.RootElement.TryGetProperty("type",out var kind)||kind.ValueKind!=JsonValueKind.String)return;if(kind.GetString() is "lifeos-panel-drag" or "lifeos-panel-resize" or "lifeos-panel-size" or "lifeos-panel-reset" or "lifeos-panel-header")HandleLayoutMessage(message.RootElement);else if(kind.GetString()=="lifeos-panel-close")Hide();else if(kind.GetString()=="lifeos-panel-autohide"&&message.RootElement.TryGetProperty("enabled",out var enabled)){autoHideEnabled=enabled.ValueKind==JsonValueKind.True;if(Visible&&autoHideEnabled)autoHideTimer.Start();else autoHideTimer.Stop();}else if(kind.GetString()=="lifeos-panel-open"&&message.RootElement.TryGetProperty("route",out var route)){string path=route.GetString()??"";if(path.StartsWith('/')&&!path.StartsWith("//")&&!path.Contains('\\')){OpenRouteRequested?.Invoke(path);Hide();}}}catch(JsonException){}};
             browser.CoreWebView2.Navigate(new Uri(home,"/desktop/panel").ToString());

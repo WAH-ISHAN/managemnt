@@ -5,7 +5,11 @@ final class ConnectivityIcs {
     private static function unescape(string $s): string { return preg_replace_callback('/\\\\([nN,;\\\\])/',fn($m)=>in_array($m[1],['n','N'],true) ? "\n" : $m[1],$s); }
     private static function escape(string $s): string { return str_replace(["\\","\r\n","\r","\n",';',','],["\\\\","\\n","\\n","\\n","\\;","\\,"],$s); }
     private static function date(string $value,array $params): string {
-        if (($params['VALUE'] ?? '')==='DATE' || preg_match('/^\d{8}$/D',$value)) throw new InvalidArgumentException(t('All-day events need a timed start/end before importing.'));
+        if (($params['VALUE'] ?? '')==='DATE' || preg_match('/^\d{8}$/D',$value)) {
+            $date=DateTimeImmutable::createFromFormat('!Ymd',$value);
+            if (!$date || $date->format('Ymd')!==$value) throw new InvalidArgumentException(t('Calendar contains an invalid date.'));
+            return $date->format('Y-m-d').' 00:00';
+        }
         $zone=$params['TZID'] ?? 'Asia/Colombo';
         try { $tz=new DateTimeZone($zone); } catch (Throwable) { throw new InvalidArgumentException(t('Unknown calendar timezone.')); }
         $format=str_ends_with($value,'Z') ? '!Ymd\THis\Z' : (strlen($value)===13 ? '!Ymd\THi' : '!Ymd\THis');
@@ -22,9 +26,14 @@ final class ConnectivityIcs {
         foreach (preg_split('/\r\n|\n|\r/',$ics) as $line) {
             if ($line==='BEGIN:VEVENT') { if ($event!==null) throw new InvalidArgumentException(t('Nested calendar events are unsupported.')); $event=[]; continue; }
             if ($line==='END:VEVENT') {
-                if (!$event || !isset($event['UID'],$event['DTSTART'],$event['DTEND'],$event['SUMMARY'])) throw new InvalidArgumentException(t('Every event needs UID, title, start and end.'));
+                if (!$event || !isset($event['UID'],$event['DTSTART'],$event['SUMMARY'])) throw new InvalidArgumentException(t('Every event needs UID, title, start and end.'));
+                $allDay=($event['DTSTART'][1]['VALUE'] ?? '')==='DATE' || preg_match('/^\d{8}$/D',$event['DTSTART'][0]);
+                if (!isset($event['DTEND']) && $allDay) $event['DTEND']=[(new DateTimeImmutable(self::date(...$event['DTSTART'])))->modify('+1 day')->format('Ymd'),['VALUE'=>'DATE']];
+                if (!isset($event['DTEND'])) throw new InvalidArgumentException(t('Every event needs UID, title, start and end.'));
+                $endAllDay=($event['DTEND'][1]['VALUE'] ?? '')==='DATE' || preg_match('/^\d{8}$/D',$event['DTEND'][0]);
+                if ((bool)$allDay!==(bool)$endAllDay) throw new InvalidArgumentException(t('Calendar start and end must use the same date format.'));
                 if (count($events)>=500) throw new InvalidArgumentException(t('Import at most 500 events at a time.'));
-                $row=['uid'=>PlannerService::title($event['UID'][0],500),'title'=>PlannerService::title(self::unescape($event['SUMMARY'][0])),'starts_at'=>self::date(...$event['DTSTART']),'ends_at'=>self::date(...$event['DTEND']),'location'=>mb_substr(self::unescape($event['LOCATION'][0] ?? ''),0,200),'notes'=>mb_substr(self::unescape($event['DESCRIPTION'][0] ?? ''),0,2000),'status'=>($event['STATUS'][0] ?? '')==='CANCELLED' ? 'cancelled' : 'scheduled'];
+                $row=['uid'=>PlannerService::title($event['UID'][0],500),'title'=>PlannerService::title(self::unescape($event['SUMMARY'][0])),'starts_at'=>self::date(...$event['DTSTART']),'ends_at'=>self::date(...$event['DTEND']),'location'=>mb_substr(self::unescape($event['LOCATION'][0] ?? ''),0,200),'notes'=>mb_substr(self::unescape($event['DESCRIPTION'][0] ?? ''),0,2000),'status'=>($event['STATUS'][0] ?? '')==='CANCELLED' ? 'cancelled' : 'scheduled','all_day'=>$allDay ? 1 : 0];
                 if ($row['ends_at']<=$row['starts_at']) throw new InvalidArgumentException(t('Event end must follow its start.'));
                 $events[]=$row; $event=null; continue;
             }
@@ -64,7 +73,9 @@ final class ConnectivityIcs {
         foreach (Db::all('SELECT * FROM planner_appointments ORDER BY starts_at,id LIMIT 5000') as $a) {
             $id=hash('sha256',Db::setting('connection_calendar_identity','lifeos').':'.$a['id']);
             $utc=fn($v)=>(new DateTimeImmutable($v,new DateTimeZone('Asia/Colombo')))->setTimezone(new DateTimeZone('UTC'))->format('Ymd\THis\Z');
-            array_push($lines,'BEGIN:VEVENT','UID:'.$id.'@lifeos.local','DTSTAMP:'.gmdate('Ymd\THis\Z'),'DTSTART:'.$utc($a['starts_at']),'DTEND:'.$utc($a['ends_at']),'SUMMARY:'.self::escape($a['title']),'LOCATION:'.self::escape($a['location'] ?? ''),'DESCRIPTION:'.self::escape($a['notes'] ?? ''),'STATUS:'.($a['status']==='cancelled' ? 'CANCELLED' : 'CONFIRMED'),'END:VEVENT');
+            $start=$a['all_day'] ? 'DTSTART;VALUE=DATE:'.str_replace('-','',substr($a['starts_at'],0,10)) : 'DTSTART:'.$utc($a['starts_at']);
+            $end=$a['all_day'] ? 'DTEND;VALUE=DATE:'.str_replace('-','',substr($a['ends_at'],0,10)) : 'DTEND:'.$utc($a['ends_at']);
+            array_push($lines,'BEGIN:VEVENT','UID:'.$id.'@lifeos.local','DTSTAMP:'.gmdate('Ymd\THis\Z'),$start,$end,'SUMMARY:'.self::escape($a['title']),'LOCATION:'.self::escape($a['location'] ?? ''),'DESCRIPTION:'.self::escape($a['notes'] ?? ''),'STATUS:'.($a['status']==='cancelled' ? 'CANCELLED' : 'CONFIRMED'),'END:VEVENT');
         }
         $lines[]='END:VCALENDAR'; return implode("\r\n",array_map(self::fold(...),$lines))."\r\n";
     }

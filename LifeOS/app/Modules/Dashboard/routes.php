@@ -22,7 +22,12 @@ return function (Router $r) {
             'series'=>$salary ? SalaryService::monthlySeries() : [],'assets'=>$assets,'goals'=>$invest ? InvestmentService::goals() : [],
             'rules'=>$salary ? Db::all('SELECT * FROM allocation_rules WHERE active=1 ORDER BY sort,id') : [],
             'due'=>$uni ? UniService::upcoming(7) : [],'exams'=>$uni ? UniService::exams(30) : [],'gpa'=>$uni ? UniService::gpa() : null,
-            'tasks'=>Db::all("SELECT * FROM tasks WHERE status='open' ORDER BY due IS NULL,due,id LIMIT 8"),
+            'taskCategories'=>[
+                'exams'=>Db::all("SELECT id,title,due FROM tasks WHERE status='open' AND archived_at IS NULL AND category='exam' ORDER BY due IS NULL,due,id LIMIT 6"),
+                'todos'=>Db::all("SELECT id,title,due FROM tasks WHERE status='open' AND archived_at IS NULL AND category='todo' ORDER BY due IS NULL,due,id LIMIT 8"),
+                'tasks'=>Db::all("SELECT id,title,due FROM tasks WHERE status='open' AND archived_at IS NULL AND category='task' ORDER BY due IS NULL,due,id LIMIT 6"),
+            ],
+            'panelNotes'=>module_enabled('Insights') ? Db::all('SELECT id,title,body FROM desktop_panel_notes ORDER BY id DESC LIMIT 4') : [],
             'repeated'=>$lessons ? LessonService::repeated() : [],'review'=>$lessons ? Db::one('SELECT * FROM weekly_reviews ORDER BY week DESC LIMIT 1') : null,
             'hasMoneyRecords'=>$salary && (Db::one('SELECT 1 FROM income LIMIT 1') || Db::one('SELECT 1 FROM expenses LIMIT 1')),
             'hasAssetRecords'=>$invest && (bool)Db::one('SELECT 1 FROM asset_transactions LIMIT 1'),
