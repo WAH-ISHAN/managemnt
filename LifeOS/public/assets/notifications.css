@@ -25,3 +25,22 @@
 @supports not (backdrop-filter:blur(1px)){.notifications-drawer,.notification-toast{background:var(--glass-dialog,var(--input))}}
 @media(prefers-reduced-transparency:reduce){.notifications-drawer,.notification-toast{background:var(--glass-dialog,var(--input));backdrop-filter:none;-webkit-backdrop-filter:none}}
 @media(forced-colors:active){.notifications-drawer,.notification-toast{background:Canvas;color:CanvasText;border:1px solid CanvasText;box-shadow:none}}
+.notification-toast.update-toast{width:min(460px,calc(100vw - 32px));padding:22px;gap:15px;border:1px solid var(--notification-edge);border-radius:24px;align-items:flex-start}
+.update-toast .update-toast-icon{flex:0 0 42px;width:42px;height:42px;display:grid;place-items:center;border-radius:14px;background:var(--accent-soft);color:var(--accent)}
+.update-toast-icon svg{width:23px;height:23px}
+.update-toast .update-toast-content{flex:1;min-width:0;padding-right:18px}
+.update-toast-heading{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.update-toast .update-toast-heading strong{font-size:15px;line-height:1.5;letter-spacing:-.2px}
+.update-version{font-size:10px;line-height:1.5;font-weight:650;padding:3px 8px;border:1px solid var(--line);border-radius:8px;color:var(--muted);overflow-wrap:anywhere}
+.update-toast .update-toast-description{font-size:12px;line-height:1.7;margin:7px 0 16px}
+.update-toast-actions{display:flex;gap:10px;flex-wrap:wrap}
+.notification-toast.update-toast .update-primary,.notification-toast.update-toast .update-later{min-height:42px!important;padding:10px 15px!important;font-size:12px!important;font-weight:650;border-radius:12px;line-height:1.5}
+.notification-toast.update-toast .update-primary{background:#1767df!important;color:#fff!important;border:1px solid transparent;box-shadow:0 4px 12px rgba(22,93,220,.18)}
+.notification-toast.update-toast .update-primary:hover:not(:disabled){background:#105bc9!important}
+.notification-toast.update-toast .update-later{background:transparent!important;color:var(--muted)!important;border:1px solid var(--line)}
+.update-toast .update-primary:disabled{opacity:.65;cursor:wait}
+.notification-toast.update-toast .update-toast-close{position:absolute;top:12px;right:12px;width:32px;min-height:32px!important;padding:0!important;display:grid;place-items:center;border-radius:10px;color:var(--muted)!important}
+.update-toast .update-toast-close:hover{background:var(--accent-soft)!important;color:var(--text)!important}
+.update-toast button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:440px){.notification-toast.update-toast{padding:18px;gap:12px;right:16px;bottom:16px}.update-toast .update-toast-icon{flex-basis:34px;width:34px;height:34px;border-radius:11px}.update-toast .update-toast-content{padding-right:10px}.update-toast-actions{gap:8px}.notification-toast.update-toast .update-primary,.notification-toast.update-toast .update-later{flex:1 1 auto}.update-toast-heading{padding-right:8px}}
+@media(forced-colors:active){.notification-toast.update-toast .update-primary{background:ButtonFace!important;color:ButtonText!important;border-color:ButtonText}}

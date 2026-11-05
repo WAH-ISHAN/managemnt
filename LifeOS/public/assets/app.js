@@ -317,6 +317,7 @@
   requestAnimationFrame(focusDestination);
   pollAlerts();
   const bridge = window.chrome?.webview;
+  let dismissedUpdateVersion = null;
   if (bridge) {
     window.LifeOSUpdate = {
       check: () => bridge.postMessage({ type: 'lifeos-update', action: 'check' }),
@@ -340,22 +341,44 @@
         applyBtn.hidden = !data.ready;
       }
       let banner = document.getElementById('lifeos-update-banner');
+      const version = String(data.availableVersion || window.lifeosT('new version'));
       if (data.ready) {
         if (!banner) {
           banner = document.createElement('aside');
           banner.id = 'lifeos-update-banner';
           banner.className = 'notification-toast update-toast';
-          banner.setAttribute('role', 'alert');
-          banner.innerHTML = window.lifeosHTML('<div><strong>Update Ready</strong><p>LifeOS ') + (data.availableVersion || window.lifeosT('new version')) + window.lifeosHTML(' is ready to install.</p><button type="button" class="btn" id="update-banner-apply" style="min-height:30px;padding:4px 12px;font-size:11px;margin-top:6px;">Restart &amp; Update</button></div><button type="button" class="quiet" id="update-banner-close" aria-label="Dismiss">×</button>');
+          banner.setAttribute('role', 'region');
+          banner.setAttribute('aria-labelledby', 'update-banner-title');
+          banner.innerHTML = '<div class="update-toast-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3m-4 4 4-4 4 4M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg></div><div class="update-toast-content"><div class="update-toast-heading"><strong id="update-banner-title"></strong><span class="update-version"></span></div><p class="update-toast-description"></p><div class="update-toast-actions"><button type="button" class="update-primary" id="update-banner-apply"></button><button type="button" class="update-later"></button></div></div><button type="button" class="quiet update-toast-close" id="update-banner-close">×</button>';
+          banner.querySelector('#update-banner-title').textContent = window.lifeosT('Update ready');
+          banner.querySelector('.update-toast-description').textContent = window.lifeosT('Restart LifeOS to finish installing the update.');
+          banner.querySelector('.update-later').textContent = window.lifeosT('Later');
+          banner.querySelector('.update-toast-close').setAttribute('aria-label', window.lifeosT('Dismiss update notification'));
           document.body.appendChild(banner);
-          document.getElementById('update-banner-apply')?.addEventListener('click', () => {
+          const dismiss = () => {
+            dismissedUpdateVersion = banner.dataset.version;
+            const hadFocus = banner.contains(document.activeElement);
+            banner.hidden = true;
+            if (hadFocus) document.querySelector('[data-notifications-open]')?.focus();
+          };
+          banner.querySelector('#update-banner-apply').addEventListener('click', event => {
+            if (event.currentTarget.disabled) return;
+            event.currentTarget.disabled = true;
+            event.currentTarget.textContent = window.lifeosT('Restarting…');
             bridge.postMessage({ type: 'lifeos-update', action: 'apply' });
           });
-          document.getElementById('update-banner-close')?.addEventListener('click', () => {
-            banner.hidden = true;
+          banner.querySelector('.update-toast-close').addEventListener('click', dismiss);
+          banner.querySelector('.update-later').addEventListener('click', dismiss);
+          banner.addEventListener('keydown', event => {
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); dismiss(); }
           });
         }
-        banner.hidden = false;
+        banner.dataset.version = version;
+        banner.querySelector('.update-version').textContent = 'v' + version;
+        const restart = banner.querySelector('#update-banner-apply');
+        restart.disabled = !!data.busy;
+        restart.textContent = window.lifeosT(data.busy ? 'Restarting…' : 'Restart & update');
+        banner.hidden = dismissedUpdateVersion === version;
       } else if (banner) {
         banner.hidden = true;
       }
