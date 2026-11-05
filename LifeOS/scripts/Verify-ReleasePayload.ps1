@@ -17,6 +17,13 @@ $distributionPath=[IO.Path]::GetFullPath($Distribution)
 $checks=[Collections.Generic.List[string]]::new()
 $manifest=[Collections.Generic.List[object]]::new()
 function Check([bool]$Valid,[string]$Label){if(!$Valid){throw $Label};$checks.Add($Label)}
+function Normalize-ArtifactVersion([string]$Value){
+    $parts=$Value.Trim().Split('.')
+    if($parts.Count -lt 2 -or $parts.Count -gt 4 -or @($parts | Where-Object {$_ -notmatch '^\d+$'}).Count){throw ('Invalid artifact version: '+$Value)}
+    $numbers=@($parts | ForEach-Object {[int]$_})
+    while($numbers.Count -lt 4){$numbers+=0}
+    return ($numbers -join '.')
+}
 function Compare-PayloadFile([string]$Relative){
     $source=Join-Path $script:project $Relative
     $target=Join-Path $script:distributionPath $Relative
@@ -68,7 +75,11 @@ $setup=Get-Item -LiteralPath $Installer
 $installerHash=(Get-FileHash -LiteralPath $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 $sidecar=Get-Content -LiteralPath ($setup.FullName+'.sha256') -Raw
 Check ($sidecar.Split(' ')[0] -ceq $installerHash) 'Installer checksum sidecar matches the artifact'
-Check ($setup.VersionInfo.ProductVersion -ceq $version) 'Installer artifact version matches source'
+# Inno's Windows version resource pads AppVersion to four numeric components.
+# Compare equivalent numeric versions, while still rejecting any changed component.
+$artifactVersion=Normalize-ArtifactVersion $setup.VersionInfo.ProductVersion
+$sourceVersion=Normalize-ArtifactVersion $version
+Check ($artifactVersion -ceq $sourceVersion) ('Installer artifact version matches source (artifact '+$setup.VersionInfo.ProductVersion+', source '+$version+')')
 $result=[ordered]@{success=$true;version=$version;commercial=[bool]$Commercial;verifiedUtc=[DateTime]::UtcNow.ToString('o');checks=@($checks.ToArray());sourceFiles=@($manifest.ToArray());launcherSha256=(Get-FileHash -LiteralPath $executable.FullName -Algorithm SHA256).Hash.ToLowerInvariant();aiRuntimeSha256=$runtimeHash;installer=[ordered]@{path=$setup.FullName;bytes=$setup.Length;sha256=$installerHash;signature=(Get-AuthenticodeSignature -LiteralPath $setup.FullName).Status.ToString()};scope='Distribution/source file identity, selected runtime identity/imports, launcher version and installer metadata/checksum. Does not extract the installer or establish compiled-source equivalence, clean-machine installation, account approval or physical-device acceptance.'}
 $evidenceFile=[IO.Path]::GetFullPath($EvidencePath)
 [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($evidenceFile))
