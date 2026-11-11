@@ -58,7 +58,7 @@ jobs:
         run: |
           ./tests/update_package.ps1
           if (-not $?) { throw 'Portable update package fixture failed.' }
-          ./tests/update_delivery.ps1
+          ./tests/update_delivery.ps1 -PhpDirectory (Split-Path (Get-Command php).Source)
           if (-not $?) { throw 'Update delivery suite failed.' }
           ./tests/update_notification_contract.ps1
           if (-not $?) { throw 'Update notification contract failed.' }
