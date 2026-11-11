@@ -77,8 +77,13 @@ final class WebsiteHttpClient {
         if (strlen($json)>self::MAX_REQUEST) throw new InvalidArgumentException(t('This record is too large for the connector. Shorten the content and try again.'));
         $parts=parse_url($url); $host=$parts['host'];
         $addresses=self::addresses($host); $address=$addresses[0];
-        $pin=$host.':443:'.(str_contains($address,':') ? '['.$address.']' : $address);
-        $options=['addresses'=>$addresses,'pinnedAddress'=>$address,'verifyPeer'=>true,'verifyHost'=>2,'followRedirects'=>false,'proxy'=>'','maxResponse'=>self::MAX_RESPONSE];
+        // Let libcurl try every vetted public DNS answer while keeping DNS rebinding protection.
+        // CURLOPT_RESOLVE supports comma-separated IPs (including bracketed IPv6 addresses).
+        $pin=$host.':443:'.implode(',',array_map(
+            static fn(string $ip): string => str_contains($ip,':') ? '['.$ip.']' : $ip,
+            $addresses
+        ));
+        $options=['addresses'=>$addresses,'pinnedAddress'=>$address,'resolveEntry'=>$pin,'verifyPeer'=>true,'verifyHost'=>2,'followRedirects'=>false,'proxy'=>'','maxResponse'=>self::MAX_RESPONSE];
         if (self::$testTransport!==null) {
             $response=(self::$testTransport)($url,$token,$payload,$options);
             if (!is_array($response) || !isset($response['status'],$response['body']) || !is_int($response['status']) || !is_string($response['body'])) throw new RuntimeException(t('Invalid test transport response.'));
