@@ -13,6 +13,8 @@ $milliseconds=[int]($interval.Groups[1].Value.Replace('_',''))
 Check ($milliseconds -gt 0 -and $milliseconds -le 60000) 'Installed clients poll within one minute'
 Check ($source.Contains('new(){Interval=UpdatePollIntervalMilliseconds}')) 'The timer uses the bounded polling interval'
 Check ($source.Contains('SystemSounds.Asterisk.Play()')) 'A native Windows sound announces a new release'
+Check ($source.Contains('AnnounceUpdate(release.Version,release.BuildNumber)')) 'Every published build can trigger notification, including same-version builds'
+Check ($source.Contains('announcedRelease==identity')) 'Notification deduplication uses version and build identity'
 Check ($source.Contains('reminders.ShowBalloonTip(10_000)')) 'A Windows tray notification announces a new release'
 Check ($source.IndexOf('AnnounceUpdate(release.Version)',[StringComparison]::Ordinal) -lt $source.IndexOf('client.GetAsync(release.Package.Url',[StringComparison]::Ordinal)) 'Notification occurs before the package download'
 Check ($source.Contains('Cache-Control","no-cache, no-store')) 'Release checks bypass stale HTTP caches'
