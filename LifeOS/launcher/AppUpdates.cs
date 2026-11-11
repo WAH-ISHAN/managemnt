@@ -56,7 +56,7 @@ internal sealed partial class LifeWindow
     private readonly System.Windows.Forms.Timer updateTimer=new(){Interval=UpdatePollIntervalMilliseconds};
     private bool updateChecking,updateReady;
     private string updateMessage="Automatic updates are enabled.",availableVersion="";
-    private string announcedVersion="";
+    private string announcedRelease="";
     private string AppDataDirectory=>Path.GetFullPath(Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR") ?? Path.Combine(root,"data"));
 
     private void InitializeAppUpdates()
@@ -73,13 +73,14 @@ internal sealed partial class LifeWindow
         catch(OperationCanceledException) {}
     }
 
-    private void AnnounceUpdate(string version)
+    private void AnnounceUpdate(string version,long build)
     {
-        if(diagnostic || announcedVersion==version || IsDisposed)return;
-        announcedVersion=version;
+        string identity=version+" (build "+build+")";
+        if(diagnostic || announcedRelease==identity || IsDisposed)return;
+        announcedRelease=identity;
         reminderRoute="/settings#updates";
         reminders.BalloonTipTitle="LifeOS update available";
-        reminders.BalloonTipText="LifeOS "+version+" is being prepared. It will be downloaded and verified automatically.";
+        reminders.BalloonTipText="LifeOS "+identity+" is available. Download and integrity verification will begin automatically.";
         reminders.BalloonTipIcon=ToolTipIcon.Info;
         SystemSounds.Asterisk.Play();
         reminders.ShowBalloonTip(10_000);
@@ -142,7 +143,7 @@ internal sealed partial class LifeWindow
             var release=UpdateRelease.Parse(json);
             var installed=AppUpdateFiles.Installed(root);
             if(!release.IsNewerThan(installed.Version,installed.Build)) { updateMessage="LifeOS is up to date.";return; }
-            AnnounceUpdate(release.Version);
+            AnnounceUpdate(release.Version,release.BuildNumber);
             string updates=Path.Combine(AppDataDirectory,"updates"),stage=Guid.NewGuid().ToString("N");
             downloadDirectory=Path.Combine(updates,stage);Directory.CreateDirectory(downloadDirectory);
             string package=Path.Combine(downloadDirectory,"LifeOS-Update.zip");
