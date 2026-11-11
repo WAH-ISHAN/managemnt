@@ -98,6 +98,12 @@ try {
     website_check(WebsiteService::session($id)!==null && Db::one('SELECT action FROM website_operations WHERE website_id=? ORDER BY id DESC LIMIT 1',[$id])['action']==='health_check','Connection check refreshes the live manifest and records the result');
     $pin=$calls[array_key_last($calls)]['options'];
     website_check($pin['pinnedAddress']==='93.184.216.34' && $pin['verifyPeer'] && $pin['verifyHost']===2 && !$pin['followRedirects'] && $pin['proxy']==='','HTTPS transport pins a checked public address and disables ambient proxy/redirects');
+    $dns=['93.184.216.34','2606:4700:4700::1111','1.1.1.1'];
+    WebsiteService::checkConnection($id);
+    $multi=$calls[array_key_last($calls)]['options'];
+    website_check($multi['resolveEntry']==='example.com:443:93.184.216.34,[2606:4700:4700::1111],1.1.1.1',
+        'Every validated public DNS answer is available to libcurl for failover, with bracketed IPv6');
+    $dns=['93.184.216.34'];
     $dns=['93.184.216.34','127.0.0.1'];
     $before=count($calls);
     website_rejects(fn()=>WebsiteService::refresh($id,'pages'),'Mixed public/private DNS is rejected','reserved');
