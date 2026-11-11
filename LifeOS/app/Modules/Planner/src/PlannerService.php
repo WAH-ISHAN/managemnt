@@ -90,9 +90,10 @@ final class PlannerService {
         if ($end<=$start) throw new InvalidArgumentException(t('Appointment end must be after its start.'));
         $location=self::text($d['location'] ?? '',200); $notes=self::text($d['notes'] ?? '',2000);
         $status=$d['status'] ?? 'scheduled'; if (!is_string($status) || !in_array($status,['scheduled','done','cancelled'],true)) throw new InvalidArgumentException(t('Invalid appointment status.'));
-        $values=[$title,$start,$end,$location,$notes,int_range($d['reminder_minutes'] ?? 15,0,10080),$status,$allDay];
-        if ($id) { Db::run('UPDATE planner_appointments SET title=?,starts_at=?,ends_at=?,location=?,notes=?,reminder_minutes=?,status=?,all_day=? WHERE id=?',[...$values,$id]); return $id; }
-        return Db::run('INSERT INTO planner_appointments(title,starts_at,ends_at,location,notes,reminder_minutes,status,all_day) VALUES (?,?,?,?,?,?,?,?)',$values);
+        $kind=$d['kind'] ?? $current['kind'] ?? 'event'; if (!is_string($kind) || !in_array($kind,['event','renewal','exam'],true)) throw new InvalidArgumentException(t('Choose an event type.'));
+        $values=[$title,$start,$end,$location,$notes,int_range($d['reminder_minutes'] ?? 15,0,10080),$status,$allDay,$kind];
+        if ($id) { Db::run('UPDATE planner_appointments SET title=?,starts_at=?,ends_at=?,location=?,notes=?,reminder_minutes=?,status=?,all_day=?,kind=? WHERE id=?',[...$values,$id]); return $id; }
+        return Db::run('INSERT INTO planner_appointments(title,starts_at,ends_at,location,notes,reminder_minutes,status,all_day,kind) VALUES (?,?,?,?,?,?,?,?,?)',$values);
     }
     public static function appointmentWhen(array $row): string { return !empty($row['all_day']) ? t('All day').' · '.substr($row['starts_at'],0,10).' → '.(new DateTimeImmutable($row['ends_at']))->modify('-1 day')->format('Y-m-d') : $row['starts_at'].' → '.$row['ends_at']; }
     public static function validTime(mixed $time): string { if (!is_string($time) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/',$time)) throw new InvalidArgumentException(t('Choose a valid time.')); return $time; }
@@ -102,4 +103,23 @@ final class PlannerService {
     public static function streak(int $id): int { $dates=array_column(Db::all('SELECT date FROM planner_habit_checks WHERE habit_id=? ORDER BY date DESC',[$id]),'date'); $day=date('Y-m-d'); if (!in_array($day,$dates,true)) $day=date('Y-m-d',strtotime('-1 day')); $n=0; while (in_array($day,$dates,true)) { $n++; $day=date('Y-m-d',strtotime($day.' -1 day')); } return $n; }
     public static function upcoming(int $days=7): array { return Db::all("SELECT * FROM planner_appointments WHERE status='scheduled' AND ends_at>=? AND starts_at<=? ORDER BY starts_at",[date('Y-m-d H:i'),date('Y-m-d H:i',strtotime('+'.$days.' days'))]); }
     public static function appointmentsOn(string $date): array { valid_date($date); return Db::all("SELECT * FROM planner_appointments WHERE status='scheduled' AND starts_at<? AND ends_at>? ORDER BY starts_at",[date('Y-m-d',strtotime($date.' +1 day')).' 00:00',$date.' 00:00']); }
+    public static function calendarMonth(string $date): array {
+        valid_date($date); $first=new DateTimeImmutable(substr($date,0,7).'-01');
+        $start=$first->modify('-'.((int)$first->format('N')-1).' days'); $end=$start->modify('+42 days');
+        $items=[];
+        foreach (Db::all("SELECT id,title,due,category FROM tasks WHERE due>=? AND due<? AND archived_at IS NULL AND status='open' ORDER BY due,id",[$start->format('Y-m-d'),$end->format('Y-m-d')]) as $task) {
+            $items[$task['due']][]=['title'=>$task['title'],'kind'=>$task['category']==='exam'?'Exam':'Task','url'=>'/planner?'.http_build_query(['view'=>'tasks','date'=>$task['due'],'q'=>$task['title']])];
+        }
+        if (module_enabled('Uni') && class_exists('UniService')) {
+            foreach (Db::all('SELECT x.date,m.name FROM exams x JOIN uni_modules m ON m.id=x.module_id WHERE x.date>=? AND x.date<? ORDER BY x.date,x.id',[$start->format('Y-m-d'),$end->format('Y-m-d')]) as $exam) {
+                $items[$exam['date']][]=['title'=>$exam['name'],'kind'=>'Exam','url'=>'/uni?view=exams'];
+            }
+        }
+        foreach (Db::all("SELECT id,title,starts_at,ends_at,kind FROM planner_appointments WHERE status='scheduled' AND starts_at<? AND ends_at>? ORDER BY starts_at,id",[$end->format('Y-m-d').' 00:00',$start->format('Y-m-d').' 00:00']) as $event) {
+            $day=max(substr($event['starts_at'],0,10),$start->format('Y-m-d'));
+            $last=(new DateTimeImmutable($event['ends_at']))->modify('-1 minute')->format('Y-m-d');
+            while ($day<=$last && $day<$end->format('Y-m-d')) { $items[$day][]=['title'=>$event['title'],'kind'=>ucfirst($event['kind']),'url'=>'/planner?view=appointments&date='.$day.'&appointment='.$event['id'].'#appointment-'.$event['id']]; $day=(new DateTimeImmutable($day))->modify('+1 day')->format('Y-m-d'); }
+        }
+        return ['first'=>$first,'items'=>$items];
+    }
 }

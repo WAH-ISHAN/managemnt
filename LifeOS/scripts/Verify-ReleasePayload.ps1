@@ -6,7 +6,9 @@ param(
     [string]$EvidencePath='',
     [string]$AiExecutable="$env:LOCALAPPDATA/LifeOS/ai-runtime/opencode-2.2.5/opencode.exe",
     [switch]$Commercial,
-    [switch]$WithoutAiRuntime
+    [switch]$WithoutAiRuntime,
+    [switch]$RequireSigned,
+    [switch]$RequireReleaseIdentity
 )
 $ErrorActionPreference='Stop'
 $project=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -48,6 +50,19 @@ foreach($name in @('README.md','README-si.md','THIRD-PARTY.md','VERIFICATION.md'
 foreach($name in @('Apply-LifeOSUpdate.ps1','update-backup.php','Set-WindowsStartup.ps1','mobile_companion.py','setup_mobile_tls.py','connectivity_worker.py','authorize_calendar.py','lifeos_cli.py','Track-ActiveWindow.ps1','opencode_worker.py')){
     Compare-PayloadFile ('scripts/'+$name)
 }
+# The development data directory is deliberately preserved between local builds,
+# but Inno excludes it. Audit every file that can actually ship.
+$forbiddenNames='(^|/)(\.env(?:\..+)?|credentials?\.json|client_secret[^/]*\.json|[^/]+\.(?:pdb|pfx|p12|pem|key|db|sqlite|sqlite3))$'
+foreach($item in Get-ChildItem -LiteralPath $distributionPath -Recurse -Force){
+    $relative=$item.FullName.Substring($distributionPath.Length+1).Replace('\','/')
+    if($relative -like 'data/*'){continue}
+    Check (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) ('Shipped payload is not a reparse point: '+$relative)
+    Check ($relative -notmatch '(^|/)(\.git|\.hg|\.svn|node_modules|__pycache__)(/|$)') ('Shipped payload excludes development directories: '+$relative)
+    if(-not $item.PSIsContainer){Check ($relative -notmatch $forbiddenNames) ('Shipped payload excludes debug, database, credential and private-key artifacts: '+$relative)}
+}
+$inno=[IO.File]::ReadAllText((Join-Path $project 'lifeos.iss'))
+Check ($inno -match '(?im)^Source:\s*"dist\\\*";[^\r\n]*Excludes:\s*"[^"]*data\\\*[^"]*"') 'Installer source excludes preserved development data'
+Check ($inno -match '(?im)^Name:\s*"\{app\}\\data";[^\r\n]*uninsneveruninstall') 'Installer preserves local data during uninstall'
 $configuration=Get-Content -LiteralPath (Join-Path $distributionPath 'app/Core/license-config.json') -Raw|ConvertFrom-Json
 Check ([bool]$configuration.required -eq [bool]$Commercial) 'Payload has the requested commercial activation policy'
 if($Commercial){Check ($configuration.server -eq 'https://orean.tech' -and [Convert]::FromBase64String($configuration.publicKey).Length -eq 32) 'Commercial public verification key is present'}
@@ -55,8 +70,27 @@ if($Commercial){Check ($configuration.server -eq 'https://orean.tech' -and [Conv
 $version=[string]$launcher.Project.PropertyGroup.Version
 $installerVersion=[regex]::Match([IO.File]::ReadAllText((Join-Path $project 'lifeos.iss')),'(?m)^AppVersion=(.+)$').Groups[1].Value.Trim()
 Check ($version -ceq $installerVersion) 'Launcher and installer source versions agree'
+$settingsVersion=[IO.File]::ReadAllText((Join-Path $project 'app/Modules/Settings/views/index.php'))
+Check ($settingsVersion.Contains('LifeOS '+$version)) 'Settings UI version agrees with the launcher'
+$pluginTrust=[IO.File]::ReadAllText((Join-Path $project 'app/Modules/Platform/src/PluginTrustService.php'))
+Check ($pluginTrust -match ('DEVELOPMENT_VERSION\s*=\s*[''"]'+[regex]::Escape($version)+'[''"]')) 'Plugin compatibility version agrees with the launcher'
+$releaseIdentity=$null
+$releaseIdentityPath=Join-Path $distributionPath 'lifeos-release.json'
+if(Test-Path -LiteralPath $releaseIdentityPath -PathType Leaf){
+    $identity=Get-Content -LiteralPath $releaseIdentityPath -Raw|ConvertFrom-Json
+    Check ([int]$identity.schemaVersion -eq 1) 'Release identity schema is supported'
+    Check ([string]$identity.product -ceq 'LifeOS') 'Release identity product is LifeOS'
+    Check ([string]$identity.channel -ceq 'stable') 'Release identity channel is stable'
+    Check ([string]$identity.version -ceq $version) 'Release identity version matches source'
+    Check ([int]$identity.buildNumber -gt 0) 'Release identity has a positive build number'
+    Check ([string]$identity.repository -match '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') 'Release identity repository is valid'
+    Check ([string]$identity.commit -match '^[a-f0-9]{40}$') 'Release identity commit is a full lowercase Git hash'
+    $releaseIdentity=[ordered]@{schemaVersion=[int]$identity.schemaVersion;product=[string]$identity.product;repository=[string]$identity.repository;channel=[string]$identity.channel;version=[string]$identity.version;buildNumber=[int]$identity.buildNumber;commit=[string]$identity.commit}
+} elseif($RequireReleaseIdentity){throw 'A stamped lifeos-release.json is required for this release build.'}
 $executable=Get-Item -LiteralPath (Join-Path $distributionPath 'LifeOS.exe')
 Check ($executable.VersionInfo.ProductVersion.Split('+')[0] -ceq $version) 'Built launcher version matches source'
+$launcherSignature=(Get-AuthenticodeSignature -LiteralPath $executable.FullName).Status.ToString()
+if($RequireSigned){Check ($launcherSignature -eq 'Valid') 'Built launcher has a valid Authenticode signature'}
 $runtimeHash=$null
 if(!$WithoutAiRuntime){
     $runtime=Join-Path $distributionPath 'scripts/ai-runtime'
@@ -80,7 +114,9 @@ Check ($sidecar.Split(' ')[0] -ceq $installerHash) 'Installer checksum sidecar m
 $artifactVersion=Normalize-ArtifactVersion $setup.VersionInfo.ProductVersion
 $sourceVersion=Normalize-ArtifactVersion $version
 Check ($artifactVersion -ceq $sourceVersion) ('Installer artifact version matches source (artifact '+$setup.VersionInfo.ProductVersion+', source '+$version+')')
-$result=[ordered]@{success=$true;version=$version;commercial=[bool]$Commercial;verifiedUtc=[DateTime]::UtcNow.ToString('o');checks=@($checks.ToArray());sourceFiles=@($manifest.ToArray());launcherSha256=(Get-FileHash -LiteralPath $executable.FullName -Algorithm SHA256).Hash.ToLowerInvariant();aiRuntimeSha256=$runtimeHash;installer=[ordered]@{path=$setup.FullName;bytes=$setup.Length;sha256=$installerHash;signature=(Get-AuthenticodeSignature -LiteralPath $setup.FullName).Status.ToString()};scope='Distribution/source file identity, selected runtime identity/imports, launcher version and installer metadata/checksum. Does not extract the installer or establish compiled-source equivalence, clean-machine installation, account approval or physical-device acceptance.'}
+$installerSignature=(Get-AuthenticodeSignature -LiteralPath $setup.FullName).Status.ToString()
+if($RequireSigned){Check ($installerSignature -eq 'Valid') 'Installer has a valid Authenticode signature'}
+$result=[ordered]@{success=$true;version=$version;commercial=[bool]$Commercial;signedRelease=[bool]$RequireSigned;releaseIdentity=$releaseIdentity;verifiedUtc=[DateTime]::UtcNow.ToString('o');checks=@($checks.ToArray());sourceFiles=@($manifest.ToArray());launcherSha256=(Get-FileHash -LiteralPath $executable.FullName -Algorithm SHA256).Hash.ToLowerInvariant();launcherSignature=$launcherSignature;aiRuntimeSha256=$runtimeHash;installer=[ordered]@{path=$setup.FullName;bytes=$setup.Length;sha256=$installerHash;signature=$installerSignature};scope='Distribution/source file identity, stamped release identity, sensitive-file and reparse-point gates, selected runtime identity/imports, launcher version, signatures and installer metadata/checksum. Does not extract the installer or establish compiled-source equivalence, clean-machine installation, account approval or physical-device acceptance.'}
 $evidenceFile=[IO.Path]::GetFullPath($EvidencePath)
 [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($evidenceFile))
 [IO.File]::WriteAllText($evidenceFile,($result|ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false))

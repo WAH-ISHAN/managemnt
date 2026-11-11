@@ -67,7 +67,9 @@ Response example:
 }
 ```
 
-Collection IDs and field names use lowercase identifiers matching `[a-z][a-z0-9_]{0,63}`. Labels are display text, never HTML or code. Supported field types are `text`, `textarea`, `number`, `boolean` and `date`. `max_length` is a string limit, up to 20000 characters in the LifeOS adapter. Dates use `YYYY-MM-DD`, or an empty string when optional. Numbers must be finite JSON numbers within ±1e12; booleans must be JSON booleans. A required string cannot be blank.
+Collection IDs use lowercase identifiers matching `[a-z][a-z0-9_]{0,63}`. Field names match `[a-zA-Z][a-zA-Z0-9_]{0,63}` so existing camelCase API keys remain intact. Labels are display text, never HTML or code. Supported field types are `text`, `textarea`, `number`, `boolean` and `date`. `max_length` is a string limit, up to 20000 characters in the LifeOS adapter. Dates use `YYYY-MM-DD`, or an empty string when optional. Numbers must be finite JSON numbers within ±1e12; booleans must be JSON booleans. A required string cannot be blank.
+
+A field may include the optional boolean `read_only`, defaulting to `false`. Read-only fields are displayed in list and edit views, validated in returned records, and omitted from create/update payloads. The server supplies their values (including required read-only fields) and must independently reject attempts to change them. Return all declared fields in successful saved records to preserve customer and order context.
 
 The reference's actual manifest additionally defines page slugs/publication dates and product fields. Generate forms from the response rather than hardcoding those example collections in the client. File upload, executable HTML, nested objects, SQL queries and arbitrary shell/filesystem actions are not part of this protocol.
 

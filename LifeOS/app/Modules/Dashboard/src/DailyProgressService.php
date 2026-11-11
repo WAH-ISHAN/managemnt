@@ -29,6 +29,19 @@ final class DailyProgressService {
         for ($i=6;$i>=0;$i--) $days[]=self::day($end->modify('-'.$i.' day')->format('Y-m-d'));
         return $days;
     }
+    public static function previousWeekTotals(string $ending): array {
+        self::date($ending);
+        $zone=new DateTimeZone('Asia/Colombo');
+        $end=new DateTimeImmutable($ending,$zone);
+        $startUtc=$end->modify('-13 days')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        $endUtc=$end->modify('-6 days')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        $tasks=(int)(Db::one("SELECT COUNT(*) n FROM tasks WHERE status='done' AND completed_at>=? AND completed_at<?",[$startUtc,$endUtc])['n'] ?? 0);
+        $study=0.0;
+        if (module_enabled('Focus')) {
+            $study=(float)(Db::one("SELECT COALESCE(SUM(elapsed_seconds),0)/60.0 minutes FROM focus_sessions WHERE status='complete' AND kind='study' AND completed_at>=? AND completed_at<?",[$startUtc,$endUtc])['minutes'] ?? 0);
+        }
+        return ['tasks'=>$tasks,'focus_minutes'=>round($study,1)];
+    }
     public static function suggestions(): array {
         $today=date('Y-m-d'); $soon=date('Y-m-d',strtotime('+7 days')); $items=[];
         foreach (Db::all("SELECT title,due FROM tasks WHERE status='open' AND due IS NOT NULL AND due<=? ORDER BY due,id LIMIT 3",[$soon]) as $row) $items[]=['title'=>$row['title'],'date'=>$row['due'],'kind'=>'Task','route'=>'/planner?view=tasks'];

@@ -1,57 +1,106 @@
 using System.Diagnostics;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+
+internal enum StartupStage { Initializing, LogoReady, AppReady, SplashExit, DashboardVisible }
 
 internal sealed class StartupWelcome : Form
 {
-    private readonly System.Windows.Forms.Timer animation = new() { Interval=25 };
+    private readonly System.Windows.Forms.Timer animation = new() { Interval=16 };
     private readonly Stopwatch elapsed = Stopwatch.StartNew();
-    private readonly Image? logo;
+    private readonly Image logo;
     private readonly bool motion;
-    private bool ready;
     private double? fading;
-    internal static string Greeting(int hour) => hour is >=5 and <12 ? "Good morning" : hour is >=12 and <17 ? "Good afternoon" : "Good evening";
-    internal static DateTimeOffset LocalTime(DateTimeOffset utc) => utc.ToOffset(TimeSpan.FromMinutes(330));
+    private bool appReady;
+    private Form? parent;
+    internal StartupStage Stage { get; private set; } = StartupStage.Initializing;
+    internal event Action? TimedOut;
+
     internal StartupWelcome(string root)
     {
-        FormBorderStyle=FormBorderStyle.None; ShowInTaskbar=false; StartPosition=FormStartPosition.CenterParent;
-        ClientSize=new Size(460,380); BackColor=Color.FromArgb(244,247,255); DoubleBuffered=true;
-        AccessibleName="Welcome to LifeOS";
+        FormBorderStyle=FormBorderStyle.None;
+        ShowInTaskbar=false;
+        StartPosition=FormStartPosition.Manual;
+        ClientSize=new Size(460,380);
+        BackColor=Color.FromArgb(7,18,37);
+        DoubleBuffered=true;
+        AccessibleName="LifeOS is opening";
         motion=!SystemParametersInfo(0x1042,0,out bool enabled,0) || enabled;
-        Opacity=motion?0:1;
         var path=Path.Combine(root,"public","assets","brand","lifeos-mark.png");
-        if(File.Exists(path)) { using var source=Image.FromFile(path); logo=new Bitmap(source); }
+        try { using var source=Image.FromFile(path); logo=new Bitmap(source); }
+        catch (Exception error) when (error is IOException or ArgumentException or UnauthorizedAccessException) {
+            using var icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application;
+            logo=icon.ToBitmap();
+        }
         animation.Tick+=(_,_)=>TickFrame();
-        Shown+=(_,_)=>{elapsed.Restart();animation.Start();};
+        Shown+=(_,_)=>{
+            if(Owner is Form owner) {
+                parent=owner;
+                Bounds=owner.Bounds;
+                owner.Move+=FollowParent;
+                owner.Resize+=FollowParent;
+            }
+            elapsed.Restart();
+            animation.Start();
+            Invalidate();
+        };
     }
-    internal void Ready() => ready=true;
+
+    internal void Ready()
+    {
+        appReady=true;
+        if(Stage==StartupStage.LogoReady) Stage=StartupStage.AppReady;
+    }
+
+    private void FollowParent(object? sender,EventArgs args)
+    {
+        if(parent is { IsDisposed:false }) Bounds=parent.Bounds;
+    }
+
     private void TickFrame()
     {
         double ms=elapsed.Elapsed.TotalMilliseconds;
-        if(ready && ms>=(motion?1200:0)) fading??=ms;
+        if(ms>=30_000 && !appReady) { animation.Stop(); TimedOut?.Invoke(); return; }
+        if(appReady && Stage==StartupStage.LogoReady) Stage=StartupStage.AppReady;
+        if(Stage==StartupStage.AppReady) { Stage=StartupStage.SplashExit; fading=ms; }
         if(fading is double start) {
-            double fade=motion?Math.Clamp((ms-start)/280,0,1):1;
+            double fade=motion?Math.Clamp((ms-start)/220,0,1):1;
             Opacity=1-fade;
-            if(fade>=1) { Close();return; }
-        } else Opacity=motion?Math.Clamp(ms/350,0,1):1;
+            if(fade>=1) { Stage=StartupStage.DashboardVisible; Close(); return; }
+        }
         Invalidate();
     }
+
     protected override void OnPaint(PaintEventArgs e)
     {
-        base.OnPaint(e);var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;
-        float entrance=motion?(float)Math.Clamp(elapsed.Elapsed.TotalMilliseconds/700,0,1):1;
-        float eased=1-(float)Math.Pow(1-entrance,3);float size=104+24*eased;
-        if(logo is not null)g.DrawImage(logo,(Width-size)/2,62+(1-eased)*14,size,size);
-        using var title=new Font("Segoe UI",23,FontStyle.Bold);using var subtitle=new Font("Segoe UI",15);
-        using var ink=new SolidBrush(Color.FromArgb(30,43,68));using var muted=new SolidBrush(Color.FromArgb(86,103,129));
-        using var centered=new StringFormat{Alignment=StringAlignment.Center};
-        g.DrawString("Welcome to LifeOS",title,ink,new RectangleF(12,216,Width-24,45),centered);
-        g.DrawString(Greeting(LocalTime(DateTimeOffset.UtcNow).Hour),subtitle,muted,new RectangleF(12,265,Width-24,34),centered);
-        using var ring=new Pen(Color.FromArgb(35,111,225),3){StartCap=LineCap.Round,EndCap=LineCap.Round};
-        float angle=motion?(float)(elapsed.Elapsed.TotalSeconds*180%360):0;
-        g.DrawArc(ring,Width/2-11,322,22,22,angle,250);
+        base.OnPaint(e);
+        var g=e.Graphics;
+        g.InterpolationMode=InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode=PixelOffsetMode.HighQuality;
+        double entrance=motion?Math.Clamp(elapsed.Elapsed.TotalMilliseconds/320,0,1):1;
+        double eased=1-Math.Pow(1-entrance,3);
+        float size=(float)Math.Min(Math.Min(ClientSize.Width,ClientSize.Height)*0.34,180);
+        size=Math.Max(56,size);
+        size*=(float)(0.94+0.06*eased);
+        float x=(ClientSize.Width-size)/2;
+        float y=(ClientSize.Height-size)/2;
+        using var attributes=new ImageAttributes();
+        var matrix=new ColorMatrix { Matrix33=(float)eased };
+        attributes.SetColorMatrix(matrix);
+        g.DrawImage(logo,Rectangle.Round(new RectangleF(x,y,size,size)),0,0,logo.Width,logo.Height,GraphicsUnit.Pixel,attributes);
+        if(Stage==StartupStage.Initializing) Stage=StartupStage.LogoReady;
     }
+
     protected override bool ShowWithoutActivation=>true;
-    protected override void Dispose(bool disposing){if(disposing){animation.Dispose();logo?.Dispose();}base.Dispose(disposing);}
+    protected override void Dispose(bool disposing)
+    {
+        if(disposing) {
+            animation.Dispose();
+            logo.Dispose();
+            if(parent is not null) { parent.Move-=FollowParent; parent.Resize-=FollowParent; }
+        }
+        base.Dispose(disposing);
+    }
     [DllImport("user32.dll",SetLastError=true)] private static extern bool SystemParametersInfo(uint action,uint parameter,[MarshalAs(UnmanagedType.Bool)] out bool value,uint flags);
 }

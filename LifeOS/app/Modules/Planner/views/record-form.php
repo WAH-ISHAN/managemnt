@@ -1,4 +1,4 @@
-<?php $editing=isset($record); $row=$record ?? []; $action='/planner/'.$formType.($editing ? '/'.$row['id'].'/edit' : ''); ?>
+<?php $editing=isset($record); $row=$record ?? ($formType==='appointments' ? ['starts_at'=>$date.' 09:00','ends_at'=>$date.' 10:00'] : []); $action='/planner/'.$formType.($editing ? '/'.$row['id'].'/edit' : ''); ?>
 <form class="stack" action="<?= e($action) ?>" method="post" <?= $formType==='appointments' ? 'data-appointment-form' : '' ?>><?= csrf_field() ?>
 <label><?= e(t('Title')) ?><input name="title" maxlength="200" value="<?= e($row['title'] ?? '') ?>" required></label>
 <?php if ($formType==='habits'): ?>
@@ -7,6 +7,7 @@
 <label><?= e(t('Time')) ?><input type="time" name="time" value="<?= e($row['time'] ?? '') ?>" required></label><fieldset><legend><?= e(t('Repeat on')) ?></legend><div class="export-links"><?php foreach (PlannerService::DAYS as $day=>$label): ?><label><input type="checkbox" name="days[]" value="<?= e($day) ?>" <?= in_array((string)$day,explode(',',$row['days'] ?? '1,2,3,4,5'),true) ? 'checked' : '' ?>><?= e($label) ?></label><?php endforeach; ?></div></fieldset>
 <?php else: ?>
 <?php $allDay=!empty($row['all_day']); ?>
+<label><?= e(t('Type')) ?><select name="kind"><?php foreach (['event'=>t('Event'),'renewal'=>t('Renewal'),'exam'=>t('Exam')] as $kind=>$label): ?><option value="<?= e($kind) ?>" <?= ($row['kind'] ?? 'event')===$kind ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></label>
 <input type="hidden" name="all_day" value="0"><label class="checkbox-label"><input type="checkbox" name="all_day" value="1" <?= $allDay ? 'checked' : '' ?>><?= e(t('All day')) ?></label>
 <div data-appointment-timed <?= $allDay ? 'hidden' : '' ?>><label><?= e(t('Starts')) ?><input type="datetime-local" name="starts_at" value="<?= e(str_replace(' ','T',$row['starts_at'] ?? '')) ?>" <?= $allDay ? 'disabled' : 'required' ?>></label><label><?= e(t('Ends')) ?><input type="datetime-local" name="ends_at" value="<?= e(str_replace(' ','T',$row['ends_at'] ?? '')) ?>" <?= $allDay ? 'disabled' : 'required' ?>></label></div>
 <div data-appointment-dates <?= $allDay ? '' : 'hidden' ?>><label><?= e(t('First day')) ?><input type="date" name="starts_on" value="<?= e(substr($row['starts_at'] ?? '',0,10)) ?>" <?= $allDay ? 'required' : 'disabled' ?>></label><label><?= e(t('Last day')) ?><input type="date" name="ends_on" value="<?= e($allDay ? (new DateTimeImmutable($row['ends_at']))->modify('-1 day')->format('Y-m-d') : substr($row['starts_at'] ?? '',0,10)) ?>" <?= $allDay ? 'required' : 'disabled' ?>></label></div>

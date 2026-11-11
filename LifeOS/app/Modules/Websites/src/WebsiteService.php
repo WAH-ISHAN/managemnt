@@ -86,7 +86,8 @@ final class WebsiteService {
         return $bundle ? ['manifest'=>$bundle['manifest'],'expires_at'=>$bundle['expires_at'],'username'=>$bundle['username'] ?? '','auth_mode'=>$bundle['auth_mode'] ?? 'token'] : null;
     }
     private static function identifier(mixed $value,string $label='collection'): string {
-        if (!is_string($value) || !preg_match('/^[a-z][a-z0-9_]{0,63}$/D',$value)) throw new InvalidArgumentException(t('The connector returned an invalid ').$label.' identifier.');
+        $pattern=$label==='field' ? '/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/D' : '/^[a-z][a-z0-9_]{0,63}$/D';
+        if (!is_string($value) || !preg_match($pattern,$value)) throw new InvalidArgumentException(t('The connector returned an invalid ').$label.' identifier.');
         return $value;
     }
     private static function recordId(mixed $value): string {
@@ -110,7 +111,9 @@ final class WebsiteService {
                 if (isset($names[$name]) || !is_string($type) || !in_array($type,self::FIELD_TYPES,true) || !is_bool($field['required'] ?? null)) throw new InvalidArgumentException(t('The connector contains duplicate, invalid or unsupported fields.'));
                 $names[$name]=true; $max=$field['max_length'] ?? ($type==='textarea' ? 20000 : 2000);
                 if (!is_int($max) || $max<1 || $max>20000) throw new InvalidArgumentException(t('The connector field length is unsupported.'));
-                $clean['fields'][]=['name'=>$name,'label'=>self::text($field['label'] ?? '', 'field label',100,true),'type'=>$type,'required'=>$field['required'],'max_length'=>$max];
+                $readOnly=array_key_exists('read_only',$field) ? $field['read_only'] : false;
+                if (!is_bool($readOnly)) throw new InvalidArgumentException(t('The connector returned an invalid read-only field setting.'));
+                $clean['fields'][]=['name'=>$name,'label'=>self::text($field['label'] ?? '', 'field label',100,true),'type'=>$type,'required'=>$field['required'],'max_length'=>$max,'read_only'=>$readOnly];
             }
             $result['collections'][]=$clean;
         }
@@ -204,11 +207,15 @@ final class WebsiteService {
     private static function requireCapability(array $collection,string $operation): void {
         if (!in_array($operation,$collection['capabilities'],true)) throw new InvalidArgumentException(t('This connector does not allow ').$operation.' operations for this collection.');
     }
-    private static function data(array $collection,array $values): array {
+    private static function data(array $collection,array $values,bool $writing=false): array {
         $names=array_column($collection['fields'],'name');
         if (array_diff(array_keys($values),$names)) throw new InvalidArgumentException(t('The record contains fields that are not exposed by this connector.'));
         $clean=[];
         foreach ($collection['fields'] as $field) {
+            if ($writing && !empty($field['read_only'])) {
+                if (array_key_exists($field['name'],$values)) throw new InvalidArgumentException(t('Read-only website fields cannot be changed.'));
+                continue;
+            }
             $value=$values[$field['name']] ?? ($field['type']==='boolean' ? false : '');
             if ($field['type']==='boolean') {
                 if (!in_array($value,[true,false,0,1,'0','1'],true)) throw new InvalidArgumentException(t('Choose a valid value for ').$field['label'].'.');
@@ -250,7 +257,7 @@ final class WebsiteService {
     public static function cached(int $id,string $slug): ?array { $bundle=self::load($id); return $bundle['cache'][$slug] ?? null; }
     public static function saveRecord(int $id,string $slug,array $values,?string $recordId=null,?int $version=null): void {
         $collection=self::collection($id,$slug); $action=$recordId===null ? 'create' : 'update';
-        self::requireCapability($collection,$action); $data=self::data($collection,$values); $bundle=self::requireSession($id);
+        self::requireCapability($collection,$action); $data=self::data($collection,$values,true); $bundle=self::requireSession($id);
         $payload=['protocol'=>'lifeos-admin-v1','action'=>$action,'collection'=>$slug,'data'=>$data];
         if ($recordId!==null) {
             $payload['id']=self::recordId($recordId);

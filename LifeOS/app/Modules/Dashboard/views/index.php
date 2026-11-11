@@ -1,6 +1,12 @@
 <div class="dashboard-home">
+<?php $firstName=trim(explode(' ',trim((string)$name))[0] ?? ''); ?>
+<div class="dashboard-hero"><div class="dashboard-hero-copy">
+    <p class="dashboard-date"><?= e(ui_date('l, j F Y')) ?></p>
+    <h1><?= e(t('Good')) ?> <?= e((int)ui_date('G')<12 ? t('morning') : ((int)ui_date('G')<17 ? t('afternoon') : t('evening'))) ?><?= $firstName!=='' ? ', '.e($firstName) : '' ?>.</h1>
+    <p><?= e(PersonaService::description()) ?></p>
+</div><span class="dashboard-hero-orb" aria-hidden="true"></span></div>
 <nav class="tabs" aria-label="<?= e(t('Your workspace tools')) ?>"><?php foreach(['Employee'=>['/employee','Employee workspace'],'StudyTools'=>['/study','University study tools']]as $module=>[$route,$label]):if(!module_enabled($module))continue; ?><a href="<?= e($route) ?>"><?= e(t($label)) ?></a><?php endforeach; ?></nav>
-<header class="page-header dashboard-header">
+<header class="page-header dashboard-header sr-only">
     <div>
         <p class="dashboard-date"><?= e(ui_date('l, j F Y')) ?><?= $name ? ' | '.e($name) : '' ?></p>
         <h1><?= e(t('Today')) ?><?php if (!PersonaService::profile()): ?><?= e(t(': Your day, in perspective.')) ?><?php endif; ?></h1>
@@ -11,6 +17,7 @@
 <?php require ROOT.'/app/Core/views/notices.php'; ?>
 
 <nav class="dashboard-actions" aria-label="<?= e(t('Quick actions')) ?>">
+    <a class="dashboard-action-primary" href="/planner?view=tasks#new-task"><?= icon('calendar') ?><span><?= e(t('Add a task')) ?></span></a>
     <?php if ($hasSalary): ?>
         <a href="/salary#add-expense"><?= icon('wallet') ?><span><?= e(t('Add expense')) ?></span></a>
         <a href="/salary#add-income"><?= icon('wallet') ?><span><?= e(t('Add income')) ?></span></a>
@@ -20,6 +27,7 @@
     <a href="/knowledge/daily"><?= icon('book') ?><span><?= e(t('Today’s note')) ?></span></a>
 </nav>
 
+<div class="dashboard-bento"><div class="dashboard-main-column">
 <?php require __DIR__.'/daily-progress.php'; ?>
 <?php if ($pinnedNotes): ?><section class="card dashboard-pinned-notes" aria-labelledby="pinned-notes-title"><div class="section-heading"><h2 id="pinned-notes-title"><?= e(t('Pinned notes')) ?></h2><a href="/knowledge"><?= e(t('Knowledge Hub →')) ?></a></div><div class="knowledge-actions"><?php foreach ($pinnedNotes as $note): ?><a href="/knowledge/<?= e($note['id']) ?>"><?= e($note['title']) ?> <small>· <?= e($note['notebook']) ?></small></a><?php endforeach; ?></div></section><?php endif; ?>
 <div class="two-col dashboard-primary">
@@ -52,6 +60,12 @@
     </section>
 <?php endif; ?>
 </div>
+
+</div><aside class="dashboard-rail" aria-label="<?= e(t('Your day at a glance')) ?>">
+    <?php if (module_enabled('Intelligence')): ?><section class="card dashboard-ai-card" aria-labelledby="dashboard-ai-title"><span class="dashboard-rail-icon" aria-hidden="true"><?= icon('sparkles') ?></span><h2 id="dashboard-ai-title"><?= e(t('LifeOS AI')) ?></h2><p class="muted"><?= e(t('Think through your day with your personal assistant.')) ?></p><button type="button" class="btn secondary" data-assistant-open><?= e(t('Ask LifeOS AI')) ?> <span aria-hidden="true">→</span></button></section><?php endif; ?>
+    <?php if ($hasFocus): ?><section class="card dashboard-focus-card" aria-labelledby="dashboard-focus-title"><span class="dashboard-rail-icon" aria-hidden="true"><?= icon('clock') ?></span><h2 id="dashboard-focus-title"><?= e(t('Focus time')) ?></h2><?php if ($focus): ?><p><strong><?= e($focus['subject']) ?></strong><small><?= e(ucfirst($focus['kind'])) ?> · <?= e($focus['status']) ?></small></p><?php else: ?><p class="muted"><?= e(t('Make room for one meaningful session.')) ?></p><?php endif; ?><a class="btn secondary" href="/focus"><?= e(t($focus ? 'Continue focus' : 'Start focus')) ?> <span aria-hidden="true">→</span></a></section><?php endif; ?>
+    <section class="card dashboard-upcoming" aria-labelledby="dashboard-upcoming-title"><span class="dashboard-rail-icon" aria-hidden="true"><?= icon('calendar') ?></span><h2 id="dashboard-upcoming-title"><?= e(t('Upcoming')) ?></h2><?php foreach (array_slice($suggestions,0,4) as $item): ?><a class="dashboard-upcoming-item" href="<?= e($item['route']) ?>"><small><?= e($item['when']) ?> · <?= e($item['kind']) ?></small><strong><?= e($item['title']) ?></strong></a><?php endforeach; ?><?php if (!$suggestions): ?><p class="muted"><?= e(t('No upcoming dates recorded.')) ?></p><?php endif; ?><a class="dashboard-upcoming-all" href="/planner"><?= e(t('Open planner')) ?> <span aria-hidden="true">→</span></a></section>
+</aside></div>
 
 <details class="dashboard-details"><summary><?= e(t(module_enabled('Uni')?'Study, goals & reviews':'Focus, goals & reviews')) ?> <span><?= e(t('Open your longer-term progress')) ?></span></summary><div class="two-col dashboard-secondary">
     <?php if ($hasUni || $hasFocus): ?><section class="card">

@@ -21,8 +21,8 @@ UninstallDisplayIcon={app}\LifeOS.exe
 SetupIconFile=icon.ico
 
 [Files]
-Source: "dist\*"; DestDir: "{app}"; Excludes: "prerequisites\*,data\*"; Flags: recursesubdirs createallsubdirs ignoreversion
-Source: "dist\prerequisites\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "dist\*"; DestDir: "{app}"; Excludes: "prerequisites\*,data\*"; Flags: recursesubdirs createallsubdirs ignoreversion notimestamp
+Source: "dist\prerequisites\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall notimestamp
 
 [Dirs]
 Name: "{app}\data"; Flags: uninsneveruninstall

@@ -19,7 +19,8 @@ final class ConnectivityRecurrence {
         return $date;
     }
     private static function identity(DateTimeInterface $date): string { return $date->format('U'); }
-    public static function expand(string $ics,?string $from=null,?string $until=null): string {
+    public static function expand(string $ics,?string $from=null,?string $until=null,int $limit=500): string {
+        if ($limit<1 || $limit>5000) throw new InvalidArgumentException(t('Invalid calendar event limit.'));
         if (!preg_match('/^(?:RRULE|RDATE|EXDATE|RECURRENCE-ID)[;:]/mi',$ics)) return $ics;
         self::library();
         $from=valid_date($from ?? date('Y-m-d')); $until=valid_date($until ?? (new DateTimeImmutable($from))->modify('+1 year')->format('Y-m-d'));
@@ -33,7 +34,7 @@ final class ConnectivityRecurrence {
             if($line==='BEGIN:VALARM'){$alarm=true;continue;}if($line==='END:VALARM'){$alarm=false;continue;}if($alarm)continue;
             if(str_contains($line,':'))$current[]=self::property($line);
         }
-        if($current!==null || count($blocks)>500)throw new InvalidArgumentException(t('Import at most 500 events at a time.'));
+        if($current!==null || count($blocks)>$limit)throw new InvalidArgumentException(t('Calendar feed exceeds the supported event limit.'));
         $masters=[];$overrides=[];
         foreach($blocks as $props){$map=[];foreach($props as $p){$map[$p[0]][]=$p;}
             $uid=$map['UID'][0][1] ?? '';if($uid==='')throw new InvalidArgumentException(t('Every event needs UID, title, start and end.'));
@@ -70,7 +71,7 @@ final class ConnectivityRecurrence {
                     $instance=$props;$instance=array_values(array_filter($instance,fn($p)=>!in_array($p[0],['DTSTART','DTEND'],true)));
                     $instance[]=self::dateProperty('DTSTART',$date,$allDay);$instance[]=self::dateProperty('DTEND',DateTimeImmutable::createFromInterface($date)->add($duration),$allDay);
                     $instances[]=['props'=>$instance,'key'=>$key];
-                    if(count($instances)>500)throw new InvalidArgumentException(t('Import at most 500 events at a time.'));
+                    if(count($instances)>$limit)throw new InvalidArgumentException(t('Calendar feed exceeds the supported event limit.'));
                 }
                 // An override can move an occurrence into the window from outside it.
                 foreach($overrides[$uid] ?? []as $key=>$replacement)if(!isset($seen[$key]))$instances[]=['props'=>self::exception($props,$replacement,(new DateTimeImmutable('@'.$key))->setTimezone($start->getTimezone()),$duration,$allDay),'key'=>$key];
@@ -83,14 +84,14 @@ final class ConnectivityRecurrence {
                 if($recurring){$d=self::date($flat['DTSTART'][0],$flat['DTSTART'][1]);if($d<$lower||$d>$upper)continue;
                     $flat['X-LIFEOS-SERIES']=[hash('sha256',$uid),[]];$flat['X-LIFEOS-OCCURRENCE']=[gmdate('Y-m-d H:i:s',(int)$instance['key']),[]];$emitted[]=$flat['UID'][0];
                 }
-                if(++$total>500)throw new InvalidArgumentException(t('Import at most 500 events at a time.'));
+                if(++$total>$limit)throw new InvalidArgumentException(t('Calendar feed exceeds the supported event limit.'));
                 $lines[]='BEGIN:VEVENT';foreach($flat as $name=>[$value,$params]){$key=$name;foreach($params as $k=>$v)$key.=';'.$k.'='.$v;$lines[]=$key.':'.$value;}$lines[]='END:VEVENT';
             }
             if($recurring){
                 $fromUtc=$lower->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');$untilUtc=$upper->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
                 foreach(Db::all("SELECT c.remote_id,c.occurrence_at,p.* FROM connectivity_events c JOIN planner_appointments p ON p.id=c.appointment_id WHERE c.provider='ics' AND c.series_uid=? AND c.occurrence_at>=? AND c.occurrence_at<=?",[hash('sha256',$uid),$fromUtc,$untilUtc])as $old){
                     if(in_array($old['remote_id'],$emitted,true)||$old['status']==='cancelled')continue;
-                    if(++$total>500)throw new InvalidArgumentException(t('Import at most 500 events at a time.'));
+                    if(++$total>$limit)throw new InvalidArgumentException(t('Calendar feed exceeds the supported event limit.'));
                     $lines[]='BEGIN:VEVENT';$lines[]='UID:'.$old['remote_id'];$lines[]='SUMMARY:'.str_replace(["\\","\r","\n",';',','],["\\\\",'',"\\n",'\\;','\\,'],$old['title']);
                     foreach(['LOCATION'=>'location','DESCRIPTION'=>'notes']as $name=>$field)$lines[]=$name.':'.str_replace(["\\","\r","\n",';',','],["\\\\",'',"\\n",'\\;','\\,'],(string)($old[$field] ?? ''));
                     foreach(['DTSTART'=>'starts_at','DTEND'=>'ends_at']as $name=>$field){$p=self::dateProperty($name,new DateTimeImmutable($old[$field],new DateTimeZone('Asia/Colombo')),(bool)$old['all_day']);$lines[]=$name.($old['all_day']?';VALUE=DATE':'').':'.$p[1];}

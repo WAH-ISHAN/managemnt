@@ -108,8 +108,8 @@
       const config = JSON.parse(canvas.dataset.chart);
       const preference=document.documentElement.dataset.theme || 'system';
       const dark = preference==='dark' || (preference==='system' && matchMedia('(prefers-color-scheme: dark)').matches);
-      Chart.defaults.color = dark ? '#aaaab1' : '#64646b';
-      Chart.defaults.borderColor = dark ? 'rgba(164,189,225,.10)' : 'rgba(70,94,135,.09)';
+      Chart.defaults.color = dark ? '#98A5BD' : '#64646b';
+      Chart.defaults.borderColor = dark ? 'rgba(152,165,189,.12)' : 'rgba(70,94,135,.09)';
       styleChart(config,canvas,dark);
       new Chart(canvas, config);
     });
@@ -141,38 +141,50 @@
       options.layout.padding={top:24,right:22,bottom:0,left:0};
     }
     const legend=options.plugins.legend ||= {};
-    legend.labels={usePointStyle:true,pointStyle:'circle',boxWidth:7,boxHeight:7,padding:20,font:{size:11},...legend.labels};
-    options.plugins.tooltip={backgroundColor:dark ? '#e9f0fc' : '#19243b',titleColor:dark ? '#19243b' : '#fff',bodyColor:dark ? '#33435e' : '#e4ecfa',padding:13,cornerRadius:12,displayColors:true,boxPadding:5,...options.plugins.tooltip};
+    legend.labels={usePointStyle:true,pointStyle:'circle',boxWidth:7,boxHeight:7,padding:20,font:{size:11},color:dark ? '#98A5BD' : '#64646b',...legend.labels};
+    options.plugins.tooltip={
+      backgroundColor:dark ? 'rgba(9,19,40,.95)' : '#19243b',
+      titleColor:dark ? '#F5F6FA' : '#fff',
+      bodyColor:dark ? '#D8B4FE' : '#e4ecfa',
+      borderColor:dark ? 'rgba(168,121,247,.35)' : 'rgba(70,94,135,.18)',
+      borderWidth:1,
+      padding:12,
+      cornerRadius:12,
+      displayColors:true,
+      boxPadding:6,
+      ...options.plugins.tooltip
+    };
     const radial=['doughnut','pie','polarArea','radar'].includes(config.type);
     if (!radial) {
       options.scales ||= {};
-      options.scales.x={...options.scales.x,grid:{display:false,...options.scales.x?.grid},border:{display:false,...options.scales.x?.border},ticks:{maxRotation:0,padding:9,font:{size:10},...options.scales.x?.ticks}};
-      options.scales.y={...options.scales.y,grid:{color:dark ? 'rgba(164,189,225,.10)' : 'rgba(70,94,135,.09)',drawTicks:false,...options.scales.y?.grid},border:{display:false,dash:[4,5],...options.scales.y?.border},ticks:{padding:10,maxTicksLimit:5,font:{size:10},...options.scales.y?.ticks}};
+      options.scales.x={...options.scales.x,grid:{display:false,...options.scales.x?.grid},border:{display:false,...options.scales.x?.border},ticks:{maxRotation:0,padding:9,font:{size:10},color:dark ? '#98A5BD' : '#64646b',...options.scales.x?.ticks}};
+      options.scales.y={...options.scales.y,grid:{color:dark ? 'rgba(152,165,189,.10)' : 'rgba(70,94,135,.09)',drawTicks:false,...options.scales.y?.grid},border:{display:false,dash:[4,5],...options.scales.y?.border},ticks:{padding:10,maxTicksLimit:5,font:{size:10},color:dark ? '#98A5BD' : '#64646b',...options.scales.y?.ticks}};
     }
-    const colors=dark ? ['#7eb5ff','#f3b06a','#6ed2b2','#b6a0ff'] : ['#2879e9','#d88644','#2a9b80','#8e71da'];
-    const aliases={'#0071e3':colors[0],'#bf6b22':colors[1],'#247541':colors[2],'#9faec3':dark ? '#9daec8' : '#a0afc5'};
+    const colors=dark ? ['#A879F7','#38BDF8','#34D399','#FB7185','#FBBF24'] : ['#2879e9','#d88644','#2a9b80','#8e71da','#bf6b22'];
+    const aliases={'#0071e3':colors[0],'#bf6b22':dark ? '#FB7185' : '#d88644','#247541':colors[2],'#9faec3':dark ? 'rgba(152,165,189,.35)' : '#a0afc5'};
     config.data.datasets.forEach((dataset,index)=>{
       const original=dataset.borderColor || dataset.backgroundColor;
       const color=cashflowDepth ? colors[index%colors.length] : (aliases[original] || original || colors[index%colors.length]);
       if (typeof color!=='string') return;
       if (config.type==='line') {
-        dataset.borderColor=color; dataset.borderWidth=2.5; dataset.pointRadius=2; dataset.pointHoverRadius=5;
-        dataset.pointBackgroundColor=color; dataset.pointBorderWidth=0; dataset.tension=.35;
+        dataset.borderColor=color; dataset.borderWidth=2.8; dataset.pointRadius=3.5; dataset.pointHoverRadius=6;
+        dataset.pointBackgroundColor=color; dataset.pointBorderColor=dark ? '#071225' : '#ffffff'; dataset.pointBorderWidth=2;
+        dataset.tension=.38;
         dataset.fill=true;
         dataset.backgroundColor=context=>{
           const area=context.chart.chartArea;
           if (!area || !/^#[\da-f]{6}$/i.test(color)) return color;
           const gradient=context.chart.ctx.createLinearGradient(0,area.top,0,area.bottom);
-          gradient.addColorStop(0,color+'42'); gradient.addColorStop(1,color+'00'); return gradient;
+          gradient.addColorStop(0,color+'55'); gradient.addColorStop(1,color+'00'); return gradient;
         };
       } else if (config.type==='bar') {
         dataset.backgroundColor=context=>{
           const area=context.chart.chartArea;
           if (!area || !/^#[\da-f]{6}$/i.test(color)) return color;
           const gradient=context.chart.ctx.createLinearGradient(0,area.top,0,area.bottom);
-          gradient.addColorStop(0,color); gradient.addColorStop(1,color+'a0'); return gradient;
+          gradient.addColorStop(0,color); gradient.addColorStop(1,color+'88'); return gradient;
         };
-        dataset.borderWidth=0; dataset.borderRadius=7; dataset.maxBarThickness=34;
+        dataset.borderWidth=0; dataset.borderRadius=8; dataset.maxBarThickness=36;
         dataset.categoryPercentage=.65; dataset.barPercentage=.8;
         if (cashflowDepth) {dataset.lifeosDepthColor=color;dataset.borderRadius=0;dataset.barPercentage=.7;}
       }
@@ -205,8 +217,9 @@
   document.addEventListener('wheel',event=>{
     if(event.target instanceof HTMLInputElement&&event.target.type==='number'&&document.activeElement===event.target)event.target.blur();
   },{passive:true});
+  let commandOpener=null;
   const commands={
-    openCommands() { menu(false); document.getElementById('quick-add-dialog')?.close(); const dialog=document.getElementById('command-dialog'); if (dialog && !dialog.open) { dialog.showModal(); document.getElementById('command-search').focus(); } },
+    openCommands() { menu(false); document.getElementById('quick-add-dialog')?.close(); const dialog=document.getElementById('command-dialog'); if (dialog && !dialog.open) { commandOpener=document.activeElement; dialog.showModal(); document.getElementById('command-search').focus(); } },
     openQuickAdd() { menu(false); document.getElementById('command-dialog')?.close(); const dialog=document.getElementById('quick-add-dialog'); if (dialog && !dialog.open) dialog.showModal(); },
     go(path) { if (typeof path==='string' && path.startsWith('/') && !path.startsWith('//')) location.assign(path); }
   };
@@ -239,6 +252,14 @@
     }
   });
   document.addEventListener('keydown',event=>{
+    const commandDialog=document.getElementById('command-dialog');
+    if (event.key==='Escape' && commandDialog?.open) {
+      // A search input otherwise consumes the first Escape to clear its value.
+      event.preventDefault(); commandDialog.close();
+      if (commandOpener?.isConnected) commandOpener.focus();
+      else document.querySelector('[data-command-open]')?.focus();
+      return;
+    }
     if (event.ctrlKey && event.shiftKey && event.code==='Space') { event.preventDefault(); window.location.assign('/planner/capture'); return; }
     if (narrowMenu.matches && document.documentElement.dataset.menuOpen==='true') {
       if (event.key==='Escape') { event.preventDefault(); menu(false,true); return; }
@@ -302,6 +323,7 @@
     update();
     if (event.detail.elt?.id === 'main' && !focusDestination()) document.getElementById('main')?.focus({ preventScroll: true });
   });
+  document.addEventListener('lifeos:charts-ready',update);
   document.addEventListener('htmx:beforeSwap', event => {
     if (event.detail.xhr.status === 422) { event.detail.shouldSwap = true; event.detail.isError = false; }
   });
@@ -401,4 +423,41 @@
       instance.update('none');
     });
   });
+})();
+
+// A subscribed feed is refreshed after the first usable screen, never during boot.
+(() => {
+  let syncing = false;
+  async function syncSubscribedCalendar() {
+    if (syncing || document.visibilityState !== 'visible') return;
+    syncing = true;
+    try {
+      const response = await fetch('/uni/calendar/subscription/status', {credentials:'same-origin', cache:'no-store'});
+      if (!response.ok) return;
+      const status = await response.json();
+      if (!status.connected || !status.automatic || !status.csrf) return;
+      const last = Date.parse(String(status.lastSync || '').replace(' ', 'T') + '+05:30');
+      if (Number.isFinite(last) && Date.now() - last < 30 * 60 * 1000) return;
+      const body = new URLSearchParams({_csrf:status.csrf});
+      const synced = await fetch('/uni/calendar/subscription/sync', {method:'POST', credentials:'same-origin', body});
+      if (synced.ok && location.pathname === '/uni/calendar/subscription') location.reload();
+    } catch { /* The saved calendar remains available offline. */ }
+    finally { syncing = false; }
+  }
+  if (location.pathname === '/uni/calendar/subscription') setTimeout(syncSubscribedCalendar, 500);
+  setInterval(syncSubscribedCalendar, 15 * 60 * 1000);
+})();
+
+(() => {
+  function animateProgress() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    document.querySelectorAll('.dashboard-activity-ring:not([data-progress-animated])').forEach(ring => {
+      const target = ring.style.getPropertyValue('--activity-progress');
+      ring.dataset.progressAnimated = 'true';
+      ring.style.setProperty('--activity-progress', '0%');
+      requestAnimationFrame(() => requestAnimationFrame(() => ring.style.setProperty('--activity-progress', target)));
+    });
+  }
+  animateProgress();
+  document.addEventListener('htmx:afterSwap', animateProgress);
 })();

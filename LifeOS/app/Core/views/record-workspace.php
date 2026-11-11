@@ -1,6 +1,30 @@
 <?php $catalog=$service::catalog();$values=$editing['fields']??[]; ?>
 <header class="page-header"><div><h1><?= e(t($workspaceTitle)) ?></h1><p class="muted"><?= e(t($description)) ?></p></div><a href="<?= e($base) ?>/report"><?= e(t('Printable report')) ?></a></header><?php require ROOT.'/app/Core/views/notices.php'; ?>
-<nav class="tabs" aria-label="<?= e(t('Workspace tools')) ?>"><?php foreach($catalog as $key=>[$label]): ?><a href="<?= e($base) ?>?page=<?= e($key) ?>" <?= $key===$kind?'aria-current="page"':'' ?>><?= e(t($label)) ?></a><?php endforeach; ?></nav>
+<?php if ($base === '/employee') {
+    $navigationGroups = [
+        'Time & Attendance' => ['attendance' => $catalog['attendance'][0], 'worklife' => $catalog['worklife'][0]],
+        'Leave & Salary' => ['leave_policies' => $catalog['leave_policies'][0], 'leave' => $catalog['leave'][0], 'payslips' => $catalog['payslips'][0]],
+        'Meetings & Performance' => ['meetings' => $catalog['meetings'][0], 'actions' => $catalog['actions'][0], 'blockers' => $catalog['blockers'][0], 'objectives' => $catalog['objectives'][0], 'achievements' => $catalog['achievements'][0]],
+        'Finance & Invoices' => ['claims' => $catalog['claims'][0], 'clients' => $catalog['clients'][0], 'invoices' => $catalog['invoices'][0], 'invoice_lines' => $catalog['invoice_lines'][0]],
+        'Career & Development' => ['offers' => $catalog['offers'][0], 'promotion' => $catalog['promotion'][0], 'credentials' => $catalog['credentials'][0]],
+    ];
+    $activeKey = $kind;
+    $navigationLabel = 'Workspace tools';
+    $navigationUrl = static fn(string $key): string => '/employee?page='.rawurlencode($key);
+    require ROOT.'/app/Core/views/workspace-navigation.php';
+} elseif ($base === '/study') {
+    $navigationGroups = [
+        'Academic' => ['attendance' => $catalog['attendance'][0], 'grade_thresholds' => $catalog['grade_thresholds'][0], 'gpa_scenarios' => $catalog['gpa_scenarios'][0]],
+        'Study Tools' => ['assignment_plans' => $catalog['assignment_plans'][0], 'exam_plans' => $catalog['exam_plans'][0], 'decks' => $catalog['decks'][0], 'cards' => $catalog['cards'][0], 'notes' => $catalog['notes'][0], 'papers' => $catalog['papers'][0], 'library' => $catalog['library'][0]],
+        'Research' => ['references' => $catalog['references'][0], 'groups' => $catalog['groups'][0], 'contributions' => $catalog['contributions'][0], 'thesis' => $catalog['thesis'][0], 'supervision' => $catalog['supervision'][0]],
+        'Career' => ['placements' => $catalog['placements'][0], 'portfolio' => $catalog['portfolio'][0]],
+        'Finance' => ['fee_plans' => $catalog['fee_plans'][0], 'instalments' => $catalog['instalments'][0], 'scholarships' => $catalog['scholarships'][0]],
+    ];
+    $activeKey = $kind;
+    $navigationLabel = 'Workspace tools';
+    $navigationUrl = static fn(string $key): string => '/study?page='.rawurlencode($key);
+    require ROOT.'/app/Core/views/workspace-navigation.php';
+} else { ?><nav class="tabs" aria-label="<?= e(t('Workspace tools')) ?>"><?php foreach($catalog as $key=>[$label]): ?><a href="<?= e($base) ?>?page=<?= e($key) ?>" <?= $key===$kind?'aria-current="page"':'' ?>><?= e(t($label)) ?></a><?php endforeach; ?></nav><?php } ?>
 <?php if(isset($summaryView))require $summaryView; ?>
 <section class="card"><h2><?= $editing?t('Edit'):t('Add') ?> <?= e(t($catalog[$kind][0])) ?></h2><form class="form-grid" method="post" action="<?= e($base) ?>/<?= e($kind) ?>/save"><?= csrf_field() ?><input type="hidden" name="id" value="<?= e($editing['id']??'') ?>">
 <?php foreach($catalog[$kind][1]as $field=>$definition):$optional=str_starts_with($definition,'?');$type=ltrim($definition,'?');$value=$values[$field]??($type==='date'?ui_date('Y-m-d'):'');$options=$service::options($type); ?><label><?= e(t(ucfirst(str_replace('_',' ',$field)))) ?><?= $optional?' (optional)':'' ?>

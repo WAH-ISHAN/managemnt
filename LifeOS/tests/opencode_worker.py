@@ -163,4 +163,21 @@ with tempfile.TemporaryDirectory()as temp:
     with patch.object(worker,'AGENT_VERSION','new'):
         answer=worker.chat({'auto_model':True,'question':'Hello','context':{}},Path('existing.exe'),sandbox,root,updated_agent)
     check(answer=='Correct final answer'and len(calls)==2,'Agent updates invalidate old answer caches without resetting provider availability')
+
+with tempfile.TemporaryDirectory()as temp:
+    root=Path(temp);sandbox=root/'runtime';sandbox.mkdir();prompts=[]
+    def dated_proposal(executable,args,sandbox,model='',prompt=None,timeout=50):
+        if args[0]=='api':return catalog(model_metadata('one-free'))
+        prompts.append(prompt)
+        return json.dumps({'type':'text','part':{'text':json.dumps({'answer':'Review this task before saving.','actions':[{'action':'add_task','title':'Review proposal','due':None}]})}})
+    job={'auto_model':True,'question':'Create a task called Review proposal, due tomorrow.','context':{}}
+    with patch.object(worker.time,'strftime',return_value='2099-06-15'):
+        first=worker.chat(dict(job),Path('existing.exe'),sandbox,root,dated_proposal)
+        worker.chat(dict(job),Path('existing.exe'),sandbox,root,dated_proposal)
+    check(len(prompts)==1 and prompts[0].startswith('Current local date: 2099-06-15\n'),'Ordinary chat supplies a local date for relative deadlines and retains same-day caching')
+    with patch.object(worker.time,'strftime',return_value='2099-06-16'):
+        second=worker.chat(dict(job),Path('existing.exe'),sandbox,root,dated_proposal)
+    check(len(prompts)==2 and prompts[1].startswith('Current local date: 2099-06-16\n'),'The same tomorrow request after midnight cannot reuse a proposal based on yesterday')
+    check(json.loads(first)['actions'][0]['action']=='add_task' and first==second,'Structured action JSON reaches the existing review parser without being replaced by narration')
+    check(job['context']=={} and 'Explicit context: {}'in prompts[0],'The date metadata does not share any personal LifeOS records')
 print(f'{checks} AI worker checks passed.')

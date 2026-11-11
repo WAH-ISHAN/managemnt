@@ -66,9 +66,21 @@ with tempfile.TemporaryDirectory(prefix='lifeos-work-http-') as temporary:
             check(request(f'/work/project/{p}/views',{'_csrf':csrf,'name':'My urgent board','layout':'board','filters[assignee]':person,'filters[priority]':'1'})[0]==200,'Saved view persists and opens')
             view=db.execute('SELECT id FROM work_views WHERE project_id=?',(p,)).fetchone()[0]
             check(b'First work item' in request(f'/work/project/{p}?view_id={view}')[1],'Saved view filters resolve actual items')
-            check(request(f'/work/issue/{issue}/comments',{'_csrf':csrf,'body':'A real comment'})[0]==200,'Comments save and render')
+            code,body,headers,_=request(f'/work/issue/{issue}/comments',{'_csrf':csrf,'body':'A real comment'},headers={'HX-Request':'true','HX-Current-URL':base+f'/work/issue/{issue}'})
+            check(code==200 and headers.get('HX-Redirect')==f'/work/issue/{issue}#work-comments' and headers.get('HX-Refresh')=='true','HTMX comment POST forces a reload when redirect only adds a fragment')
+            page=request(f'/work/issue/{issue}')[1]
+            check(b'A real comment' in page and re.search(rb'<textarea[^>]+name="body"[^>]+placeholder=[^>]+>\s*</textarea>',page) is not None,'Reload displays saved comment and a fresh empty composer')
+            check(db.execute('SELECT COUNT(*) FROM work_comments WHERE issue_id=?',(issue,)).fetchone()[0]==1,'One HTMX comment POST creates exactly one comment')
             comment=db.execute('SELECT id FROM work_comments WHERE issue_id=?',(issue,)).fetchone()[0]
-            check(request(f'/work/issue/{issue}/comments',{'_csrf':csrf,'comment_id':comment,'version':1,'body':'Edited comment'})[0]==200,'Comment edits use versions')
+            code,_,headers,_=request(f'/work/issue/{issue}/comments',{'_csrf':csrf,'comment_id':comment,'version':1,'body':'Edited comment'},headers={'HX-Request':'true','HX-Current-URL':base+f'/work/issue/{issue}#work-comments'})
+            check(code==200 and headers.get('HX-Refresh')=='true','Editing with the same current fragment also refreshes the saved page')
+            for current in [base+f'/work/project/{p}',base+f'/work/issue/{issue}?view=details']:
+                version=db.execute('SELECT version FROM work_comments WHERE id=?',(comment,)).fetchone()[0]
+                code,_,headers,_=request(f'/work/issue/{issue}/comments',{'_csrf':csrf,'comment_id':comment,'version':version,'body':'Edited comment'},headers={'HX-Request':'true','HX-Current-URL':current})
+                check(code==200 and headers.get('HX-Redirect')==f'/work/issue/{issue}#work-comments' and headers.get('HX-Refresh') is None,'Different document redirect preserves ordinary HTMX navigation: '+current)
+            version=db.execute('SELECT version FROM work_comments WHERE id=?',(comment,)).fetchone()[0]
+            code,page,headers,_=request(f'/work/issue/{issue}/comments',{'_csrf':csrf,'comment_id':comment,'version':version,'body':'Edited comment'})
+            check(code==200 and b'Edited comment' in page and headers.get('HX-Refresh') is None,'Native comment submission still follows its ordinary redirect and renders')
             check(request(f'/work/issue/{issue}/comments',{'_csrf':csrf,'comment_id':comment,'version':1,'body':'Stale'})[0]==422,'Stale comment rejected')
             childResponse=request(f'/work/project/{p}/issues',{'_csrf':csrf,'title':'Child item','parent_id':issue});child=int(childResponse[3].rsplit('/',1)[1]);check(childResponse[0]==200,'Sub-issue creation works')
             check(request(f'/work/project/{p}/issues/{issue}/save',{'_csrf':csrf,'version':3,'parent_id':child})[0]==422,'Parent cycle rejected through HTTP')

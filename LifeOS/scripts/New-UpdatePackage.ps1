@@ -25,17 +25,22 @@ foreach($required in @('LifeOS.exe','app','public','php/php.exe','scripts/Apply-
 $package=Join-Path $outputPath 'LifeOS-update.zip'
 if(Test-Path -LiteralPath $package){Remove-Item -LiteralPath $package -Force}
 $allowed=@('LifeOS.exe','app','public','php','scripts','integrations','qa','docs','README.md','README-si.md','THIRD-PARTY.md','VERIFICATION.md','PERFORMANCE.md','lifeos-release.json')
+$forbiddenNames='(^|/)(\.env(?:\..+)?|credentials?\.json|client_secret[^/]*\.json|[^/]+\.(?:pdb|pfx|p12|pem|key|db|sqlite|sqlite3))$'
 $archive=[IO.Compression.ZipFile]::Open($package,[IO.Compression.ZipArchiveMode]::Create)
 try {
     foreach($rootName in $allowed) {
         $itemPath=Join-Path $distributionPath $rootName
         if(-not(Test-Path -LiteralPath $itemPath)){continue}
         $rootItem=Get-Item -LiteralPath $itemPath -Force
-        $files=if($rootItem.PSIsContainer){@(Get-ChildItem -LiteralPath $itemPath -Recurse -File -Force)}else{@($rootItem)}
+        $items=if($rootItem.PSIsContainer){@($rootItem)+@(Get-ChildItem -LiteralPath $itemPath -Recurse -Force)}else{@($rootItem)}
+        foreach($item in $items) {
+            if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw ('Release payload cannot contain reparse points: '+$item.FullName)}
+        }
+        $files=@($items | Where-Object {-not $_.PSIsContainer})
         foreach($file in $files) {
-            if(($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'Release payload cannot contain reparse points.'}
             $relative=$file.FullName.Substring($distributionPath.TrimEnd('\','/').Length+1).Replace('\','/')
-            if($relative -match '(^|/)(\.git|node_modules|data|\.env)(/|$)' -or $relative.EndsWith('.pdb')){continue}
+            if($relative -match '(^|/)(\.git|\.hg|\.svn|node_modules|__pycache__)(/|$)'){throw ('Release payload contains a development directory: '+$relative)}
+            if($relative -match $forbiddenNames){throw ('Release payload contains a sensitive or development artifact: '+$relative)}
             [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$file.FullName,$relative,[IO.Compression.CompressionLevel]::Optimal)|Out-Null
         }
     }

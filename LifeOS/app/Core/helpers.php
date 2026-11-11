@@ -24,7 +24,14 @@ function money(mixed $value): string { return 'Rs. ' . number_format((float)$val
 function csrf_field(): string { return '<input type="hidden" name="_csrf" value="' . e($_SESSION['csrf']) . '">'; }
 function redirect(string $path, string $message = ''): string {
     if ($message !== '') $_SESSION['flash'] = $message;
-    if (($_SERVER['HTTP_HX_REQUEST'] ?? '') === 'true') header('HX-Redirect: ' . $path);
+    if (($_SERVER['HTTP_HX_REQUEST'] ?? '') === 'true') {
+        header('HX-Redirect: ' . $path);
+        $destination=parse_url($path); $current=parse_url($_SERVER['HTTP_HX_CURRENT_URL'] ?? '');
+        // A fragment-only navigation does not fetch the newly saved page.
+        if (is_array($destination) && isset($destination['fragment']) && is_array($current)
+            && ($destination['path'] ?? '')===($current['path'] ?? '')
+            && ($destination['query'] ?? '')===($current['query'] ?? '')) header('HX-Refresh: true');
+    }
     else { header('Location: ' . $path, true, 303); }
     return '';
 }

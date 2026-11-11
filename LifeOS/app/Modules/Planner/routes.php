@@ -25,16 +25,17 @@ return function (Router $r) {
         return redirect('/planner/holidays?year='.$year,'Holiday saved.');
     });
     $r->get('/planner',function () {
-        $date=PlannerService::dateInput($_GET['date'] ?? date('Y-m-d')); $tab=$_GET['view'] ?? 'today'; if (!in_array($tab,['today','tasks','habits','routines','appointments'],true)) throw new InvalidArgumentException(t('Choose a planner page.'));
+        $date=PlannerService::dateInput($_GET['date'] ?? date('Y-m-d')); $tab=$_GET['view'] ?? 'today'; if (!in_array($tab,['today','calendar','tasks','habits','routines','appointments'],true)) throw new InvalidArgumentException(t('Choose a planner page.'));
         $taskList=PlannerService::taskList($_GET['filter'] ?? 'all',$_GET['q'] ?? '',$date); $tasks=$taskList['rows'];
         $habits=Db::all('SELECT h.*,EXISTS(SELECT 1 FROM planner_habit_checks c WHERE c.habit_id=h.id AND c.date=?) checked,(SELECT COUNT(*) FROM planner_habit_checks c WHERE c.habit_id=h.id AND c.date>=? AND c.date<=?) week_count FROM planner_habits h ORDER BY active DESC,id',[$date,date('Y-m-d',strtotime($date.' -6 days')),$date]);
         foreach ($habits as &$habit) $habit['streak']=PlannerService::streak((int)$habit['id']); unset($habit);
         $routines=Db::all('SELECT r.*,EXISTS(SELECT 1 FROM planner_routine_checks c WHERE c.routine_id=r.id AND c.date=?) checked FROM planner_routines r ORDER BY active DESC,time,id',[$date]);
-        $appointments=Db::all('SELECT * FROM planner_appointments ORDER BY starts_at DESC LIMIT 100');
+        $selectedAppointment=$tab==='appointments' && isset($_GET['appointment']) ? PlannerService::requireRow('planner_appointments',record_id($_GET['appointment'])) : null;
+        $appointments=$selectedAppointment ? [$selectedAppointment] : Db::all('SELECT * FROM planner_appointments ORDER BY starts_at DESC LIMIT 100');
         $dayAppointments=PlannerService::appointmentsOn($date);
         $dayTasks=Db::all("SELECT * FROM tasks WHERE status='open' AND (due IS NULL OR due<=?) ORDER BY due IS NULL,due,id LIMIT 200",[$date]);
         $dayTaskCount=(int)Db::one("SELECT COUNT(*) n FROM tasks WHERE status='open' AND (due IS NULL OR due<=?)",[$date])['n'];
-        return View::render(__DIR__.'/views/index.php',['title'=>t('Daily Planner'),'tab'=>$tab,'date'=>$date,'taskList'=>$taskList,'tasks'=>$tasks,'habits'=>$habits,'routines'=>$routines,'appointments'=>$appointments,'dayAppointments'=>$dayAppointments,'dayTasks'=>$dayTasks,'dayTaskCount'=>$dayTaskCount]);
+        return View::render(__DIR__.'/views/index.php',['title'=>t('Daily Planner'),'tab'=>$tab,'date'=>$date,'taskList'=>$taskList,'tasks'=>$tasks,'habits'=>$habits,'routines'=>$routines,'appointments'=>$appointments,'dayAppointments'=>$dayAppointments,'dayTasks'=>$dayTasks,'dayTaskCount'=>$dayTaskCount,'selectedAppointment'=>$selectedAppointment,'calendar'=>$tab==='calendar' ? PlannerService::calendarMonth($date) : null]);
     });
     $r->post('/planner/tasks',function () { PlannerService::saveTask(null,$_POST); return redirect('/planner?view=tasks','Task added.'); });
     $r->post('/planner/tasks/{id}/edit',function ($p) { $return=PlannerService::taskReturnUrl($_POST); PlannerService::saveTask(record_id($p['id']),$_POST); return redirect($return,'Task updated.'); });

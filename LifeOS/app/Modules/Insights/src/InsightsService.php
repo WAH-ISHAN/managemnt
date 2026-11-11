@@ -21,7 +21,10 @@ final class InsightsService {
         if (module_enabled('Uni') && in_array('uni_calendar_notifications',self::tables(),true)) {
             foreach (Db::all('SELECT * FROM uni_calendar_notifications ORDER BY id DESC LIMIT 50') as $item) {
                 $key=hash('sha256','nibm-sync:'.$item['id']);
-                $calendar[]=['id'=>$key,'title'=>$item['title'],'body'=>$item['body'],'route'=>'/uni/calendar','level'=>'info','kind'=>'calendar','created_at'=>$item['created_at'],'read'=>(bool)Db::one('SELECT 1 FROM notification_reads WHERE key=?',[$key])];
+                $summary=$item['body'];
+                if (($item['changes_json'] ?? '[]')==='[]' && str_starts_with($item['title'],'Lecture calendar updated')) $summary=explode('. ',$summary,2)[0].'.';
+                $route=$item['batch_id']==='ics'?'/uni/calendar/subscription?changes='.(int)$item['id']:'/uni/calendar?changes='.(int)$item['id'];
+                $calendar[]=['id'=>$key,'title'=>$item['title'],'body'=>$summary,'route'=>$route,'level'=>'info','kind'=>'calendar','created_at'=>$item['created_at'],'read'=>(bool)Db::one('SELECT 1 FROM notification_reads WHERE key=?',[$key])];
             }
         }
         $today=date('Y-m-d'); $soon=date('Y-m-d',strtotime('+2 days')); $items=[];

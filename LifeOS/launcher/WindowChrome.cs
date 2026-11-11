@@ -157,7 +157,7 @@ internal sealed partial class LifeWindow
         if (!await WaitForExpression("!!document.querySelector('#desktop-titlebar [data-window-action=close]')")) throw new InvalidOperationException("Desktop glass header missing.");
         if (!customChrome || FormBorderStyle!=FormBorderStyle.None) throw new InvalidOperationException("Native caption was not replaced by the glass header.");
         checks["glass-titlebar"]=true;
-        if (Padding!=Padding.Empty || web.Bounds!=ClientRectangle) throw new InvalidOperationException("A visible frame remains around the WebView.");
+        if (Padding!=Padding.Empty || web.Bounds!=ClientRectangle) throw new InvalidOperationException($"A visible frame remains around the WebView. padding={Padding}; web={web.Bounds}; client={ClientRectangle}; visible={web.Visible}");
         checks["window-content-to-edge"]=true;
         const string resizeGrips="(()=>{const grips=[...document.querySelectorAll('[data-resize-edge]')];return grips.length===8 && grips.every(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.backgroundColor==='rgba(0, 0, 0, 0)' && s.borderTopWidth==='0px' && s.boxShadow==='none' && e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})})()";
         if (!await WaitForExpression(resizeGrips)) throw new InvalidOperationException("Invisible resize edges are missing or blocked.");

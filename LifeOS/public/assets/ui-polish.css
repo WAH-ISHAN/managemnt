@@ -1,3 +1,4 @@
+@import url('/assets/future-dashboard.css');
 /* Final cross-page fit and finish. Component styles remain in their owning files. */
 .lecture-calendar-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
 .lecture-calendar-heading h2{margin-bottom:5px}
@@ -51,6 +52,10 @@ select{padding-right:42px}
 .automation-benefit h3,.automation-benefit p{margin:0}
 .automation-benefit form{margin-top:auto}
 .automation-benefit button{width:100%}
+.automation-overview-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.automation-overview-grid .automation-benefit{padding:14px 16px;min-height:82px}
+.automation-overview-grid strong{font-size:25px;font-variant-numeric:tabular-nums;line-height:1}
+.automation-overview-grid span{font-size:12px;color:var(--muted)}
 
 @media(max-width:720px){
   .task-row{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
@@ -58,4 +63,71 @@ select{padding-right:42px}
   .record-workspace-search{grid-template-columns:1fr}
   .record-workspace-search button{width:100%}
   .platform-hub-nav,.automation-benefits{grid-template-columns:1fr}
+  .automation-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Finwise luxury dark dashboard refinements */
+:root[data-theme=dark] .app-shell .card:hover{border-color:rgba(168,121,247,.24)}
+:root[data-theme=dark] .app-shell .dashboard-actions>a{border-color:rgba(152,165,189,.14);background:rgba(14,27,52,.65)}
+:root[data-theme=dark] .app-shell .dashboard-actions>a:hover{background:rgba(168,121,247,.14);border-color:rgba(168,121,247,.38);color:#fff}
+:root[data-theme=dark] .app-shell .dashboard-actions>a svg{color:#C084FC}
+:root[data-theme=dark] .app-shell .action-icon svg{color:#C084FC}
+:root[data-theme=dark] .app-shell #command-dialog,
+:root[data-theme=dark] .app-shell .action-dialog{
+  border-color:rgba(168,121,247,.32);
+  box-shadow:0 24px 80px -20px rgba(0,0,0,.75),0 0 35px -8px rgba(124,58,237,.25),inset 0 1px 0 rgba(255,255,255,.12);
+}
+:root[data-theme=dark] .app-shell .command-results a:hover{
+  background:rgba(168,121,247,.12);color:#fff;
+}
+:root[data-theme=dark] .app-shell .quick-add-grid a:hover{
+  background:rgba(168,121,247,.12);border-color:rgba(168,121,247,.35);transform:translateY(-1px);
+}
+:root[data-theme=dark] .table-wrap table tr:hover td{background:rgba(168,121,247,.05)}
+:root[data-theme=dark] .app-shell .task-row:hover,
+:root[data-theme=dark] .app-shell .simple-row:hover,
+:root[data-theme=dark] .app-shell .deadline:hover{
+  background:rgba(168,121,247,.04);border-radius:10px;
+}
+:root[data-theme=dark] .app-shell .planner-week>a{
+  background:rgba(14,27,52,.65);border-color:rgba(152,165,189,.14);
+}
+:root[data-theme=dark] .app-shell .planner-week>a:hover{
+  background:rgba(168,121,247,.12);border-color:rgba(168,121,247,.35);color:#fff;
+}
+:root[data-theme=dark] .app-shell .planner-week>a[aria-current=date]{
+  background:linear-gradient(135deg,rgba(124,58,237,.35),rgba(99,102,241,.20));
+  border-color:rgba(168,121,247,.45);
+  box-shadow:0 2px 10px -2px rgba(124,58,237,.35);
+  color:#fff;
+}
+:root[data-theme=dark] .app-shell .planner-week>a[aria-current=date] span,
+:root[data-theme=dark] .app-shell .planner-week>a[aria-current=date] small{color:#D8B4FE}
+:root[data-theme=dark] .progress-donut--violet{--progress-start:#C084FC;--progress-end:#7C3AED;--progress-side:#581C87}
+
+/* Shared module finish: keep every workflow in the same premium panel system. */
+.app-shell .card>.section-heading:first-child{padding-bottom:14px;border-bottom:1px solid var(--line)}
+.app-shell .card>.section-heading:first-child h2{font-size:clamp(17px,1.35vw,21px);letter-spacing:-.45px}
+.app-shell .card>.section-heading:first-child a{font-weight:650}
+.app-shell .notice{border:1px solid color-mix(in srgb,var(--accent) 32%,transparent);border-radius:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.app-shell .table-wrap{border:1px solid var(--line);border-radius:18px;background:color-mix(in srgb,var(--card) 78%,transparent)}
+.app-shell .table-wrap table{min-width:100%}
+.app-shell .table-wrap th{padding-top:15px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.app-shell .table-wrap th:first-child,.app-shell .table-wrap td:first-child{padding-left:18px}
+.app-shell .table-wrap th:last-child,.app-shell .table-wrap td:last-child{padding-right:18px}
+.app-shell .badge,.app-shell .chip{border:1px solid var(--line);border-radius:999px;font-weight:650}
+.app-shell button,.app-shell .btn,.app-shell .toolbar-button{box-shadow:0 8px 24px -18px currentColor}
+.app-shell button:not(:disabled):hover,.app-shell .btn:hover{transform:translateY(-1px)}
+.app-shell button:disabled,.app-shell .btn[aria-disabled=true]{cursor:not-allowed;opacity:.55;filter:saturate(.55)}
+.app-shell input:hover,.app-shell select:hover,.app-shell textarea:hover{border-color:color-mix(in srgb,var(--accent) 42%,var(--line))}
+.app-shell input:focus,.app-shell select:focus,.app-shell textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent);outline:0}
+.app-shell .empty{min-height:150px;display:grid;place-content:center;border:1px dashed color-mix(in srgb,var(--muted) 35%,transparent);border-radius:18px;background:color-mix(in srgb,var(--input) 52%,transparent)}
+:root[data-theme=dark] .app-shell .table-wrap{background:rgba(8,20,42,.38);box-shadow:inset 0 1px 0 rgba(255,255,255,.025)}
+:root[data-theme=dark] .app-shell .notice{background:linear-gradient(135deg,rgba(124,58,237,.14),rgba(37,99,235,.07));color:#D8B4FE}
+@media(max-width:600px){
+  .app-shell .card>.section-heading:first-child{align-items:flex-start}
+  .app-shell .table-wrap{border-radius:15px}
+  .app-shell .table-wrap th:first-child,.app-shell .table-wrap td:first-child{padding-left:14px}
+  .app-shell .table-wrap th:last-child,.app-shell .table-wrap td:last-child{padding-right:14px}
+}
+@media(prefers-reduced-motion:reduce){.app-shell button:not(:disabled):hover,.app-shell .btn:hover{transform:none}}

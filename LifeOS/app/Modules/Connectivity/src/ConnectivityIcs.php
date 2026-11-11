@@ -18,10 +18,11 @@ final class ConnectivityIcs {
         if (!$d || ($errors && ($errors['warning_count'] || $errors['error_count']))) throw new InvalidArgumentException(t('Calendar contains an invalid date.'));
         return $d->setTimezone(new DateTimeZone('Asia/Colombo'))->format('Y-m-d H:i');
     }
-    public static function preview(string $ics,?string $from=null,?string $until=null): array {
+    public static function preview(string $ics,?string $from=null,?string $until=null,int $limit=500): array {
+        if ($limit<1 || $limit>5000) throw new InvalidArgumentException(t('Invalid calendar event limit.'));
         if (strlen($ics)>2*1024*1024 || str_contains($ics,"\0")) throw new InvalidArgumentException(t('Choose a calendar smaller than 2 MiB.'));
         if (!str_contains($ics,'BEGIN:VCALENDAR') || !str_contains($ics,'END:VCALENDAR')) throw new InvalidArgumentException(t('Choose a valid ICS calendar.'));
-        $ics=ConnectivityRecurrence::expand($ics,$from,$until);
+        $ics=ConnectivityRecurrence::expand($ics,$from,$until,$limit);
         $ics=preg_replace('/\r?\n[ \t]/','',$ics);
         if (!str_contains($ics,'BEGIN:VCALENDAR') || !str_contains($ics,'END:VCALENDAR')) throw new InvalidArgumentException(t('Choose a valid ICS calendar.'));
         $events=[]; $event=null;
@@ -34,7 +35,7 @@ final class ConnectivityIcs {
                 if (!isset($event['DTEND'])) throw new InvalidArgumentException(t('Every event needs UID, title, start and end.'));
                 $endAllDay=($event['DTEND'][1]['VALUE'] ?? '')==='DATE' || preg_match('/^\d{8}$/D',$event['DTEND'][0]);
                 if ((bool)$allDay!==(bool)$endAllDay) throw new InvalidArgumentException(t('Calendar start and end must use the same date format.'));
-                if (count($events)>=500) throw new InvalidArgumentException(t('Import at most 500 events at a time.'));
+                if (count($events)>=$limit) throw new InvalidArgumentException(t('Calendar feed exceeds the supported event limit.'));
                 $row=['uid'=>PlannerService::title($event['UID'][0],500),'title'=>PlannerService::title(self::unescape($event['SUMMARY'][0])),'starts_at'=>self::date(...$event['DTSTART']),'ends_at'=>self::date(...$event['DTEND']),'location'=>mb_substr(self::unescape($event['LOCATION'][0] ?? ''),0,200),'notes'=>mb_substr(self::unescape($event['DESCRIPTION'][0] ?? ''),0,2000),'status'=>($event['STATUS'][0] ?? '')==='CANCELLED' ? 'cancelled' : 'scheduled','all_day'=>$allDay ? 1 : 0];
                 if ($row['ends_at']<=$row['starts_at']) throw new InvalidArgumentException(t('Event end must follow its start.'));
                 $row['series_uid']=$event['X-LIFEOS-SERIES'][0] ?? null;

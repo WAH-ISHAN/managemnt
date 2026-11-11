@@ -13,9 +13,19 @@ New-Item -ItemType Directory -Path (Join-Path $dist 'scripts') -Force|Out-Null
 foreach($helper in @('Apply-LifeOSUpdate.ps1','update-backup.php','Set-WindowsStartup.ps1')){Copy-Item -LiteralPath (Join-Path $project ('scripts/'+$helper)) -Destination (Join-Path $dist 'scripts')}
 & (Join-Path $project 'scripts/New-UpdatePackage.ps1') -Distribution $dist -OutputDirectory $output -Version '1.8.0' -BuildNumber 17 -Commit ('a'*40)
 $archive=[IO.Compression.ZipFile]::OpenRead((Join-Path $output 'LifeOS-update.zip'))
-try{foreach($name in @('scripts/Apply-LifeOSUpdate.ps1','scripts/update-backup.php','scripts/Set-WindowsStartup.ps1','lifeos-release.json')){if($name -notin $archive.Entries.FullName){throw "Missing payload entry: $name"}}}finally{$archive.Dispose()}
+try{
+ foreach($name in @('scripts/Apply-LifeOSUpdate.ps1','scripts/update-backup.php','scripts/Set-WindowsStartup.ps1','lifeos-release.json')){if($name -notin $archive.Entries.FullName){throw "Missing payload entry: $name"}}
+ $identityEntry=$archive.GetEntry('lifeos-release.json');$reader=[IO.StreamReader]::new($identityEntry.Open())
+ try{$identity=$reader.ReadToEnd()|ConvertFrom-Json}finally{$reader.Dispose()}
+ if($identity.version -cne '1.8.0' -or [int]$identity.buildNumber -ne 17 -or $identity.commit -cne ('a'*40)){throw 'Archive release identity does not match package parameters.'}
+}finally{$archive.Dispose()}
 Remove-Item -LiteralPath (Join-Path $dist 'scripts/update-backup.php')
 $rejected=$false
 try{& (Join-Path $project 'scripts/New-UpdatePackage.ps1') -Distribution $dist -OutputDirectory (Join-Path $root 'invalid') -Version '1.8.0' -BuildNumber 18 -Commit ('b'*40)}catch{if($_.Exception.Message -like '*Missing release payload*update-backup.php*'){$rejected=$true}else{throw}}
 if(!$rejected){throw 'Incomplete package was accepted'}
-Write-Host 'PowerShell syntax and package checks passed; all runtime helpers included and incomplete package rejected.'
+Copy-Item -LiteralPath (Join-Path $project 'scripts/update-backup.php') -Destination (Join-Path $dist 'scripts')
+Set-Content -LiteralPath (Join-Path $dist 'app/.env.production') -Value 'fixture-secret=must-not-ship'
+$rejected=$false
+try{& (Join-Path $project 'scripts/New-UpdatePackage.ps1') -Distribution $dist -OutputDirectory (Join-Path $root 'sensitive') -Version '1.8.0' -BuildNumber 19 -Commit ('c'*40)}catch{if($_.Exception.Message -like '*sensitive or development artifact*'){$rejected=$true}else{throw}}
+if(!$rejected){throw 'Sensitive package artifact was accepted'}
+Write-Host 'PowerShell syntax and package checks passed; release identity and runtime helpers included, incomplete and sensitive payloads rejected.'

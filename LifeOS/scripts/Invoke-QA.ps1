@@ -74,19 +74,24 @@ function Invoke-QaStage([string]$Name,[scriptblock]$Action) {
     }
 }
 function Get-SourceSnapshot {
-    $files=@(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'app'),(Join-Path $projectRoot 'public') -Recurse -File)
-    foreach($folder in @('launcher','scripts','tests')) {
+    # Hash every source tree that is shipped, tested or used to create a release.
+    # Generated evidence and compiler output are deliberately excluded.
+    $files=@()
+    foreach($folder in @('app','public','docs','qa','integrations','launcher','scripts','tests')) {
         $folderRoot=Join-Path $projectRoot $folder
         $files+=@(Get-ChildItem -LiteralPath $folderRoot -Recurse -File | Where-Object {
             $relative=$_.FullName.Substring($folderRoot.Length+1)
-            $relative -notmatch '(^|[\\/])(\.tmp|bin|obj|__pycache__)([\\/]|$)' -and $_.Extension -In @('.cs','.csproj','.ps1','.php','.py','.js','.cjs','.mjs')
+            $relative -notmatch '(^|[\\/])(\.tmp|bin|obj|node_modules|__pycache__)([\\/]|$)'
         })
     }
-    foreach($name in @('composer.json','composer.lock','phpunit.xml','php.ini','lifeos.iss','build.ps1')) {
+    foreach($name in @('composer.json','composer.lock','phpunit.xml','php.ini','lifeos.iss','build.ps1','README.md','README-si.md','THIRD-PARTY.md','VERIFICATION.md','PERFORMANCE.md','PRODUCTION.md')) {
         if(Test-Path -LiteralPath (Join-Path $projectRoot $name)) { $files+=Get-Item -LiteralPath (Join-Path $projectRoot $name) }
     }
+    $workflow=Join-Path $projectRoot '../.github/workflows/lifeos-release.yml'
+    if(Test-Path -LiteralPath $workflow) { $files+=Get-Item -LiteralPath $workflow }
     return @($files | Sort-Object FullName -Unique | ForEach-Object {
-        [ordered]@{path=$_.FullName.Substring($projectRoot.Length+1).Replace('\','/');sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
+        $path=if($_.FullName.StartsWith($projectRoot,[StringComparison]::OrdinalIgnoreCase)){$_.FullName.Substring($projectRoot.Length+1).Replace('\','/')}else{'../.github/workflows/lifeos-release.yml'}
+        [ordered]@{path=$path;sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
     })
 }
 
@@ -126,7 +131,7 @@ try {
             Write-QaLog ($files.Count.ToString()+' JavaScript files passed syntax checks.')
         }
         Invoke-QaStage 'phpunit' { Invoke-CheckedNative $phpCommand @('vendor/bin/phpunit','--no-progress') }
-        foreach($suite in @('module_loading','fresh_workspace','services','finance_planning','planner_growth_career','planner_search','documents_encryption','freedom','daily_progress','modern_tools','knowledge','life_planning','websites','website_accounts','website_costs','website_gateway','admin_studio','work_management','cloud_hub','wordpress_adapter','uni_calendar','uni_calendar_upgrade','persona','automation','expense_category_rules','sri_lanka_calendar','profiles_packs','capture_planning_trends','focus_intelligence','connectivity','calendar_completion','localization','work_roles','ai_provider','employee_study','platform','workspace_exchange')) {
+        foreach($suite in @('module_loading','fresh_workspace','services','finance_planning','life_finance_extensions','planner_growth_career','planner_search','documents_encryption','portable_records','freedom','daily_progress','modern_tools','knowledge','life_planning','websites','website_accounts','website_costs','website_gateway','admin_studio','work_management','cloud_hub','wordpress_adapter','uni_calendar','uni_calendar_upgrade','uni_ics_subscription','persona','automation','expense_category_rules','sri_lanka_calendar','profiles_packs','capture_planning_trends','focus_intelligence','connectivity','calendar_completion','localization','work_roles','ai_provider','employee_study','platform','plugin_lifecycle','workspace_exchange','planner_month_calendar','website_readonly')) {
             $suiteName=$suite
             Invoke-QaStage ('service-'+$suiteName) { Invoke-CheckedNative $phpCommand @('tests/'+$suiteName+'.php') }
         }
@@ -134,7 +139,7 @@ try {
         Invoke-QaStage 'persona-http' { Invoke-CheckedNative $pythonCommand @('tests/persona_http.py') }
         Invoke-QaStage 'desktop-panel-http' { Invoke-CheckedNative $pythonCommand @('tests/desktop_panel_http.py') }
         Invoke-QaStage 'expense-rules-http' { Invoke-CheckedNative $pythonCommand @('tests/expense_rules_http.py') }
-        foreach($extensionSuite in @('profiles_http','capture_planning_http','intelligence_http','connectivity_http','connectivity_worker','calendar_authorization')) {
+        foreach($extensionSuite in @('profiles_http','capture_planning_http','intelligence_http','connectivity_http','connectivity_worker','calendar_authorization','device_sync')) {
             $extensionName=$extensionSuite
             Invoke-QaStage $extensionName { Invoke-CheckedNative $pythonCommand @('tests/'+$extensionName+'.py') }
         }
@@ -145,13 +150,16 @@ try {
         Invoke-QaStage 'roles-ai-ui' { Invoke-CheckedNative $pythonCommand @('tests/roles_ai_ui.py') }
         Invoke-QaStage 'voice-recording-ui' { Invoke-CheckedNative $pythonCommand @('tests/voice_recording_ui.py') }
         Invoke-QaStage 'calendar-completion-ui' { Invoke-CheckedNative $pythonCommand @('tests/calendar_completion_ui.py') }
+        Invoke-QaStage 'planner-month-calendar-ui' { Invoke-CheckedNative $pythonCommand @('tests/planner_month_calendar_ui.py') }
         Invoke-QaStage 'workspace-exchange-http' { Invoke-CheckedNative $pythonCommand @('tests/workspace_exchange_http.py') }
         Invoke-QaStage 'localization-ui' { Invoke-CheckedNative $pythonCommand @('tests/localization_ui.py') }
         Invoke-QaStage 'opencode-worker' { Invoke-CheckedNative $pythonCommand @('tests/opencode_worker.py') }
         Invoke-QaStage 'ai-account-worker' { Invoke-CheckedNative $pythonCommand @('tests/ai_accounts.py') }
         Invoke-QaStage 'ai-account-ui' { Invoke-CheckedNative $pythonCommand @('tests/ai_account_ui.py') }
         Invoke-QaStage 'persona-ui' { Invoke-CheckedNative $pythonCommand @('tests/persona_ui.py','--output',(Join-Path $evidence 'persona-ui')) }
+        Invoke-QaStage 'dashboard-ui' { Invoke-CheckedNative $pythonCommand @('tests/dashboard_ui.py') }
         Invoke-QaStage 'uni-calendar-http' { Invoke-CheckedNative $pythonCommand @('tests/uni_calendar_http.py') }
+        Invoke-QaStage 'uni-subscription-ui' { Invoke-CheckedNative $pythonCommand @('tests/uni_subscription_ui.py') }
         Invoke-QaStage 'admin-studio-http' { Invoke-CheckedNative $pythonCommand @('tests/admin_studio_http.py') }
         Invoke-QaStage 'work-management-http' { Invoke-CheckedNative $pythonCommand @('tests/work_management_http.py') }
         Invoke-QaStage 'website-connector' { Invoke-CheckedNative $pythonCommand @('tests/website_connector.py') }

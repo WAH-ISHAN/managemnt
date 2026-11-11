@@ -52,6 +52,66 @@ Rebuilding preserves any existing `dist/data` directory. Installer payloads expl
 
 **Your daily progress** reviews actual completed tasks and goal steps, completed study sessions, personal time, income, spending and habit check-ins by date. Review yesterday or the last seven days without an invented productivity score. Task/goal completion dates begin with version 1.2; older completed records without a known completion date are not backfilled. Study sessions are attributed to their completion date. Suggestions use saved task, assignment, exam, appointment and payment dates.
 
+## Current features and options
+
+This is the user-facing module inventory for the current source. Role selection controls which modules appear; disabled modules keep their saved records. The retired School module remains only as an upgrade-compatible schema and is not a usable workspace. A local Admin Studio record or website profile does not by itself publish changes to a live website.
+
+For a per-module classification of what runs automatically, what only calculates on view, and what still requires approval or implementation, see the [automation inventory](docs/AUTOMATION-INVENTORY.md).
+
+| Area | Open in LifeOS | Features and choices |
+| --- | --- | --- |
+| Today | `/` | Greeting, role-aware workspace links, quick actions, daily activity and seven-day task/study charts from saved records, active days, task completion, previous-day/seven-day comparison, appointments, money, goals, AI and focus shortcuts. Select another recorded date. |
+| Planner | `/planner` | Tasks with due dates, priority, category, estimates, status, search and filters; habits and check-ins; appointments, reminders, weekly and month calendar, recurring events, all-day events, reviewable edits and supported cancellation publishing. |
+| Study focus | `/focus` | Study and break sessions, persistent timer, completed-time history and study totals. |
+| Money | `/salary` | Income, expenses, accounts, categories, budgets, allocation rules, monthly cashflow, expense rules, salary plan, bills and loan payments, financial calendar and CSV/report views. |
+| Investments | `/investments` | Assets, deposits, withdrawals, valuations, returns, business revenue/cost, trading, deposits and asset-linked goals. |
+| Your freedom | `/freedom` | Financial runway from recorded savings and essential costs, personal-time entries, weekly totals, history and goals. |
+| Goals & Growth | `/growth` | Personal goals, prerequisite goals, steps, progress and milestones. |
+| Lessons & growth | `/lessons` | Failure journal, causes, linked action tasks, repeated patterns, verification and weekly reviews. |
+| Review & insights | `/insights` | Monthly record summaries, workload trends, deadline/payment/calendar alerts, read/dismiss controls and optional Windows reminders. |
+| University | `/uni` | Modules, grade map and GPA, assignments, exams, timetable and NIBM lecture calendar. |
+| University study tools | `/study` | Grouped Academic tools (attendance, grade thresholds, GPA scenarios); Study Tools (assignment/exam plans, flashcards, notes, papers, library); Research (references, groups, thesis, supervision); Career (placements, portfolio); Finance (fees, instalments, scholarships). Search, add, edit, archive and printable report. |
+| University ICS subscription | `/uni/calendar/subscription` | One-time private HTTPS ICS URL, connection status, Sync now, automatic sync while open, disconnect, cached lectures, month/week/day/agenda views, date navigation, search, module filter, details and structured change notifications. |
+| Employee workspace | `/employee` | Grouped attendance/timesheets and work-life, overtime, leave policies/balances and requests, payslips, meetings/actions, blockers, KPI/OKR, achievements, claims, clients, invoices/lines, offers, promotions and credentials. Search, add, edit, archive and printable report. |
+| Work management | `/work` | Workspaces and projects, issues/sub-issues, dependencies, states, priorities, assignees, labels, Kanban/list/calendar/spreadsheet/timeline, cycles, releases, pages, comments, attachments, timers, saved views, reports and exports. |
+| Work roles | `/roles` | Multiple roles, recurring responsibilities, role time logs, estimates and corrections. |
+| Career | `/career` | Skills, learning, applications, interviews and career planning. |
+| Knowledge Hub | `/knowledge` | Notebooks, tagged and linked notes, backlinks, pinned/daily notes, templates, search, archive/trash, Markdown import and export. |
+| Documents | `/documents` | Local uploads, categories, search, metadata, downloads and recoverable Trash. |
+| Life & Sri Lanka | `/life` | New Year plans and travel, seettu, utilities, vehicles, gold/jewellery, deposits/T-bills, currency rates, events, health and other dated life records; calculations use supplied values. |
+| Personal essentials | `/life-admin` | Subscriptions and renewals, lending/borrowing with payments, and other recurring personal administration. |
+| Small business | `/small-business` | Local projects, clients, time, income and cost entries with project totals. |
+| Website Manager | `/websites` | Add multiple sites/businesses, connection guide, per-site HTTPS connector login and encrypted sessions, search/filter/switching, hosting notes, maintenance costs, live collection editing where a real connector supports it. |
+| Admin Studio | `/web-admin` | Per-website local content and operations workspace: pages, media, SEO, projects, services, customers, tasks, invoices and activity. Cloud gateway/client management is separately configured. |
+| LifeOS AI | Toolbar or **Win + Shift + \\** | Dedicated chat panel, typed messages, reviewed action proposals and optional deliberate record sharing. Online processing and verified zero-cost model availability apply; no silent paid-model fallback. |
+| Automations | `/automation` | Starter morning, evening, deadline, weekly and monthly routines; custom schedule, weekdays, timezone, activity trigger, up to five actions, catch-up/retry settings, weather opt-in, pause, run history and saved reports. |
+| Connections & automation | `/connectivity` | Encrypted external backup, matching-email previews, Google/Outlook calendar sync, reviewed ICS import/export, optional application time tracking, scoped local API/CLI tokens and configured macros. |
+| Devices & privacy | `/platform` | Device pairing, encrypted workspace delivery, selected-record sharing, task/record import and export, conflict review, audit/history and supported undo. |
+| Settings and profiles | `/settings`, `/settings/workspace`, `/profiles` | Name, profile/PIN, English/Sinhala/Tamil shell language, roles, starter pack, enabled modules and sidebar order, grade points, accounts/budgets/allocation rules, themes, backups, restore, exports and reports. |
+
+### What LifeOS can automate now
+
+Automation is opt-in and profile-scoped. In the installed Windows app, the resident process continues scheduled work when its window is hidden to the tray; **Exit LifeOS** stops it. Windows sign-in startup is an installer option. Browser development runs have no native resident scheduler. Review screens remain required for changes that could alter personal records or publish externally.
+
+| Workflow | Where to enable it | What runs automatically | Required setup or limit |
+| --- | --- | --- | --- |
+| Morning/evening briefs, deadlines, weekly and monthly summaries | Automations | Saves notifications and reports on the selected schedule or supported activity event. | Turn on a starter or custom routine. Choose time, days, timezone, catch-up and retry rules. Duplicate effects for a period are suppressed. |
+| Weather in the morning brief | Automations -> Morning weather | Fetches weather for the entered coordinates once per day. | Explicit opt-in and internet; coordinates go to Open-Meteo, not LifeOS records. |
+| Daily database snapshots | Settings | Keeps the latest 14 daily local SQLite snapshots on use. | Plain snapshots cover database records; use an encrypted complete backup for uploaded documents. |
+| Encrypted external backups | Connections & automation | Writes a verified backup to a USB or locally synced folder at the selected time. | Supply destination and recovery passphrase; an unavailable drive is retried later or through **Back up now**. |
+| University ICS lectures | University -> Calendar connection | Checks stale feeds after startup/in-app and while open; conditionally fetches changed feeds, upserts lectures, retains offline cache and summarizes changes. | Enter the private HTTPS URL once and enable automatic sync. A closed app has no feed worker. |
+| NIBM lecture calendar | University -> Lecture calendar | Syncs new, changed and cancelled lectures to Planner while the Windows app is open and unlocked. | Paste the batch link and sign in with NIBM email/OTP in its separate window. |
+| Google/Outlook calendar | Connections & automation | Refreshes access tokens and syncs every 15 minutes; optional publishing and separately approved cancellation/deletion. | Configure your provider OAuth app, calendar ID and tokens. Conflicts require review. |
+| Matching email to task preview | Connections & automation | Polls the configured mailbox at its interval. | Configure mailbox credentials/filter; a person accepts or ignores each preview before a task is created. |
+| Recurring personal/work follow-ups | Planner, Work roles, Life & Sri Lanka | Produces due reminders or idempotent linked tasks where enabled. | Save a rule, responsibility or follow-up first. |
+| Windows notifications | Review & insights | Shows supported reminders while LifeOS is open. | Enable preference and allow OS notifications; Windows quiet hours and permissions still apply. |
+| Local API, CLI and macros | Connections & automation | Scoped tasks/time commands and configured local macros; compatible with a locally configured n8n flow. | Create a scoped token, set the command/flow and keep the loopback API private. |
+| Website content/operations | Website Manager / Admin Studio | Reads and saves real site records through an authenticated compatible connector. | Each site needs its own connector or provider gateway and permissions. A local draft or static site build is not an automatic live publish. |
+
+**Not automatic today:** AI-proposed writes still require review; a private ICS feed does not sync while the app is closed; static `oreanweb` homepage copy still needs a source integration plus deployment; and GitHub Actions, AWS, VPS and Cloudflare operations require separate accounts, credentials, targets, backups and verified deployment configuration. LifeOS must not silently publish to Git, modify DNS, or deploy a site when a local record is saved.
+
+To enable a useful first automation: open **Automations**, turn on a starter routine, then review its schedule and notification history. For lectures, open **University -> Calendar connection**, connect your private ICS URL once, enable automatic sync and check the last successful sync time. For daily encrypted backups, open **Connections & automation**, choose an external destination and recovery passphrase, save, then run **Back up now** to verify that destination before relying on the schedule. Each person's websites must be added and authenticated in their own LifeOS profile; connecting one site does not grant another person access to it.
+
 ## Manage your businesses and websites
 
 Website Manager is a single-owner workspace for 10 businesses/websites or more in one LifeOS installation. Assign websites to a business, filter across your businesses, and review recent activity from all websites in one overview. A business can have more than one website. Add each website's HTTPS connector endpoint, sign in with your website username/password, and switch between independent admin panels without disconnecting other websites. Each website enforces its own permissions and stores its content on its hosting/VPS. LifeOS does not save website passwords; encrypted local sessions expire within 30 minutes.

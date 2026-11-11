@@ -14,7 +14,8 @@ internal static class Program
         if(args.Contains("--shutdown-for-update",StringComparer.OrdinalIgnoreCase)){LifeWindow.NotifyExistingInstance(true);return;}
         bool activationTest=Environment.GetEnvironmentVariable("LIFEOS_ACTIVATION_TEST")=="1";
         bool browserTest=Environment.GetEnvironmentVariable("LIFEOS_BROWSER_TEST")=="1";
-        bool diagnostic=Environment.GetEnvironmentVariable("LIFEOS_SMOKE_TEST")=="1" || Environment.GetEnvironmentVariable("LIFEOS_PROFILE_TEST")=="1" || activationTest || browserTest;
+        bool qaInstance=Environment.GetEnvironmentVariable("LIFEOS_QA_INSTANCE")=="1";
+        bool diagnostic=Environment.GetEnvironmentVariable("LIFEOS_SMOKE_TEST")=="1" || Environment.GetEnvironmentVariable("LIFEOS_PROFILE_TEST")=="1" || activationTest || browserTest || qaInstance;
         if (diagnostic && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR"))) { Environment.ExitCode=2; return; }
         // Explicit diagnostic runs use their own data/profile and must not claim
         // the user's normal app instance. Ordinary launches remain single-instance.
@@ -42,6 +43,7 @@ internal sealed partial class LifeWindow : Form
     private bool appReady,pendingPanelToggle;
     private StartupWelcome? startupWelcome;
     private bool startupPageReady;
+    private int startupNavigationFailures;
     private WebView2 web = new() { Dock = DockStyle.Fill };
     private Process? php;
     private readonly ProcessJob job = new();
@@ -51,7 +53,8 @@ internal sealed partial class LifeWindow : Form
     private ResidentAutomationRunner? automationRunner;
     private readonly string root = AppContext.BaseDirectory;
     private readonly bool activationTest=Environment.GetEnvironmentVariable("LIFEOS_ACTIVATION_TEST")=="1";
-    private readonly bool diagnostic=Environment.GetEnvironmentVariable("LIFEOS_SMOKE_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_PROFILE_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_ACTIVATION_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_BROWSER_TEST")=="1";
+    private readonly bool qaInstance=Environment.GetEnvironmentVariable("LIFEOS_QA_INSTANCE")=="1";
+    private readonly bool diagnostic=Environment.GetEnvironmentVariable("LIFEOS_SMOKE_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_PROFILE_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_ACTIVATION_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_BROWSER_TEST")=="1"||Environment.GetEnvironmentVariable("LIFEOS_QA_INSTANCE")=="1";
     private Uri? home;
     private CoreWebView2Environment? webEnvironment;
     private DesktopPanelWindow? desktopPanel;
@@ -70,7 +73,7 @@ internal sealed partial class LifeWindow : Form
         this.activationEvent=activationEvent;
         this.shutdownEvent=shutdownEvent;
         Text = "LifeOS — Student Life Management"; Width = 1320; Height = 880; MinimumSize = new Size(720, 600);
-        StartPosition = FormStartPosition.CenterScreen; BackColor = Color.FromArgb(245,245,247);
+        StartPosition = FormStartPosition.CenterScreen; BackColor = Color.FromArgb(7,18,37);
         InitializeWindowChrome();
         Icon=System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         reminders.Icon=Icon ?? SystemIcons.Application; reminders.Text="LifeOS · Student life reminders";
@@ -81,8 +84,9 @@ internal sealed partial class LifeWindow : Form
         VisibleChanged += (_,_) => { if(!Visible)StopVoiceCapture(); };
         if (activationEvent is not null) _=Task.Run(WatchResidentSignals);
         InitializeAppUpdates();
+        if(!diagnostic)web.Visible=false;
         Controls.Add(web); Load += Start;
-        Shown += (_,_) => { if(!diagnostic) { startupWelcome=new StartupWelcome(root); startupWelcome.Show(this); if(startupPageReady)startupWelcome.Ready(); } };
+        Shown += (_,_) => { if(!diagnostic || qaInstance) { startupWelcome=new StartupWelcome(root) { Bounds=Bounds }; startupWelcome.TimedOut+=()=>{if(IsDisposed)return;LogStartup("Splash readiness timed out");startupWelcome?.Close();MessageBox.Show(this,"LifeOS did not finish opening. Please restart the app. Your records are safe.","LifeOS could not open",MessageBoxButtons.OK,MessageBoxIcon.Error);allowExitForMaintenance=true;Close();}; startupWelcome.Show(this); if(startupPageReady)startupWelcome.Ready(); } };
         FormClosed += (_, _) => { startupWelcome?.Dispose(); Cleanup(); };
         Application.ApplicationExit += (_, _) => Cleanup();
     }
@@ -200,19 +204,41 @@ internal sealed partial class LifeWindow : Form
             web.CoreWebView2.PermissionRequested += RequestVoicePermission;
             web.CoreWebView2.NavigationCompleted += async (sender, navigation) => {
                 if(IsDisposed || web.IsDisposed || !ReferenceEquals(sender,web.CoreWebView2))return;
+                if(!navigation.IsSuccess && !startupPageReady) {
+                    if(startupNavigationFailures++==0) { LogStartup("Initial navigation failed; retrying");web.CoreWebView2.Reload();return; }
+                    LogStartup("Initial navigation failed twice");
+                    startupWelcome?.Close();
+                    MessageBox.Show(this,"LifeOS could not load its first screen. Please restart the app.","LifeOS could not open",MessageBoxButtons.OK,MessageBoxIcon.Error);
+                    allowExitForMaintenance=true;Close();return;
+                }
                 if (navigation.IsSuccess && await SwitchBrowserIfNeededAsync()) return;
-                web.Visible=true;
-                if(navigation.IsSuccess) { startupPageReady=true; startupWelcome?.Ready(); }
                 if (IsDisposed) return;
                 try {
                     await RefreshNativeLocaleAsync();
                     bool ready=await web.CoreWebView2.ExecuteScriptAsync("!!document.getElementById('desktop-titlebar')")=="true";
+                    web.Visible=true;
+                    web.PerformLayout();
                     if (!IsDisposed) SetCustomChrome(ready);
                     appReady=ready;if(ready&&pendingQuickCapture)ShowQuickCapture();if(ready&&pendingAssistant)ShowAssistantPanel();if(ready&&pendingPanelToggle){pendingPanelToggle=false;ToggleDesktopPanel();}if(ready)WriteResidentState();
+                    if(navigation.IsSuccess && !startupPageReady) {
+                        bool pageReady=await web.CoreWebView2.ExecuteScriptAsync("document.readyState==='complete' && !!document.getElementById('main')")=="true";
+                        if(!pageReady)throw new InvalidOperationException("The first LifeOS screen is incomplete.");
+                        startupPageReady=true;
+                        LogStartup("First screen ready");
+                    }
+                    startupWelcome?.Ready();
                     if(ready&&!diagnostic)await CheckForTodayPanelAsync();
                     PublishUpdateState();
                     if(ready && Environment.GetEnvironmentVariable("LIFEOS_BROWSER_TEST")=="1" && !browserTestStarted) { browserTestStarted=true; BeginInvoke(new Action(async()=>await RunBrowserProfileSmokeAsync())); }
-                } catch (InvalidOperationException) { if (!IsDisposed) SetCustomChrome(false); }
+                } catch (InvalidOperationException error) {
+                    if(!IsDisposed) SetCustomChrome(false);
+                    if(!startupPageReady && !IsDisposed) {
+                        LogStartup("First screen readiness failed",error);
+                        startupWelcome?.Close();
+                        MessageBox.Show(this,"LifeOS could not prepare its first screen. Please restart the app.","LifeOS could not open",MessageBoxButtons.OK,MessageBoxIcon.Error);
+                        allowExitForMaintenance=true;Close();
+                    }
+                }
             };
             web.CoreWebView2.WebMessageReceived += (_, e) => {
                 if (!Uri.TryCreate(e.Source,UriKind.Absolute,out var source) || source.GetLeftPart(UriPartial.Authority)!=home.GetLeftPart(UriPartial.Authority)) return;
@@ -422,7 +448,7 @@ internal sealed partial class LifeWindow : Form
             await Check("onboarding-brand","document.querySelector('.lifeos-logo img')?.complete && document.querySelector('.lifeos-logo img').naturalWidth===256");
             await Capture("onboarding");
             await web.CoreWebView2.ExecuteScriptAsync("(()=>{const f=document.querySelector('form[action=\"/welcome\"]');f.querySelector('[data-role-choices] input[value=employee]').checked=true;f.querySelector('[data-wizard-next]').click();f.elements.name.value='Windows smoke';f.elements.institution.value='Disposable test workspace';f.querySelector('[data-wizard-next]').click();f.elements.locale.value='en';f.requestSubmit()})()");
-            if (!await WaitForHeading("Today")) throw new InvalidOperationException("Persona onboarding did not open the dashboard.");
+            if (!await WaitForExpression("location.pathname==='/' && !!document.querySelector('#main .dashboard-home')")) throw new InvalidOperationException("Persona onboarding did not open the dashboard.");
             await Check("onboarding-persona-defaults","location.pathname==='/' && !!document.querySelector('.sidebar a[href=\"/automation\"]') && !document.querySelector('.sidebar a[href=\"/uni\"]')");
             checks["onboarding-submit"]=true;
         }
@@ -601,6 +627,16 @@ internal sealed partial class LifeWindow : Form
         foreach (string path in JsonSerializer.Deserialize<string[]>(links) ?? [])
         {
             if (path=="/") continue;
+            if (path=="/intelligence")
+            {
+                await Check("assistant-sidebar-link","!!document.querySelector('.sidebar .nav-link[href=\"/intelligence\"]')");
+                await web.CoreWebView2.ExecuteScriptAsync("document.querySelector('.sidebar .nav-link[href=\"/intelligence\"]').click()");
+                for (int attempt=0;attempt<50 && assistantPanel?.Visible!=true;attempt++) await Task.Delay(100,lifetime.Token);
+                if (assistantPanel?.Visible!=true) throw new InvalidOperationException("Sidebar LifeOS AI action did not open the native assistant panel.");
+                checks["sidebar-assistant-panel"]=true;
+                assistantPanel.Hide();
+                continue;
+            }
             await Navigate(path);
             if (path is "/planner" or "/focus" or "/career" or "/documents" or "/freedom") await Capture(path[1..]);
         }
@@ -616,10 +652,10 @@ internal sealed partial class LifeWindow : Form
         await Changed("university-exam-save-independent","location.search==='?view=exams' && document.querySelector('#main').textContent.includes('Independent exam venue')");
         await VerifyNibmCalendarAsync(checks);
         await StudioNavigate("/uni/calendar");
-        await Check("nibm-calendar-synthetic-render","document.querySelector('#main').textContent.includes('NIBM native smoke lecture') && document.querySelectorAll('#main tbody tr').length===1 && document.querySelector('#main').textContent.includes('10:00')");
+        await Check("nibm-calendar-synthetic-render","document.querySelectorAll('#uni-calendar-events .lecture-session').length===1 && document.querySelector('#uni-calendar-events .lecture-session').textContent.includes('NIBM native smoke lecture') && document.querySelector('#uni-calendar-events .lecture-session time').textContent.includes('10:00')");
         await CaptureComfort("nibm-calendar-synthetic");
         await Act("document.querySelector('[data-notifications-open]').click()");
-        await Check("calendar-notification-drawer","document.getElementById('notifications-drawer').open && document.querySelector('[data-notifications-list]').textContent.includes('NIBM native smoke lecture')");
+        await Check("calendar-notification-drawer","document.getElementById('notifications-drawer').open && [...document.querySelectorAll('[data-notification-id]')].some(row=>row.querySelector('.notification-title')?.textContent==='University calendar updated' && row.querySelector('.notification-body')?.textContent.includes('changed') && row.querySelector('.notification-title')?.getAttribute('href')?.startsWith('/uni/calendar?changes='))");
         await Check("calendar-notification-controls","document.querySelector('[data-notifications-open]').getAttribute('aria-controls')==='notifications-drawer' && document.querySelector('[data-notifications-filter=calendar]').getAttribute('aria-pressed')==='false'");
         await VerifyModalWindowChrome(checks);
         await Check("notification-window-controls-cover-viewport","(()=>{const r=document.getElementById('desktop-titlebar').getBoundingClientRect();return Math.abs(r.x)<1 && Math.abs(r.y)<1 && Math.abs(r.width-innerWidth)<1})()");

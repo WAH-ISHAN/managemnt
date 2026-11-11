@@ -12,19 +12,33 @@ using System.Windows.Forms;
 internal static class Program {
  [STAThread] private static void Main(string[] args) {
   ApplicationConfiguration.Initialize();
-  foreach(var (h,want) in new[]{(0,"Good evening"),(4,"Good evening"),(5,"Good morning"),(11,"Good morning"),(12,"Good afternoon"),(16,"Good afternoon"),(17,"Good evening"),(23,"Good evening")}) if(StartupWelcome.Greeting(h)!=want)throw new Exception("Greeting boundary "+h);
-  var local=StartupWelcome.LocalTime(new DateTimeOffset(2026,11,3,23,0,0,TimeSpan.Zero));
-  if(local.Day!=4||local.Hour!=4||local.Minute!=30)throw new Exception("Colombo date rollover");
+  using(var owner=new Form { Bounds=new System.Drawing.Rectangle(100,100,900,650) })
   using(var welcome=new StartupWelcome(args[0])) {
-   welcome.Show();var clock=Stopwatch.StartNew();
-   while(clock.ElapsedMilliseconds<900){Application.DoEvents();Thread.Sleep(15);}
+   owner.Show();welcome.Show(owner);var clock=Stopwatch.StartNew();
+   while(clock.ElapsedMilliseconds<500){Application.DoEvents();Thread.Sleep(15);}
+   if(welcome.Bounds!=owner.Bounds)throw new Exception("Splash does not cover its owner");
+   if(welcome.Stage!=StartupStage.LogoReady)throw new Exception("Logo never became ready");
    using(var bitmap=new Bitmap(welcome.ClientSize.Width,welcome.ClientSize.Height)){welcome.DrawToBitmap(bitmap,welcome.ClientRectangle);bitmap.Save(args[1]);}
    if(welcome.IsDisposed)throw new Exception("Closed before startup was ready");
    welcome.Ready();
-   while(!welcome.IsDisposed && clock.ElapsedMilliseconds<3000){Application.DoEvents();Thread.Sleep(15);}
+   while(!welcome.IsDisposed && clock.ElapsedMilliseconds<1500){Application.DoEvents();Thread.Sleep(15);}
    if(!welcome.IsDisposed)throw new Exception("Ready startup overlay did not close");
+   if(welcome.Stage!=StartupStage.DashboardVisible)throw new Exception("Splash exit did not complete");
   }
-  Console.WriteLine("11 startup greeting/timezone/lifecycle checks passed.");
+  using(var fallback=new StartupWelcome("missing-logo-fixture")) {
+   fallback.Show();fallback.Ready();
+   var clock=Stopwatch.StartNew();
+   while(!fallback.IsDisposed && clock.ElapsedMilliseconds<1500){Application.DoEvents();Thread.Sleep(15);}
+   if(!fallback.IsDisposed)throw new Exception("Missing asset fallback did not exit");
+  }
+  using(var timeout=new StartupWelcome(args[0])) {
+   bool notified=false;
+   timeout.TimedOut+=()=>{notified=true;timeout.Close();};
+   timeout.Show();var clock=Stopwatch.StartNew();
+   while(!timeout.IsDisposed && clock.ElapsedMilliseconds<32000){Application.DoEvents();Thread.Sleep(15);}
+   if(!notified||!timeout.IsDisposed)throw new Exception("Unready splash remained stuck");
+  }
+  Console.WriteLine("7 startup logo/readiness/fallback/lifecycle checks passed.");
  }
 }
 '@)

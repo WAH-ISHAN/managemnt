@@ -11,7 +11,7 @@ let checks=0;
 function check(actual,expected,message) { assert.equal(actual,expected,message); checks++; }
 
 class Element {
-  constructor(id='') { this.id=id; this.dataset={}; this.attributes=new Map(); }
+  constructor(id='') { this.id=id; this.dataset={}; this.attributes=new Map(); this.isConnected=true; }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   setAttribute(name,value) { this.attributes.set(name,String(value)); }
   removeAttribute(name) { this.attributes.delete(name); }
@@ -20,6 +20,7 @@ class Element {
   querySelector() { return {}; }
   closest() { return null; }
   matches(selector) { return this===form && selector==='form'; }
+  focus() { document.activeElement=this; }
 }
 
 const main=new Element('main'), form=new Element(), save=new Element(), unavailable=new Element();
@@ -30,10 +31,15 @@ form.querySelectorAll=()=>[save,unavailable];
 form.closest=()=>form;
 
 const document=new EventTarget();
+const commandDialog=new Element('command-dialog'), commandSearch=new Element('command-search'), commandOpener=new Element('command-opener');
+commandDialog.open=false;
+commandDialog.showModal=()=>{ commandDialog.open=true; };
+commandDialog.close=()=>{ commandDialog.open=false; };
+document.activeElement=commandOpener;
 document.documentElement={dataset:{}};
 document.querySelector=()=>null;
 document.querySelectorAll=()=>[];
-document.getElementById=id=>id==='main' ? main : null;
+document.getElementById=id=>({'main':main,'command-dialog':commandDialog,'command-search':commandSearch}[id] ?? null);
 const window=new EventTarget();
 window.confirm=()=>true;
 
@@ -60,6 +66,18 @@ function idle(message) {
 }
 
 (async()=>{
+  window.LifeOS.openCommands();
+  check(commandDialog.open,true,'Command search opens');
+  check(document.activeElement,commandSearch,'Command search receives keyboard focus');
+  commandSearch.value='income';
+  const escape=new Event('keydown',{cancelable:true});
+  Object.defineProperties(escape,{key:{value:'Escape'},target:{value:commandSearch}});
+  document.dispatchEvent(escape);
+  check(commandDialog.open,false,'One Escape closes command search with a populated query');
+  check(escape.defaultPrevented,true,'Escape prevents native search clearing instead of closing');
+  check(commandSearch.value,'income','Closing search preserves the query');
+  check(document.activeElement,commandOpener,'Escape restores focus to the search opener');
+
   check(fire('submit',{},form).defaultPrevented,false,'Native submit remains available');
   idle('Native submit');
 

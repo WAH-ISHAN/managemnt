@@ -16,7 +16,7 @@ mkdir($temporary,0700,true);$copiedFiles=[];$copiedDirs=[];
 try {
     $modules=Modules::discover(ROOT.'/app/Modules');
     $currentDirs=array_merge([ROOT.'/app/Core/migrations'],array_map(fn($m)=>$m['path'].'/migrations',$modules));
-    $oldDirs=[];$excluded=[];$newMigrationKeys=['Uni/002_calendar.sql','Uni/003_calendar_notifications.sql','Insights/002_notification_reads.sql','Insights/003_desktop_panel.sql'];
+    $oldDirs=[];$excluded=[];$newMigrationKeys=['Uni/002_calendar.sql','Uni/003_calendar_notifications.sql','Uni/004_calendar_notification_changes.sql','Uni/005_ics_subscription.sql','Insights/002_notification_reads.sql','Insights/003_desktop_panel.sql'];
     foreach($currentDirs as $source) {
         $module=basename(dirname($source));$target=$temporary.'/'.$module.'/migrations';
         mkdir($target,0700,true);$copiedDirs[]=$target;$copiedDirs[]=dirname($target);$oldDirs[]=$target;
@@ -26,7 +26,7 @@ try {
         }
     }
     sort($excluded);$expectedExcluded=$newMigrationKeys;sort($expectedExcluded);
-    ucu_check($excluded===$expectedExcluded,'Old-schema fixture excludes exactly the three new calendar and notification migrations');
+    ucu_check($excluded===$expectedExcluded,'Old-schema fixture excludes the calendar and notification migrations');
     $database=$temporary.'/lifeos.db';Db::init($database);Migrator::run($oldDirs);
     ucu_check(Db::one("SELECT name FROM sqlite_master WHERE name='uni_calendar_events'")===null,'Pre-upgrade database has no calendar table');
     ucu_check(Db::one("SELECT name FROM sqlite_master WHERE name IN ('uni_calendar_notifications','notification_reads','desktop_panel_notes')")===null,'Pre-upgrade database has none of the new notification or panel tables');
@@ -47,11 +47,11 @@ try {
     Migrator::run($currentDirs);
     ucu_check(Db::one("SELECT name FROM sqlite_master WHERE name='uni_calendar_events'")!==null,'New migration creates the university calendar table');
     $after=ucu_records();$calendar=$after['uni_calendar_events'];unset($after['uni_calendar_events']);
-    foreach(['uni_calendar_notifications','notification_reads','desktop_panel_notes'] as $newTable){ucu_check(isset($after[$newTable])&&$after[$newTable]['rows']===[],'Upgrade creates empty '.$newTable.' without fabricated history');unset($after[$newTable]);}
+    foreach(['uni_calendar_notifications','uni_ics_events','notification_reads','desktop_panel_notes'] as $newTable){ucu_check(isset($after[$newTable])&&$after[$newTable]['rows']===[],'Upgrade creates empty '.$newTable.' without fabricated history');unset($after[$newTable]);}
     ucu_check($after===$before,'Every pre-existing user table retains its exact schema and rows through upgrade');
     ucu_check($calendar['rows']===[],'Upgrade does not fabricate imported lectures');
     $newMigrations=Db::all('SELECT * FROM migrations ORDER BY file');
-    ucu_check(count($newMigrations)===count($oldMigrations)+count($newMigrationKeys),'Upgrade applies exactly the three intended migrations');
+    ucu_check(count($newMigrations)===count($oldMigrations)+count($newMigrationKeys),'Upgrade applies exactly the intended migrations');
     foreach($oldMigrations as $migration) {
         $row=Db::one('SELECT * FROM migrations WHERE file=?',[$migration['file']]);
         if($row!==$migration)throw new RuntimeException('Upgrade rewrote original migration history: '.$migration['file']);

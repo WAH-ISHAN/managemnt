@@ -54,6 +54,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Chromium installation failed.' }
       - name: Verify application services, routes and scripts
         run: ./scripts/Invoke-QA.ps1
+      - name: Verify portable update packaging and rollback
+        run: |
+          ./tests/update_package.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Portable update package fixture failed.' }
+          ./tests/update_delivery.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Update delivery suite failed.' }
       - name: Compile Windows launcher
         run: |
           dotnet build launcher/LifeOS.csproj -c Release
@@ -120,11 +126,40 @@ jobs:
         env:
           LIFEOS_COMMERCIAL: ${{ vars.LIFEOS_COMMERCIAL }}
           LIFEOS_LICENSE_PUBLIC_KEY: ${{ vars.LIFEOS_LICENSE_PUBLIC_KEY }}
+          LIFEOS_REQUIRE_SIGNING: ${{ vars.LIFEOS_REQUIRE_SIGNING }}
+          LIFEOS_SIGNING_PFX_BASE64: ${{ secrets.LIFEOS_SIGNING_PFX_BASE64 }}
+          LIFEOS_SIGNING_PFX_PASSWORD: ${{ secrets.LIFEOS_SIGNING_PFX_PASSWORD }}
         run: |
+          $ErrorActionPreference='Stop'
           $licenseArgs=@{}
           if($env:LIFEOS_COMMERCIAL -eq 'true'){$licenseArgs=@{Commercial=$true;LicensePublicKey=$env:LIFEOS_LICENSE_PUBLIC_KEY}}
-          ./build.ps1 -AiExecutable '.tools/ai-runtime/opencode.exe' @licenseArgs
-          ./scripts/New-UpdatePackage.ps1 -Version $env:LIFEOS_VERSION -BuildNumber ([int]$env:BUILD_NUMBER) -Commit $env:GITHUB_SHA -Repository $env:GITHUB_REPOSITORY
+          $signingArgs=@{}
+          $certificate=$null
+          $pfxPath=Join-Path $env:RUNNER_TEMP 'lifeos-signing.pfx'
+          try {
+            $hasPfx=-not [string]::IsNullOrWhiteSpace($env:LIFEOS_SIGNING_PFX_BASE64)
+            $hasPassword=-not [string]::IsNullOrWhiteSpace($env:LIFEOS_SIGNING_PFX_PASSWORD)
+            if($hasPfx -ne $hasPassword){throw 'Both LifeOS signing certificate secrets must be configured together.'}
+            if($env:LIFEOS_REQUIRE_SIGNING -eq 'true' -and -not $hasPfx){throw 'This release requires signing, but no signing certificate is configured.'}
+            if($hasPfx){
+              [IO.File]::WriteAllBytes($pfxPath,[Convert]::FromBase64String($env:LIFEOS_SIGNING_PFX_BASE64))
+              $password=ConvertTo-SecureString $env:LIFEOS_SIGNING_PFX_PASSWORD -AsPlainText -Force
+              $certificate=@(Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password -Exportable:$false)
+              if($certificate.Count -ne 1 -or -not $certificate[0].HasPrivateKey){throw 'Expected one code-signing certificate with a private key.'}
+              Remove-Item -LiteralPath $pfxPath -Force
+              Remove-Item Env:LIFEOS_SIGNING_PFX_BASE64,Env:LIFEOS_SIGNING_PFX_PASSWORD -ErrorAction SilentlyContinue
+              $password=$null
+              $signTool=Get-ChildItem -LiteralPath "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse -File | Where-Object {$_.Directory.Name -eq 'x64'} | Sort-Object FullName -Descending | Select-Object -First 1
+              if(-not $signTool){throw 'signtool.exe was not found on the Windows release runner.'}
+              $signingArgs=@{SigningCertificateThumbprint=$certificate[0].Thumbprint;SignTool=$signTool.FullName}
+            }
+            ./build.ps1 -AiExecutable '.tools/ai-runtime/opencode.exe' @licenseArgs @signingArgs
+            ./scripts/New-UpdatePackage.ps1 -Version $env:LIFEOS_VERSION -BuildNumber ([int]$env:BUILD_NUMBER) -Commit $env:GITHUB_SHA -Repository $env:GITHUB_REPOSITORY
+          } finally {
+            if($certificate){$certificate | ForEach-Object {Remove-Item -LiteralPath (Join-Path 'Cert:\CurrentUser\My' $_.Thumbprint) -Force}}
+            if(Test-Path -LiteralPath $pfxPath){Remove-Item -LiteralPath $pfxPath -Force}
+            Remove-Item Env:LIFEOS_SIGNING_PFX_BASE64,Env:LIFEOS_SIGNING_PFX_PASSWORD -ErrorAction SilentlyContinue
+          }
       - name: Verify update delivery against disposable installations
         run: ./tests/update_delivery.ps1
       - name: Upload immutable assets to a draft, then publish
@@ -134,11 +169,11 @@ jobs:
           if ($LASTEXITCODE -eq 0) { throw 'This build tag already exists. Start a new workflow run; published releases are not overwritten.' }
           gh release create $env:LIFEOS_TAG --draft --target $env:GITHUB_SHA --title "LifeOS $env:LIFEOS_VERSION (build $env:BUILD_NUMBER)" --notes "Verified Windows release from merged main commit $env:GITHUB_SHA. Personal records remain on your computer."
           if ($LASTEXITCODE -ne 0) { throw 'Could not create the release draft.' }
-          gh release upload $env:LIFEOS_TAG Output/LifeOS-Setup.exe Output/LifeOS-Setup.exe.sha256 Output/LifeOS-update.zip Output/lifeos-update.json
+          gh release upload $env:LIFEOS_TAG Output/LifeOS-Setup.exe Output/LifeOS-Setup.exe.sha256 Output/LifeOS-update.zip Output/lifeos-update.json Output/LifeOS-release-verification.json Output/LifeOS-build-inputs.json
           if ($LASTEXITCODE -ne 0) { throw 'Asset upload failed; release remains a draft.' }
           $release = gh release view $env:LIFEOS_TAG --json assets | ConvertFrom-Json
           $manifest = Get-Content Output/lifeos-update.json -Raw | ConvertFrom-Json
-          foreach ($asset in @(@{name='LifeOS-update.zip';size=$manifest.package.size},@{name='LifeOS-Setup.exe';size=$manifest.installer.size},@{name='lifeos-update.json';size=(Get-Item Output/lifeos-update.json).Length})) {
+          foreach ($asset in @(@{name='LifeOS-update.zip';size=$manifest.package.size},@{name='LifeOS-Setup.exe';size=$manifest.installer.size},@{name='LifeOS-Setup.exe.sha256';size=(Get-Item Output/LifeOS-Setup.exe.sha256).Length},@{name='lifeos-update.json';size=(Get-Item Output/lifeos-update.json).Length},@{name='LifeOS-release-verification.json';size=(Get-Item Output/LifeOS-release-verification.json).Length},@{name='LifeOS-build-inputs.json';size=(Get-Item Output/LifeOS-build-inputs.json).Length})) {
             $remote = @($release.assets | Where-Object name -eq $asset.name)
             if ($remote.Count -ne 1 -or $remote[0].size -ne $asset.size) { throw 'Published asset readiness verification failed; release remains a draft.' }
           }

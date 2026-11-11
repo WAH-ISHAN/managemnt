@@ -17,7 +17,8 @@ return function (Router $r) {
         usort($assets,fn($a,$b)=>$b['current']<=>$a['current']);
         return View::render(__DIR__.'/views/index.php',array_merge($summary,[
             'hasFocus'=>module_enabled('Focus'),'hasGrowth'=>module_enabled('Growth'),'hasFreedom'=>module_enabled('Freedom'),'title'=>t('Overview'),'hasSalary'=>$salary,'hasInvestments'=>$invest,'hasUni'=>$uni,'hasLessons'=>$lessons,
-            'selectedDay'=>$day,'dailyProgress'=>DailyProgressService::day($day),'dailyHistory'=>DailyProgressService::week($day),'suggestions'=>DailyProgressService::suggestions(),
+            'selectedDay'=>$day,'dailyProgress'=>DailyProgressService::day($day),'dailyHistory'=>DailyProgressService::week($day),'previousWeek'=>DailyProgressService::previousWeekTotals($day),'suggestions'=>DailyProgressService::suggestions(),
+            'taskCompletion'=>Db::one("SELECT COUNT(*) total,COALESCE(SUM(CASE WHEN status='done' THEN 1 ELSE 0 END),0) done FROM tasks WHERE archived_at IS NULL"),
             'name'=>Db::setting('name'),'accounts'=>$accounts,'balance'=>$balance,'netWorth'=>$balance+($invest ? InvestmentService::netWorth() : 0)-((module_enabled('Salary') && class_exists('FinancePlanningService')) ? FinancePlanningService::outstandingDebt() : 0),
             'series'=>$salary ? SalaryService::monthlySeries() : [],'assets'=>$assets,'goals'=>$invest ? InvestmentService::goals() : [],
             'rules'=>$salary ? Db::all('SELECT * FROM allocation_rules WHERE active=1 ORDER BY sort,id') : [],

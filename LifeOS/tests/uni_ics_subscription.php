@@ -1,0 +1,30 @@
+<?php
+declare(strict_types=1);
+require __DIR__.'/bootstrap.php';
+$checks=0;
+function check_ics(bool $condition,string $label): void { global $checks; if (!$condition) throw new RuntimeException($label); $checks++; }
+Db::init(':memory:');
+$modules=Modules::discover(ROOT.'/app/Modules');
+Migrator::run(array_merge([ROOT.'/app/Core/migrations'],array_map(fn($m)=>$m['path'].'/migrations',$modules)));
+$calendar=static fn(string $time,string $name,string $status='CONFIRMED'): string => "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:lecture-1@example.edu\r\nDTSTART:{$time}\r\nDTEND:20261112T120000Z\r\nSUMMARY:{$name}\r\nLOCATION:Hall A\r\nSTATUS:{$status}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+$parse=new ReflectionMethod(UniIcsSubscription::class,'parse');
+$apply=new ReflectionMethod(UniIcsSubscription::class,'apply');
+$first=$parse->invoke(null,$calendar('20261112T100000Z','Algorithms'));
+check_ics(count($first)===1 && $first[0]['starts_at']==='2026-11-12 15:30','UTC converted to Colombo');
+$result=$apply->invoke(null,$first,['etag'=>'"v1"','modified'=>'']);
+check_ics($result['added']===1 && UniIcsSubscription::events('2026-11-12','2026-11-12')[0]['title']==='Algorithms','Initial event imported');
+$result=$apply->invoke(null,$first,['etag'=>'"v1"','modified'=>'']);
+check_ics($result['unchanged']===1 && (int)Db::one('SELECT COUNT(*) n FROM uni_ics_events')['n']===1,'Repeat sync creates no duplicates');
+$changed=$parse->invoke(null,$calendar('20261112T110000Z','Algorithms II'));
+$result=$apply->invoke(null,$changed,['etag'=>'"v2"','modified'=>'']);
+check_ics($result['changed']===1 && UniIcsSubscription::events('2026-11-12','2026-11-12')[0]['title']==='Algorithms II','Changed lecture upserted');
+$result=$apply->invoke(null,[],['etag'=>'"empty"','modified'=>'']);
+check_ics($result['cancelled']===0 && (int)Db::one("SELECT COUNT(*) n FROM planner_appointments WHERE status='cancelled'")['n']===0,'Empty rolling feed preserves cached lecture');
+$cancelled=$parse->invoke(null,$calendar('20261112T110000Z','Algorithms II','CANCELLED'));
+$result=$apply->invoke(null,$cancelled,['etag'=>'"v3"','modified'=>'']);
+check_ics($result['cancelled']===1 && (int)Db::one("SELECT COUNT(*) n FROM planner_appointments WHERE status='cancelled'")['n']===1,'Explicit cancellation updates cached lecture');
+$result=$apply->invoke(null,$cancelled,['etag'=>'"v3"','modified'=>'']);
+check_ics($result['cancelled']===0,'Repeated cancellation creates no new change');
+check_ics((int)Db::one('SELECT COUNT(*) n FROM uni_calendar_notifications')['n']===3,'Only actual changes create notifications');
+check_ics(UniIcsSubscription::status()['lastSync']!=='' && Db::setting('uni_ics_etag')==='"v3"','Sync state persisted in settings');
+echo "$checks ICS subscription checks passed.\n";

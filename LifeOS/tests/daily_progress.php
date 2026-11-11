@@ -36,6 +36,11 @@ $localStart=(new DateTimeImmutable($today,new DateTimeZone('Asia/Colombo')))->se
 Db::run('UPDATE focus_sessions SET completed_at=? WHERE id=?',[$localStart->modify('-1 second')->format('Y-m-d H:i:s'),$focus]);
 daily_check(DailyProgressService::day($today)['focus_minutes']===0.0 && DailyProgressService::day($yesterday)['focus_minutes']===10.0,'UTC completion immediately before local midnight belongs to previous day');
 Db::run('UPDATE focus_sessions SET completed_at=? WHERE id=?',[$localStart->format('Y-m-d H:i:s'),$focus]); daily_check(DailyProgressService::day($today)['focus_minutes']===10.0,'Local midnight is included in selected day');
+$priorStamp=(new DateTimeImmutable($today,new DateTimeZone('Asia/Colombo')))->modify('-7 days')->setTime(12,0)->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+Db::run('UPDATE tasks SET completed_at=? WHERE id=?',[$priorStamp,$task]);
+Db::run('UPDATE focus_sessions SET completed_at=? WHERE id=?',[$priorStamp,$focus]);
+$prior=DailyProgressService::previousWeekTotals($today);
+daily_check($prior['tasks']===1 && $prior['focus_minutes']===10.0,'Previous seven-day comparison uses saved tasks and study sessions at Colombo day boundaries');
 Db::close();
 // Old completed records keep an unknown date rather than fabricated upgrade-day progress.
 Db::init(':memory:'); Db::exec(file_get_contents(ROOT.'/app/Core/migrations/001_core.sql')); Db::run("INSERT INTO tasks(title,status) VALUES ('Legacy action','done')"); Db::exec(file_get_contents(ROOT.'/app/Core/migrations/002_task_completion_dates.sql'));

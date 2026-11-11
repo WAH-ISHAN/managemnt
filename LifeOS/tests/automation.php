@@ -42,7 +42,11 @@ try {
     $failureResult=AutomationService::tick($now); ini_set('error_log',$oldLog);
     automation_check($failureResult['failed']===1 && count(Db::all('SELECT * FROM automation_messages'))===$before,'Failed second action rolls back first action and writes no partial messages');
     automation_check(Db::one('SELECT status FROM automation_runs WHERE rule_id=?',[$failed])['status']==='failed' && AutomationService::tick($now)['failed']===0,'Failed slot is recorded visibly and not retried endlessly');
-    Db::exec('DROP TRIGGER automation_test_failure'); AutomationService::toggle($failed,false);
+    Db::exec('DROP TRIGGER automation_test_failure');
+    $failedRun=(int)Db::one('SELECT id FROM automation_runs WHERE rule_id=?',[$failed])['id'];
+    automation_check(AutomationService::retryRun($failedRun,$now)['ran']===1 && Db::one('SELECT status FROM automation_runs WHERE id=?',[$failedRun])['status']==='complete','Explicit retry recovers the original failed slot even after automatic retries are exhausted');
+    automation_rejects(fn()=>AutomationService::retryRun($failedRun,$now),'A completed run cannot be retried');
+    AutomationService::toggle($failed,false);
     foreach ([7,3,1,0,2] as $days) Db::run('INSERT INTO tasks(title,due) VALUES (?,?)',['Due '.$days,$now->modify('+'.$days.' days')->format('Y-m-d')]);
     $done=Db::run("INSERT INTO tasks(title,due,status,completed_at) VALUES ('Already done',?,'done',?)",[$now->format('Y-m-d'),'2026-11-02 03:00:00']);
     $billAccount=(int)Db::one('SELECT id FROM accounts ORDER BY id LIMIT 1')['id'];
@@ -94,6 +98,12 @@ try {
     $_POST['actions'][2]=['type'=>'notify','title'=>'Duplicate','body'=>'Should reject'];
     automation_rejects(function () use ($router): void { ob_start(); try { $router->dispatch('POST','/automation/rules'); } finally { ob_end_clean(); } },'Builder rejects duplicate action types');
     automation_check(AutomationService::rule($multi)===$edited,'Rejected builder update preserves the complete saved rule');
+    $onDemand=AutomationService::save(null,'On demand','daily',['time'=>'23:59'],[['type'=>'notify','title'=>'Manual check','body'=>'Only after a click']],false);
+    automation_check(AutomationService::runNow($onDemand)['ran']===1 && count(Db::all("SELECT * FROM automation_messages WHERE title='Manual check'"))===1,'Run now executes a paused, allowlisted routine exactly once');
+    automation_rejects(fn()=>AutomationService::runNow($onDemand),'Immediate repeated manual execution is rate limited');
+    automation_rejects(fn()=>AutomationService::runNow($foreign),'Another profile cannot run a private rule');
+    $_GET=['q'=>'On demand']; ob_start(); $router->dispatch('GET','/automation'); $filtered=ob_get_clean(); $_GET=[];
+    automation_check(str_contains($filtered,'Automation overview') && str_contains($filtered,'Run now') && str_contains($filtered,'On demand'),'Control center searches the user’s routines and exposes manual execution');
     if (class_exists('PersonaService')) {
         PersonaService::apply('uni');
         Db::run("UPDATE modules SET enabled=0 WHERE profile_id='default' AND module_id='Salary'");

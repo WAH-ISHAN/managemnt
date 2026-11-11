@@ -84,16 +84,34 @@ final class AutomationService {
         });
     }
     /** Bounded, transactionally claimed schedule and activity slots. */
-    public static function tick(?DateTimeImmutable $now=null): array {
+    public static function runNow(int $id,?DateTimeImmutable $now=null): array {
+        self::rule($id);
+        $recent=Db::one("SELECT 1 FROM automation_runs WHERE rule_id=? AND slot LIKE 'manual:%' AND created_at>=datetime('now','-1 minute') LIMIT 1",[$id]);
+        if ($recent) throw new InvalidArgumentException(t('This routine was just run. Wait a minute before running it again.'));
+        return self::tick($now,$id,true);
+    }
+    public static function retryRun(int $runId,?DateTimeImmutable $now=null): array {
+        $run=Db::one('SELECT r.id,r.rule_id,r.slot,r.status FROM automation_runs r JOIN automation_rules a ON a.id=r.rule_id WHERE r.id=? AND a.profile_id=?',[$runId,self::profileId()]);
+        if (!$run || $run['status']!=='failed') throw new InvalidArgumentException(t('Choose a failed run from your profile.'));
+        return self::tick($now,(int)$run['rule_id'],false,$run['slot'],true);
+    }
+    public static function tick(?DateTimeImmutable $now=null,?int $onlyRule=null,bool $manual=false,?string $onlySlot=null,bool $explicitRetry=false): array {
         $out=['ran'=>0,'skipped'=>0,'failed'=>0]; $budget=200;
         if (!self::available('Automation') || !self::table('automation_rules')) return $out;
         $instant=$now ?? new DateTimeImmutable();
-        foreach (Db::all('SELECT * FROM automation_rules WHERE profile_id=? AND enabled=1 ORDER BY id LIMIT 100',[self::profileId()]) as $rule) {
+        $query='SELECT * FROM automation_rules WHERE profile_id=?'.($onlyRule!==null ? ' AND id=?' : ' AND enabled=1').' ORDER BY id LIMIT 100';
+        foreach (Db::all($query,$onlyRule!==null ? [self::profileId(),$onlyRule] : [self::profileId()]) as $rule) {
             try { [$conditions,$actions]=self::validate($rule['trigger'],json_decode($rule['conditions'],true,32,JSON_THROW_ON_ERROR),json_decode($rule['actions'],true,32,JSON_THROW_ON_ERROR)); }
             catch (Throwable $error) { error_log('Invalid automation '.$rule['id']); $out['failed']++; continue; }
             $local=$instant->setTimezone(new DateTimeZone($conditions['timezone']));
             $slots=[];
-            if ($conditions['event']!=='') {
+            if ($onlySlot!==null) {
+                $slots[$onlySlot]=preg_match('/^\d{4}-\d{2}-\d{2}$/D',$onlySlot) ? $local->setDate((int)substr($onlySlot,0,4),(int)substr($onlySlot,5,2),(int)substr($onlySlot,8,2)) : $local;
+            } elseif ($manual) {
+                // A deliberate click gets its own slot while still using the same
+                // transactional effect claim and bounded action allowlist.
+                $slots['manual:'.bin2hex(random_bytes(12))]=$local;
+            } elseif ($conditions['event']!=='') {
                 $owner=match($conditions['event']) {'task_completed','habit_checked'=>'Planner','focus_completed'=>'Focus'};
                 if (!self::available($owner)) continue;
                 foreach (Db::all("SELECT e.* FROM automation_events e WHERE kind=? AND id>? AND created_at>=? AND NOT EXISTS(SELECT 1 FROM automation_runs r WHERE r.rule_id=? AND r.slot='event:'||e.id AND (r.status IN ('complete','skipped') OR (r.status='failed' AND r.attempts>?))) ORDER BY id LIMIT 100",[$conditions['event'],$conditions['event_after'],$rule['created_at'],$rule['id'],$conditions['retry_limit']]) as $event) {
@@ -113,7 +131,7 @@ final class AutomationService {
                 if (--$budget<0) return $out;
                 $utc=$instant->setTimezone(new DateTimeZone('UTC'));
                 $old=Db::one('SELECT * FROM automation_runs WHERE rule_id=? AND slot=?',[$rule['id'],$slot]);
-                if ($old && ($old['status']!=='failed' || (int)$old['attempts']>$conditions['retry_limit'] || $old['retry_at']===null || $old['retry_at']>$utc->format('Y-m-d H:i:s'))) continue;
+                if ($old && ($old['status']!=='failed' || (!$explicitRetry && ((int)$old['attempts']>$conditions['retry_limit'] || $old['retry_at']===null || $old['retry_at']>$utc->format('Y-m-d H:i:s'))))) continue;
                 try {
                     $status=Db::tx(function () use ($rule,$slot,$slotTime,$conditions,$actions,$old): string {
                         if ($old) {
@@ -137,7 +155,9 @@ final class AutomationService {
                     if ($status==='complete') $out['ran']++; elseif ($status==='skipped') $out['skipped']++;
                 } catch (Throwable $error) {
                     error_log('Automation rule '.$rule['id'].': '.$error->getMessage());
-                    $retry=$utc->modify('+'.$conditions['retry_minutes'].' minutes')->format('Y-m-d H:i:s');
+                    $attempts=(int)($old['attempts'] ?? 0)+1;
+                    $delay=min(1440,$conditions['retry_minutes'] * (2 ** min(10,max(0,$attempts-1))));
+                    $retry=$utc->modify('+'.$delay.' minutes')->format('Y-m-d H:i:s');
                     Db::run("INSERT INTO automation_runs(rule_id,slot,status,detail,retry_at) VALUES (?,?,'failed',?,?) ON CONFLICT(rule_id,slot) DO UPDATE SET status='failed',attempts=attempts+1,detail=excluded.detail,retry_at=excluded.retry_at",[$rule['id'],$slot,'This run failed. Retry follows your routine preferences.',$retry]);
                     $out['failed']++;
                 }

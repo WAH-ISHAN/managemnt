@@ -75,6 +75,26 @@ with tempfile.TemporaryDirectory(prefix='lifeos-uni-calendar-http-') as temporar
                   'Disposable workspace onboarding succeeds')
             code, page, _, _ = request('/uni/calendar')
             check(code == 200 and b'calendar' in page.lower(), 'University calendar setup page renders')
+            code, subscription, _, _ = request('/uni/calendar/subscription')
+            check(code == 200 and b'Calendar connection' in subscription and b'uni-calendar-grid' not in subscription,
+                  'Subscribed calendar opens with no invented lectures')
+            for mode in ('month', 'week', 'day', 'agenda'):
+                code, page, _, _ = request('/uni/calendar/subscription?view=' + mode + '&date=2026-11-12')
+                check(code == 200 and b'Calendar views' in page, 'Subscribed calendar ' + mode + ' view renders')
+            status = json.loads(request('/uni/calendar/subscription/status')[1])
+            check(status['connected'] is False and status['lastSync'] == '' and 'url' not in status,
+                  'Subscription status contains no private URL')
+            check(request('/uni/calendar/subscription/sync', {'_csrf': csrf})[0] == 422,
+                  'Disconnected calendar cannot sync')
+            check(request('/uni/calendar/subscription/connect', {'calendar_url': 'https://calendar.example.edu/private.ics'})[0] == 419,
+                  'Subscribed feed connection requires CSRF')
+            for unsafe in ('http://example.edu/calendar.ics', 'https://127.0.0.1/calendar.ics',
+                           'https://localhost/calendar.ics', 'https://user:pass@example.edu/calendar.ics'):
+                check(request('/uni/calendar/subscription/connect', {'_csrf': csrf, 'calendar_url': unsafe})[0] == 422,
+                      'Unsafe subscribed feed URL rejected')
+            check(request('/uni/calendar/subscription/automatic', {'_csrf': csrf})[0] == 200 and
+                  json.loads(request('/uni/calendar/subscription/status')[1])['automatic'] is False,
+                  'Automatic synchronization preference persists')
             code, body, headers, _ = request('/uni/calendar/config')
             payload = json.loads(body)
             config = payload.get('config', payload)

@@ -13,7 +13,7 @@ return function (Router $r) {
     $r->post('/insights/alerts/{id}/read',function ($p) { InsightsService::markRead($p['id']); header('Content-Type: application/json'); return '{"ok":true}'; });
     $r->post('/insights/alerts/read-all',function () { InsightsService::markAllRead(); header('Content-Type: application/json'); return '{"ok":true}'; });
     $r->post('/insights/alerts/{id}/dismiss',function ($p) { if (!preg_match('/^[a-f0-9]{64}$/',$p['id'])) throw new InvalidArgumentException(t('Invalid notification.')); Db::run('INSERT OR IGNORE INTO notification_dismissals(key) VALUES (?)',[$p['id']]); return redirect('/insights#alerts','Reminder dismissed for today.'); });
-    $r->post('/insights/notifications',function () { Db::set('notifications_enabled',isset($_POST['enabled']) ? '1' : '0'); return redirect('/insights#alerts','Notification preferences saved.'); });
+    $r->post('/insights/notifications',function () { $enabled=isset($_POST['enabled']) ? '1' : '0'; if (Db::setting('notifications_enabled')!==$enabled) Db::set('notifications_enabled',$enabled); return redirect('/insights#alerts','Notification preferences saved.'); });
     $r->post('/insights/review',function () { $month=valid_month(text_input('month')); InsightsService::review($month,text_input('wins',5000,false),text_input('lessons',5000,false),text_input('focus',2000,false),int_range($_POST['score'] ?? '',1,10)); return redirect('/insights?month='.$month,'Monthly review saved.'); });
 };
 

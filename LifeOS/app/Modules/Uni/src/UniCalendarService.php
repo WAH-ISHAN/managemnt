@@ -93,11 +93,11 @@ final class UniCalendarService {
                     // Restore a confirmed lecture when that batch is selected again.
                     $changed=$old && (($old['details_hash'] ?? '')!==$item['detailsHash'] || !$previousActive || ($local && $local['status']!=='scheduled'));
                     if ($appointment && !$missing && $changed) Db::run("UPDATE planner_appointments SET title=?,starts_at=?,ends_at=?,location=?,notes=?,status='scheduled' WHERE id=?",[...$values,$appointment]);
-                    if (!$old || $missing || !$previousActive) { $counts['created']++; $changes[]='Added: '.$item['title'].' · '.$item['start']; }
-                    elseif ($changed) { $counts['updated']++; $changes[]='Changed: '.$item['title'].' · '.$item['start']; }
+                    if (!$old || $missing || !$previousActive) { $counts['created']++; $changes[]=['type'=>'added','title'=>$item['title'],'starts_at'=>$item['start'],'appointment_id'=>$appointment]; }
+                    elseif ($changed) { $counts['updated']++; $changes[]=['type'=>'changed','title'=>$item['title'],'starts_at'=>$item['start'],'appointment_id'=>$appointment]; }
                     else $counts['skipped']++;
                 } else {
-                    if ($appointment && $previousActive) { Db::run("UPDATE planner_appointments SET status='cancelled' WHERE id=?",[$appointment]); $counts['cancelled']++; $changes[]='Cancelled: '.$item['title']; }
+                    if ($appointment && $previousActive) { Db::run("UPDATE planner_appointments SET status='cancelled' WHERE id=?",[$appointment]); $counts['cancelled']++; $changes[]=['type'=>'cancelled','title'=>$item['title'],'starts_at'=>$item['start'],'appointment_id'=>$appointment]; }
                     else $counts['skipped']++;
                 }
                 Db::run('INSERT INTO uni_calendar_events(batch_id,remote_id,appointment_id,title,starts_at,ends_at,location,remote_status,synced_at,details_hash) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(batch_id,remote_id) DO UPDATE SET appointment_id=excluded.appointment_id,title=excluded.title,starts_at=excluded.starts_at,ends_at=excluded.ends_at,location=excluded.location,remote_status=excluded.remote_status,synced_at=excluded.synced_at,details_hash=excluded.details_hash',[$batchId,$item['id'],$appointment,$item['title'],$item['start'],$item['end'],$item['location'],$item['status'],$now,$item['detailsHash']]);
@@ -105,13 +105,13 @@ final class UniCalendarService {
             // Only absence from this complete, successfully validated window cancels a saved event.
             foreach (Db::all('SELECT * FROM uni_calendar_events WHERE batch_id=? AND starts_at>=? AND starts_at<?',[$batchId,$windowStart.' 00:00',(new DateTimeImmutable($windowEnd))->modify('+1 day')->format('Y-m-d').' 00:00']) as $old) {
                 if (isset($prepared[$old['remote_id']]) || $old['remote_status']==='MISSING') continue;
-                if ($old['appointment_id'] && in_array($old['remote_status'],self::ACTIVE,true)) { Db::run("UPDATE planner_appointments SET status='cancelled' WHERE id=?",[$old['appointment_id']]); $counts['cancelled']++; $changes[]='Cancelled: '.$old['title']; }
+                if ($old['appointment_id'] && in_array($old['remote_status'],self::ACTIVE,true)) { Db::run("UPDATE planner_appointments SET status='cancelled' WHERE id=?",[$old['appointment_id']]); $counts['cancelled']++; $changes[]=['type'=>'cancelled','title'=>$old['title'],'starts_at'=>$old['starts_at'],'appointment_id'=>$old['appointment_id']]; }
                 Db::run("UPDATE uni_calendar_events SET remote_status='MISSING',synced_at=? WHERE id=?",[$now,$old['id']]);
             }
             if ($changes) {
                 $prefix=[]; foreach (['created'=>'new','updated'=>'changed','cancelled'=>'cancelled'] as $key=>$label) if ($counts[$key]) $prefix[]=$counts[$key].' '.$label;
-                $body=implode(' · ',$prefix).'. '.implode('  ',$changes);
-                Db::run('INSERT INTO uni_calendar_notifications(batch_id,title,body,created_at) VALUES (?,?,?,?)',[$batchId,'Lecture calendar updated',mb_substr($body,0,1200),(new DateTimeImmutable('now',new DateTimeZone('Asia/Colombo')))->format('Y-m-d H:i:s')]);
+                $body=implode(', ',$prefix).'.';
+                Db::run('INSERT INTO uni_calendar_notifications(batch_id,title,body,created_at,changes_json) VALUES (?,?,?,?,?)',[$batchId,'University calendar updated',$body,(new DateTimeImmutable('now',new DateTimeZone('Asia/Colombo')))->format('Y-m-d H:i:s'),json_encode($changes,JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE)]);
             }
             Db::set('uni_calendar_last_sync',$now); Db::set('uni_calendar_error','');
             return $counts;
