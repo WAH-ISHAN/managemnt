@@ -57,11 +57,11 @@ jobs:
       - name: Verify portable update packaging and rollback
         run: |
           ./tests/update_package.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Portable update package fixture failed.' }
+          if (-not $?) { throw 'Portable update package fixture failed.' }
           ./tests/update_delivery.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Update delivery suite failed.' }
+          if (-not $?) { throw 'Update delivery suite failed.' }
           ./tests/update_notification_contract.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Update notification contract failed.' }
+          if (-not $?) { throw 'Update notification contract failed.' }
       - name: Compile Windows launcher
         run: |
           dotnet build launcher/LifeOS.csproj -c Release
