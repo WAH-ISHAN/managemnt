@@ -7,9 +7,17 @@ checks update delivery, then publishes a GitHub Release. A manual workflow run
 on `main` can also publish a new build. PR runs never publish releases.
 
 Download `LifeOS-Setup.exe` from the latest release for the first installation.
-Existing installations containing the 1.8 updater check after 20 seconds and
-hourly while open and online. They download and verify the package, then apply
-it on the next launch, or through the update action in Settings. Personal data
+Existing installations containing the 1.8 updater check shortly after launch
+and every 30 seconds while open (including while hidden in the Windows tray)
+and online. New published builds trigger a Windows tray notification with the
+system alert sound, even when a previous build of the same version is staged.
+They download and verify the package, then apply it on the next launch or
+through the update action in Settings. The alert follows release publication,
+not the initial Git push: GitHub Actions verification and building can take
+several minutes. A sub-minute guarantee measured from the Git push needs a
+separate online push-notification service and cannot be promised by polling the
+release feed. Offline machines and devices with notifications or sound disabled
+also cannot be guaranteed audible alerts. Personal data
 is excluded from update packages and the updater takes a database backup.
 Older installations without this updater must install the new setup once,
 over the same location, to receive subsequent updates.
