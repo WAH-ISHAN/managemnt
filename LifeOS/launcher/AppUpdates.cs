@@ -56,7 +56,8 @@ internal sealed partial class LifeWindow
     private readonly System.Windows.Forms.Timer updateTimer=new(){Interval=UpdatePollIntervalMilliseconds};
     private bool updateChecking,updateReady;
     private string updateMessage="Automatic updates are enabled.",availableVersion="";
-    private string announcedVersion="";
+    private string announcedRelease="";
+    private long availableBuild;
     private string AppDataDirectory=>Path.GetFullPath(Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR") ?? Path.Combine(root,"data"));
 
     private void InitializeAppUpdates()
@@ -73,13 +74,14 @@ internal sealed partial class LifeWindow
         catch(OperationCanceledException) {}
     }
 
-    private void AnnounceUpdate(string version)
+    private void AnnounceUpdate(UpdateRelease release)
     {
-        if(diagnostic || announcedVersion==version || IsDisposed)return;
-        announcedVersion=version;
+        string releaseId=release.Version+"-build."+release.BuildNumber;
+        if(diagnostic || announcedRelease==releaseId || IsDisposed)return;
+        announcedRelease=releaseId;
         reminderRoute="/settings#updates";
         reminders.BalloonTipTitle="LifeOS update available";
-        reminders.BalloonTipText="LifeOS "+version+" is being prepared. It will be downloaded and verified automatically.";
+        reminders.BalloonTipText="LifeOS "+release.Version+" (build "+release.BuildNumber+") is available. Download and verification will continue automatically.";
         reminders.BalloonTipIcon=ToolTipIcon.Info;
         SystemSounds.Asterisk.Play();
         reminders.ShowBalloonTip(10_000);
@@ -117,7 +119,7 @@ internal sealed partial class LifeWindow
 
     private async Task CheckAppUpdateAsync()
     {
-        if(updateChecking || updateReady || IsDisposed || lifetime.IsCancellationRequested) { PublishUpdateState();return; }
+        if(updateChecking || IsDisposed || lifetime.IsCancellationRequested) { PublishUpdateState();return; }
         updateChecking=true;updateMessage="Checking for updates…";PublishUpdateState();
         string? downloadDirectory=null;
         try {
@@ -142,7 +144,12 @@ internal sealed partial class LifeWindow
             var release=UpdateRelease.Parse(json);
             var installed=AppUpdateFiles.Installed(root);
             if(!release.IsNewerThan(installed.Version,installed.Build)) { updateMessage="LifeOS is up to date.";return; }
-            AnnounceUpdate(release.Version);
+            // A staged update must not hide future builds published under the same version.
+            if(updateReady && release.Version==availableVersion && release.BuildNumber<=availableBuild) {
+                updateMessage="LifeOS "+availableVersion+" (build "+availableBuild+") is ready to install.";
+                return;
+            }
+            AnnounceUpdate(release);
             string updates=Path.Combine(AppDataDirectory,"updates"),stage=Guid.NewGuid().ToString("N");
             downloadDirectory=Path.Combine(updates,stage);Directory.CreateDirectory(downloadDirectory);
             string package=Path.Combine(downloadDirectory,"LifeOS-Update.zip");
@@ -164,10 +171,10 @@ internal sealed partial class LifeWindow
             await File.WriteAllTextAsync(Path.Combine(downloadDirectory,"lifeos-update.json"),json,lifetime.Token);
             string pending=Path.Combine(updates,"pending.json"),temporary=pending+".tmp";
             await File.WriteAllTextAsync(temporary,JsonSerializer.Serialize(new{stage}),lifetime.Token);File.Move(temporary,pending,true);
-            availableVersion=release.Version;updateReady=true;downloadDirectory=null;
+            availableVersion=release.Version;availableBuild=release.BuildNumber;updateReady=true;downloadDirectory=null;
             updateMessage=Visible
-                ? "LifeOS "+release.Version+" is ready. Close LifeOS when convenient to install it automatically."
-                : "LifeOS "+release.Version+" is ready and will install now.";
+                ? "LifeOS "+release.Version+" (build "+release.BuildNumber+") is ready. Close LifeOS when convenient to install it automatically."
+                : "LifeOS "+release.Version+" (build "+release.BuildNumber+") is ready and will install now.";
         } catch(OperationCanceledException) { updateMessage="Update check paused. It will retry automatically."; }
         catch(Exception error) when(error is HttpRequestException or IOException or JsonException or InvalidDataException or InvalidOperationException or KeyNotFoundException or FormatException or UnauthorizedAccessException) {
             updateMessage="Could not check for updates. Your current app is ready to use.";
