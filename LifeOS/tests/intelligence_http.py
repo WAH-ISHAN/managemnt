@@ -114,7 +114,7 @@ with tempfile.TemporaryDirectory(prefix='intelligence-http-', dir=ROOT / 'tests/
             db.commit()
             check(post(f'/focus/{session_id}/action', {'action': 'finish'})[0] == 200 and db.execute('SELECT COUNT(*) FROM focus_task_logs').fetchone()[0] == 1, 'completion creates exactly one task time log via HTTP')
             check(post(f'/focus/{session_id}/action', {'action': 'finish'})[0] == 200 and db.execute('SELECT COUNT(*) FROM focus_task_logs').fetchone()[0] == 1, 'repeated finish remains idempotent')
-            check(request('/automation')[0] == 200, 'automation weather form renders')
+            check(request('/automation')[0] == 200, 'legacy automation bookmark redirects to Insights')
             check(post('/automation/weather', {'enabled': 'on', 'latitude': '91', 'longitude': '80'})[0] == 422, 'weather coordinates validated via HTTP')
             check(db.execute('PRAGMA foreign_key_check').fetchall() == [], 'HTTP workflows preserve relational integrity')
             db.close()

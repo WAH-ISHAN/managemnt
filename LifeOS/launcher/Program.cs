@@ -449,7 +449,7 @@ internal sealed partial class LifeWindow : Form
             await Capture("onboarding");
             await web.CoreWebView2.ExecuteScriptAsync("(()=>{const f=document.querySelector('form[action=\"/welcome\"]');f.querySelector('[data-role-choices] input[value=employee]').checked=true;f.querySelector('[data-wizard-next]').click();f.elements.name.value='Windows smoke';f.elements.institution.value='Disposable test workspace';f.querySelector('[data-wizard-next]').click();f.elements.locale.value='en';f.requestSubmit()})()");
             if (!await WaitForExpression("location.pathname==='/' && !!document.querySelector('#main .dashboard-home')")) throw new InvalidOperationException("Persona onboarding did not open the dashboard.");
-            await Check("onboarding-persona-defaults","location.pathname==='/' && !!document.querySelector('.sidebar a[href=\"/automation\"]') && !document.querySelector('.sidebar a[href=\"/uni\"]')");
+            await Check("onboarding-persona-defaults","location.pathname==='/' && !document.querySelector('.sidebar a[href=\"/automation\"]') && !document.querySelector('.sidebar a[href=\"/uni\"]')");
             checks["onboarding-submit"]=true;
         }
         await Check("application-shell","!!document.querySelector('.sidebar') && !!window.htmx && !!window.LifeOS");
@@ -461,7 +461,7 @@ internal sealed partial class LifeWindow : Form
         await Act("(()=>{const f=document.querySelector('[data-role-picker]');for(const input of f.querySelectorAll('[name=\"roles[]\"]'))input.checked=true;f.requestSubmit()})()");
         await Changed("workspace-roles-enable-full-smoke-surface","document.querySelector('#main h1')?.textContent==='Your workspace' && !!document.querySelector('.sidebar a[href=\"/uni\"]') && !!document.querySelector('.sidebar a[href=\"/employee\"]')");
         await Act("(()=>{const f=document.querySelector('form[action=\"/settings/workspace/modules\"]');for(const input of f.querySelectorAll('input[name=\"enabled[]\"]'))input.checked=true;f.requestSubmit()})()");
-        await Changed("workspace-module-controls-enable-full-smoke-surface","document.querySelector('#main h1')?.textContent==='Your workspace' && !!document.querySelector('.sidebar a[href=\"/uni\"]') && !!document.querySelector('.sidebar a[href=\"/automation\"]')");
+        await Changed("workspace-module-controls-enable-full-smoke-surface","document.querySelector('#main h1')?.textContent==='Your workspace' && !!document.querySelector('.sidebar a[href=\"/uni\"]') && !document.querySelector('.sidebar a[href=\"/automation\"]')");
         await Navigate("/");
         await Navigate("/websites");
         await Check("website-manager","[...document.forms].some(f=>f.action.endsWith('/websites/profile') && f.elements.base_url) && document.querySelector('#main h1')?.textContent.includes('websites')");

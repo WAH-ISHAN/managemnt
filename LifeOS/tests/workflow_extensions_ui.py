@@ -89,20 +89,19 @@ with (OUT / 'server.log').open('w', encoding='utf-8') as log:
             page.screenshot(path=str(OUT / 'summary-error.png'), full_page=True)
             check('private provider' not in page.locator('#understand-result').inner_text(), 'Failure hides upstream diagnostics')
             page.goto(base + '/automation')
-            page.locator('#rule-builder > summary').click()
-            page.get_by_text('Timing and reliability', exact=True).click()
-            builder = page.locator('form[action="/automation/rules"]')
-            builder.locator('[name=name]').fill('Browser activity routine')
-            builder.locator('[name=event]').select_option('task_completed')
-            builder.locator('[name=timezone]').select_option('Europe/London')
-            builder.locator('[name="actions[0][type]"]').select_option('notify')
-            builder.locator('[name="actions[0][title]"]').fill('Finished a task')
-            builder.locator('[name="actions[0][body]"]').fill('Choose the next step')
-            builder.locator('[name=retry_limit]').fill('2')
-            builder.locator('button').last.click()
-            expect(page.locator('article.task-row').filter(has_text='Browser activity routine')).to_be_visible()
-            conditions = json.loads(db.execute("SELECT conditions FROM automation_rules WHERE name='Browser activity routine'").fetchone()[0])
-            check(conditions['event'] == 'task_completed' and conditions['timezone'] == 'Europe/London' and conditions['retry_limit'] == 2, 'Real routine form persists event/timezone/retry settings')
+            page.wait_for_url(base + '/insights')
+            expect(page.locator('#rule-builder')).to_have_count(0)
+            token = page.locator('input[name="_csrf"]').first.get_attribute('value')
+            response = page.request.post(base + '/automation/rules', form={
+                '_csrf': token, 'name': 'Backend activity routine', 'trigger': 'daily',
+                'time': '07:00', 'weekdays[]': '1', 'event': 'task_completed',
+                'timezone': 'Europe/London', 'retry_limit': '2',
+                'actions[0][type]': 'notify', 'actions[0][title]': 'Finished a task',
+                'actions[0][body]': 'Choose the next step',
+            })
+            check(response.status == 200, 'Authenticated backend configuration remains compatible without a control panel')
+            conditions = json.loads(db.execute("SELECT conditions FROM automation_rules WHERE name='Backend activity routine'").fetchone()[0])
+            check(conditions['event'] == 'task_completed' and conditions['timezone'] == 'Europe/London' and conditions['retry_limit'] == 2, 'Backend routine preserves event/timezone/retry preferences')
             page.goto(base + '/connectivity')
             form = page.locator('form[action="/connectivity/calendar/preview"]')
             form.locator('[name=ics]').fill('BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:ui-recurring\nSUMMARY:UI weekly session\nDTSTART:20990105T090000Z\nDTEND:20990105T100000Z\nRRULE:FREQ=WEEKLY;COUNT=3\nEND:VEVENT\nEND:VCALENDAR')

@@ -94,9 +94,13 @@ try {
     persona_check(PersonaService::selectedRoles()===$savedRoles,'Multiple roles survive reopening the database');
     PersonaService::apply(['employee','uni'],'en');
     PersonaService::configure(['Work','Uni'],['Work'=>0,'Uni'=>1,'Dashboard'=>500,'Planner'=>501]);
-    persona_check(PersonaService::enabled('Work') && PersonaService::enabled('Uni') && !PersonaService::enabled('Salary') && !PersonaService::enabled('Automation'),'Module controls enable selected tools and pause unselected optional tools');
+    persona_check(PersonaService::enabled('Work') && PersonaService::enabled('Uni') && !PersonaService::enabled('Salary') && PersonaService::enabled('Automation'),'Module controls change visible tools and preserve the hidden scheduler');
     foreach (['Dashboard','Planner','Settings','Onboarding','Insights'] as $id) persona_check(PersonaService::enabled($id),'Required core module stays enabled: '.$id);
     $menu=PersonaService::menu(PersonaService::catalog());
+    persona_check(!in_array('Automation',array_map(fn($m)=>basename($m['path']),$menu),true),'Backend automation engine is absent from navigation data');
+    Db::run("UPDATE modules SET enabled=0 WHERE profile_id='default' AND module_id='Automation'");
+    PersonaService::configure(['Work','Uni'],['Work'=>0,'Uni'=>1]);
+    persona_check(!PersonaService::enabled('Automation'),'Saving visible module preferences retains a paused backend scheduler');
     persona_check(basename($menu[0]['path'])==='Work' && basename($menu[1]['path'])==='Uni' && !in_array('Salary',array_map(fn($m)=>basename($m['path']),$menu),true),'Saved order and module switches control ordered menu data');
     $before=persona_snapshot();
     persona_rejects(fn()=>PersonaService::configure(['UnknownModule'],[]),'Unknown module cannot be enabled');

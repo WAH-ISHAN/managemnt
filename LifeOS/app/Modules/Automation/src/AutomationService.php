@@ -165,7 +165,7 @@ final class AutomationService {
         }
         return $out;
     }
-    private static function message(int $run,string $title,string $body,string $route='/automation'): void {
+    private static function message(int $run,string $title,string $body,string $route='/insights#alerts'): void {
         Db::run('INSERT INTO automation_messages(profile_id,run_id,title,body,route) VALUES (?,?,?,?,?)',[self::profileId(),$run,$title,$body,$route]);
     }
     private static function act(array $action,int $run,DateTimeImmutable $now): void {
@@ -223,11 +223,11 @@ final class AutomationService {
         if ($kind==='weekly' && self::available('Planner') && self::table('planner_habit_checks')) $summary['habit_checkins']=(int)Db::one('SELECT COUNT(*) n FROM planner_habit_checks WHERE date>=? AND date<?',[$from,$until])['n'];
         if ($kind==='weekly' && self::available('Focus') && self::table('focus_sessions')) $summary['focus_minutes']=round((float)Db::one("SELECT COALESCE(SUM(elapsed_seconds),0)/60.0 n FROM focus_sessions WHERE kind='study' AND status='complete' AND completed_at>=? AND completed_at<?",[$utcFrom,$utcUntil])['n'],1);
         $id=Db::run('INSERT INTO automation_reports(profile_id,run_id,kind,starts_on,ends_before,summary) VALUES (?,?,?,?,?,?)',[self::profileId(),$run,$kind,$from,$until,json_encode($summary,JSON_THROW_ON_ERROR)]);
-        self::message($run,$kind==='weekly' ? t('Your weekly report is ready') : t('Your monthly money summary is ready'),$from.' to '.$end->modify('-1 day')->format('Y-m-d').' · '.t('Open to review or print.'),'/automation/reports/'.$id);
+        self::message($run,$kind==='weekly' ? t('Your weekly report is ready') : t('Your monthly money summary is ready'),$from.' to '.$end->modify('-1 day')->format('Y-m-d').' · '.t('Open to review or print.'),'/insights/reports/'.$id);
     }
     public static function alerts(): array {
         if (!self::available('Automation') || !self::table('automation_messages')) return [];
-        return array_map(fn($row)=>['id'=>hash('sha256','automation:'.$row['id']),'title'=>$row['title'],'body'=>$row['body'],'route'=>$row['route'],'level'=>'info','kind'=>'reminder','created_at'=>$row['created_at']],Db::all('SELECT * FROM automation_messages WHERE profile_id=? ORDER BY id DESC LIMIT 50',[self::profileId()]));
+        return array_map(fn($row)=>['id'=>hash('sha256','automation:'.$row['id']),'title'=>$row['title'],'body'=>$row['body'],'route'=>$row['route']==='/automation' ? '/insights#alerts' : preg_replace('~^/automation/reports/(\d+)$~','/insights/reports/$1',$row['route']),'level'=>'info','kind'=>'reminder','created_at'=>$row['created_at']],Db::all('SELECT * FROM automation_messages WHERE profile_id=? ORDER BY id DESC LIMIT 50',[self::profileId()]));
     }
     public static function reportById(int $id): array {
         $report=Db::one('SELECT * FROM automation_reports WHERE id=? AND profile_id=?',[$id,self::profileId()]);

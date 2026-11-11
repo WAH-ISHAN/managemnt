@@ -82,12 +82,19 @@ final class PersonaService {
         foreach($enabled as $id)if(!self::eligible($id))throw new InvalidArgumentException(t('Add the matching role before enabling these tools.'));
         $positions=[];
         foreach ($catalog as $m) $positions[$m['id']]=int_range($order[$m['id']] ?? $m['order'] ?? 50,0,999);
-        Db::tx(function () use ($catalog,$enabled,$positions) {
+        // Hidden services have no checkbox in the module form. Preserve their
+        // saved state instead of treating the missing field as a request to stop.
+        $hidden=[];
+        foreach ($catalog as $m) if (!empty($m['hidden'])) {
+            $hidden[$m['id']]=Db::one('SELECT enabled,sort_order FROM modules WHERE profile_id=? AND module_id=?',[self::profileId(),$m['id']]) ?? ['enabled'=>(int)self::enabled($m['id']),'sort_order'=>$m['order'] ?? 50];
+        }
+        Db::tx(function () use ($catalog,$enabled,$positions,$hidden) {
             if (!self::profile()) Db::run("INSERT INTO local_profiles(id,name,persona) VALUES (?,?,'custom')",[self::profileId(),Db::setting('name')]);
-            foreach ($catalog as $m) Db::run('INSERT INTO modules(profile_id,module_id,enabled,sort_order) VALUES (?,?,?,?) ON CONFLICT(profile_id,module_id) DO UPDATE SET enabled=excluded.enabled,sort_order=excluded.sort_order',[self::profileId(),$m['id'],(int)(in_array($m['id'],['Dashboard','Planner','Settings','Onboarding','Insights'],true)||in_array($m['id'],$enabled,true)),$positions[$m['id']]]);
+            foreach ($catalog as $m) Db::run('INSERT INTO modules(profile_id,module_id,enabled,sort_order) VALUES (?,?,?,?) ON CONFLICT(profile_id,module_id) DO UPDATE SET enabled=excluded.enabled,sort_order=excluded.sort_order',[self::profileId(),$m['id'],$hidden[$m['id']]['enabled'] ?? (int)(in_array($m['id'],['Dashboard','Planner','Settings','Onboarding','Insights'],true)||in_array($m['id'],$enabled,true)),$hidden[$m['id']]['sort_order'] ?? $positions[$m['id']]]);
         });
     }
     public static function menu(array $catalog): array {
+        $catalog=array_values(array_filter($catalog,fn($m)=>empty($m['hidden'])));
         if (class_exists('ProfileManager') && ProfileManager::isKid()) return array_values(array_filter($catalog,fn($m)=>in_array(basename($m['path']),['Planner','Focus'],true)&&self::enabled(basename($m['path']))));
 
         $rows=Db::all('SELECT module_id,enabled,sort_order FROM modules WHERE profile_id=?',[self::profileId()]);

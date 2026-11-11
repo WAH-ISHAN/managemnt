@@ -86,11 +86,11 @@ try {
     $_SESSION=['csrf'=>'test-token']; $_SERVER['HTTP_HX_REQUEST']='true'; $_SERVER['REQUEST_URI']='/automation';
     $router=new Router(); (require ROOT.'/app/Modules/Automation/routes.php')($router);
     ob_start(); $router->dispatch('GET','/automation'); $html=ob_get_clean();
-    automation_check(str_contains($html,'Private &lt;routine&gt;') && !str_contains($html,'Private <routine>'),'Automation page escapes user content');
+    automation_check($html==='','Legacy automation URL exposes no control panel or private rule content');
     $multi=AutomationService::save(null,'Multiple actions','daily',['time'=>'07:00'],[['type'=>'morning_brief'],['type'=>'notify','title'=>'Second action','body'=>'Keep this message']],false);
     $_GET=['edit'=>(string)$multi];
     ob_start(); $router->dispatch('GET','/automation'); $html=ob_get_clean(); $_GET=[];
-    automation_check(str_contains($html,'name="actions[1][type]"') && str_contains($html,'value="Second action"') && str_contains($html,'Keep this message'),'Editing a multi-action rule exposes every saved action and its text');
+    automation_check($html==='' && json_decode(AutomationService::rule($multi)['actions'],true)===[['type'=>'morning_brief'],['type'=>'notify','title'=>'Second action','body'=>'Keep this message']],'Hidden editor does not expose or alter saved multi-action routines');
     $_POST=['id'=>(string)$multi,'name'=>'Edited multiple actions','trigger'=>'daily','time'=>'08:15','weekdays'=>['1','2','3','4','5','6','7'],'min_open_tasks'=>'0','actions'=>[['type'=>'morning_brief','title'=>'','body'=>''],['type'=>'notify','title'=>'Second action','body'=>'Keep this message'],['type'=>'','title'=>'','body'=>'']]];
     ob_start(); $router->dispatch('POST','/automation/rules'); ob_end_clean();
     $edited=AutomationService::rule($multi);
@@ -103,7 +103,7 @@ try {
     automation_rejects(fn()=>AutomationService::runNow($onDemand),'Immediate repeated manual execution is rate limited');
     automation_rejects(fn()=>AutomationService::runNow($foreign),'Another profile cannot run a private rule');
     $_GET=['q'=>'On demand']; ob_start(); $router->dispatch('GET','/automation'); $filtered=ob_get_clean(); $_GET=[];
-    automation_check(str_contains($filtered,'Automation overview') && str_contains($filtered,'Run now') && str_contains($filtered,'On demand'),'Control center searches the user’s routines and exposes manual execution');
+    automation_check($filtered==='' && count(array_filter(AutomationService::alerts(),fn($alert)=>$alert['title']==='Manual check' && $alert['route']==='/insights#alerts'))===1,'Routine notifications use Insights without exposing a separate automation page');
     if (class_exists('PersonaService')) {
         PersonaService::apply('uni');
         Db::run("UPDATE modules SET enabled=0 WHERE profile_id='default' AND module_id='Salary'");
