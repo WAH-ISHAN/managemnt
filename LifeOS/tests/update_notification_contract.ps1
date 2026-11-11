@@ -21,7 +21,7 @@ Check ($source.Contains('Cache-Control","no-cache, no-store')) 'Release checks b
 $version=[string]$projectFile.Project.PropertyGroup.Version
 $installer=Get-Content -LiteralPath (Join-Path $project 'lifeos.iss') -Raw
 $settings=Get-Content -LiteralPath (Join-Path $project 'app/Modules/Settings/views/index.php') -Raw
-Check ($installer -match ('(?m)^AppVersion='+[regex]::Escape($version)+'$')) 'Installer version matches the launcher'
+Check ($installer -match ('(?m)^AppVersion='+[regex]::Escape($version)+'\r?$')) 'Installer version matches the launcher'
 Check ($settings.Contains('LifeOS '+$version)) 'Settings version matches the launcher'
 
 Write-Host "$checks update notification contract checks passed."
