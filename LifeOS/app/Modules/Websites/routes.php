@@ -64,6 +64,7 @@ return function (Router $r) {
     });
     $r->post('/websites/{id}/connect',function($p){$id=record_id($p['id']);WebsiteService::connect($id,text_input('token',4096));return redirect('/websites/'.$id,'Connected. The panel is generated from the capabilities supplied by your website.');});
     $r->post('/websites/{id}/disconnect',function($p){$id=record_id($p['id']);WebsiteService::logout($id);return redirect('/websites/'.$id,'Disconnected and session credentials cleared.');});
+    $r->post('/websites/{id}/check',function($p){$id=record_id($p['id']);WebsiteService::checkConnection($id);return redirect('/websites/'.$id,'Connection verified. Website permissions and content schema are current.');});
     $r->post('/websites/{id}/refresh',function($p){$id=record_id($p['id']);$collection=text_input('collection',80);WebsiteService::refresh($id,$collection,int_range($_POST['offset'] ?? 0,0,1000000));return redirect('/websites/'.$id.'?collection='.rawurlencode($collection),'Records loaded from your connected website.');});
     $r->post('/websites/{id}/record',function($p){
         $id=record_id($p['id']);$collection=text_input('collection',80);$fields=$_POST['fields'] ?? [];

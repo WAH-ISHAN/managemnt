@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Media;
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -51,9 +52,11 @@ internal static class AppUpdateFiles
 
 internal sealed partial class LifeWindow
 {
-    private readonly System.Windows.Forms.Timer updateTimer=new(){Interval=3_600_000};
+    private const int UpdatePollIntervalMilliseconds=30_000;
+    private readonly System.Windows.Forms.Timer updateTimer=new(){Interval=UpdatePollIntervalMilliseconds};
     private bool updateChecking,updateReady;
     private string updateMessage="Automatic updates are enabled.",availableVersion="";
+    private string announcedVersion="";
     private string AppDataDirectory=>Path.GetFullPath(Environment.GetEnvironmentVariable("LIFEOS_DATA_DIR") ?? Path.Combine(root,"data"));
 
     private void InitializeAppUpdates()
@@ -66,8 +69,20 @@ internal sealed partial class LifeWindow
 
     private async Task StartUpdateChecksAsync()
     {
-        try { await Task.Delay(20_000,lifetime.Token);await CheckAppUpdateAsync(); }
+        try { await Task.Delay(5_000,lifetime.Token);await CheckAppUpdateAsync(); }
         catch(OperationCanceledException) {}
+    }
+
+    private void AnnounceUpdate(string version)
+    {
+        if(diagnostic || announcedVersion==version || IsDisposed)return;
+        announcedVersion=version;
+        reminderRoute="/settings#updates";
+        reminders.BalloonTipTitle="LifeOS update available";
+        reminders.BalloonTipText="LifeOS "+version+" is being prepared. It will be downloaded and verified automatically.";
+        reminders.BalloonTipIcon=ToolTipIcon.Info;
+        SystemSounds.Asterisk.Play();
+        reminders.ShowBalloonTip(10_000);
     }
 
     private void PublishUpdateState()
@@ -108,6 +123,8 @@ internal sealed partial class LifeWindow
         try {
             using var client=new HttpClient {Timeout=TimeSpan.FromMinutes(10)};
             client.DefaultRequestHeaders.UserAgent.ParseAdd("LifeOS/1.8");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Cache-Control","no-cache, no-store");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Pragma","no-cache");
             using var manifestTimeout=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
             manifestTimeout.CancelAfter(TimeSpan.FromSeconds(20));
             using var response=await client.GetAsync(UpdateRelease.Feed,HttpCompletionOption.ResponseHeadersRead,manifestTimeout.Token);
@@ -125,6 +142,7 @@ internal sealed partial class LifeWindow
             var release=UpdateRelease.Parse(json);
             var installed=AppUpdateFiles.Installed(root);
             if(!release.IsNewerThan(installed.Version,installed.Build)) { updateMessage="LifeOS is up to date.";return; }
+            AnnounceUpdate(release.Version);
             string updates=Path.Combine(AppDataDirectory,"updates"),stage=Guid.NewGuid().ToString("N");
             downloadDirectory=Path.Combine(updates,stage);Directory.CreateDirectory(downloadDirectory);
             string package=Path.Combine(downloadDirectory,"LifeOS-Update.zip");

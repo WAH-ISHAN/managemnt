@@ -123,6 +123,10 @@ final class WebsiteService {
         Db::run('INSERT INTO website_operations(website_id,action,collection,record_id,outcome) VALUES (?,?,?,?,?)',[$id,$action,$collection,$record,$outcome]);
     }
     public static function operations(int $id): array { self::profile($id); return Db::all('SELECT * FROM website_operations WHERE website_id=? ORDER BY id DESC LIMIT 50',[$id]); }
+    private static function authenticatedRequest(int $id,string $url,string $token,array $payload): array {
+        try { return WebsiteHttpClient::request($url,$token,$payload); }
+        catch (WebsiteAuthenticationException $error) { self::disconnect($id); throw $error; }
+    }
     public static function connect(int $id,string $token): void {
         $profile=self::profile($id); self::key(); self::disconnect($id);
         if ($profile['connector_url']==='') throw new InvalidArgumentException(t('Add the website connector HTTPS endpoint before connecting.'));
@@ -204,6 +208,14 @@ final class WebsiteService {
         foreach ($bundle['manifest']['collections'] as $collection) if ($collection['id']===$slug) return $collection;
         throw new InvalidArgumentException(t('Choose a collection exposed by this website connector.'));
     }
+    public static function checkConnection(int $id): void {
+        $profile=self::profile($id);$bundle=self::requireSession($id);
+        try {
+            $manifest=self::manifest(self::authenticatedRequest($id,$profile['connector_url'],$bundle['token'],['protocol'=>'lifeos-admin-v1','action'=>'manifest']));
+            $bundle['manifest']=$manifest;$bundle['cache']=[];
+            self::store($id,$bundle);Db::run('UPDATE website_profiles SET last_connected_at=CURRENT_TIMESTAMP WHERE id=?',[$id]);self::log($id,'health_check');
+        } catch (Throwable $error) { self::log($id,'health_check','','','failed');throw $error; }
+    }
     private static function requireCapability(array $collection,string $operation): void {
         if (!in_array($operation,$collection['capabilities'],true)) throw new InvalidArgumentException(t('This connector does not allow ').$operation.' operations for this collection.');
     }
@@ -240,7 +252,7 @@ final class WebsiteService {
         if ($offset<0 || $offset>1000000) throw new InvalidArgumentException(t('Choose a valid record page.'));
         $collection=self::collection($id,$slug); self::requireCapability($collection,'list'); $bundle=self::requireSession($id);
         try {
-            $raw=WebsiteHttpClient::request(self::profile($id)['connector_url'],$bundle['token'],['protocol'=>'lifeos-admin-v1','action'=>'list','collection'=>$slug,'offset'=>$offset,'limit'=>50]);
+            $raw=self::authenticatedRequest($id,self::profile($id)['connector_url'],$bundle['token'],['protocol'=>'lifeos-admin-v1','action'=>'list','collection'=>$slug,'offset'=>$offset,'limit'=>50]);
             if (!is_array($raw['records'] ?? null) || !array_is_list($raw['records']) || count($raw['records'])>50 || !is_int($raw['total'] ?? null) || $raw['total']<0 || $raw['total']>1000000 || ($raw['offset'] ?? null)!==$offset || ($raw['limit'] ?? null)!==50) throw new InvalidArgumentException(t('The connector returned an invalid record page.'));
             $records=[]; $seen=[];
             foreach ($raw['records'] as $row) {
@@ -265,7 +277,7 @@ final class WebsiteService {
             $payload['version']=$version;
         }
         try {
-            $raw=WebsiteHttpClient::request(self::profile($id)['connector_url'],$bundle['token'],$payload);
+            $raw=self::authenticatedRequest($id,self::profile($id)['connector_url'],$bundle['token'],$payload);
             if (!is_array($raw['record'] ?? null)) throw new InvalidArgumentException(t('The connector did not confirm the saved record. Refresh before trying again.'));
             $saved=self::record($raw['record'],$collection);
             if ($recordId!==null && ($saved['id']!==$recordId || $saved['version']<=$version)) throw new InvalidArgumentException(t('The connector returned an inconsistent saved-record version. Refresh before trying again.'));
@@ -277,7 +289,7 @@ final class WebsiteService {
         if ($version<1 || $version>2147483647) throw new InvalidArgumentException(t('Refresh the record to get its current version before deleting.'));
         $collection=self::collection($id,$slug); self::requireCapability($collection,'delete'); $bundle=self::requireSession($id);
         try {
-            $raw=WebsiteHttpClient::request(self::profile($id)['connector_url'],$bundle['token'],['protocol'=>'lifeos-admin-v1','action'=>'delete','collection'=>$slug,'id'=>$recordId,'version'=>$version]);
+            $raw=self::authenticatedRequest($id,self::profile($id)['connector_url'],$bundle['token'],['protocol'=>'lifeos-admin-v1','action'=>'delete','collection'=>$slug,'id'=>$recordId,'version'=>$version]);
             if (($raw['deleted'] ?? null)!==true) throw new InvalidArgumentException(t('The connector did not confirm deletion. Refresh before trying again.'));
             unset($bundle['cache'][$slug]); self::store($id,$bundle); self::log($id,'delete',$slug,$recordId);
         } catch (Throwable $e) { self::log($id,'delete',$slug,$recordId,'failed'); throw $e; }

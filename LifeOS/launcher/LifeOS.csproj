@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows10.0.22621.0</TargetFramework><SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
-    <AssemblyName>LifeOS</AssemblyName><Product>LifeOS</Product><Title>LifeOS</Title><Description>LifeOS personal workspace</Description><Version>1.9.6</Version><ApplicationIcon>../icon.ico</ApplicationIcon>
+    <AssemblyName>LifeOS</AssemblyName><Product>LifeOS</Product><Title>LifeOS</Title><Description>LifeOS personal workspace</Description><Version>1.9.7</Version><ApplicationIcon>../icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup><PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2592.51" /></ItemGroup>
 </Project>

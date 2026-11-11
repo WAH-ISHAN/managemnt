@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+final class WebsiteAuthenticationException extends InvalidArgumentException {}
+
 /** A bounded, HTTPS-only connector client. No redirects, ambient proxy, or private-network targets. */
 final class WebsiteHttpClient {
     public const MAX_RESPONSE=1048576;
@@ -110,7 +112,11 @@ final class WebsiteHttpClient {
             if ($tooLarge) throw new InvalidArgumentException(t('The connector response is too large. Use smaller pages or shorter records.'));
             if ($ok===false) throw new InvalidArgumentException(t('The HTTPS connector could not be reached securely. Check its address, certificate and network connection.'));
         }
-        if ($status===401 || $status===403) throw new InvalidArgumentException(($payload['action'] ?? '')==='login' ? 'Website username or password is incorrect, or access is disabled.' : 'The website did not authorise this request. Sign in again or check your permissions.');
+        if ($status===401 || $status===403) {
+            $message=($payload['action'] ?? '')==='login' ? 'Website username or password is incorrect, or access is disabled.' : 'The website session expired or no longer has permission. Sign in again.';
+            if (($payload['action'] ?? '')==='login') throw new InvalidArgumentException($message);
+            throw new WebsiteAuthenticationException($message);
+        }
         if ($status===429) throw new InvalidArgumentException(t('Too many website login attempts. Try again in 15 minutes.'));
         if ($status===409) throw new InvalidArgumentException(t('This record changed on the website. Refresh the records before trying again.'));
         if ($status>=300 && $status<400) throw new InvalidArgumentException(t('The connector redirected the request. Enter its final HTTPS endpoint.'));

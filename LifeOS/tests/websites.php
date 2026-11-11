@@ -94,6 +94,8 @@ try {
     website_check(!str_contains(serialize($_SESSION),$token) && !str_contains(serialize($_SESSION),'Fictional test website'),'Token and remote metadata are encrypted in session storage');
     website_check(!str_contains(json_encode(WebsiteService::profiles()).json_encode(WebsiteService::operations($id)),$token),'Token is absent from database profile and audit records');
     website_check(WebsiteService::profile($id)['last_connected_at']!==null,'Only a successful manifest connection records its timestamp');
+    WebsiteService::checkConnection($id);
+    website_check(WebsiteService::session($id)!==null && Db::one('SELECT action FROM website_operations WHERE website_id=? ORDER BY id DESC LIMIT 1',[$id])['action']==='health_check','Connection check refreshes the live manifest and records the result');
     $pin=$calls[array_key_last($calls)]['options'];
     website_check($pin['pinnedAddress']==='93.184.216.34' && $pin['verifyPeer'] && $pin['verifyHost']===2 && !$pin['followRedirects'] && $pin['proxy']==='','HTTPS transport pins a checked public address and disables ambient proxy/redirects');
     $dns=['93.184.216.34','127.0.0.1'];
@@ -134,8 +136,12 @@ try {
         $mode=$failureMode;
         try { WebsiteService::refresh($id,'pages'); throw new RuntimeException('Expected transport refusal: '.$mode); }
         catch (InvalidArgumentException $error) { website_check(!str_contains($error->getMessage(),$token) && !str_contains($error->getMessage(),'password'),'Remote errors are bounded/redacted and not rendered verbatim'); }
+        $mode='';
+        if(WebsiteService::session($id)===null)WebsiteService::connect($id,$token);
     }
-    $mode='';
+    $mode='forbidden';website_rejects(fn()=>WebsiteService::checkConnection($id),'Expired remote authorization is reported');
+    website_check(WebsiteService::session($id)===null,'Expired remote authorization clears the unusable local session');
+    $mode='';WebsiteService::connect($id,$token);
     $original=$manifest;
     $manifest['collections'][0]['capabilities']=['list',['invalid']];
     website_rejects(fn()=>WebsiteService::connect($id,$token),'Malformed permission arrays are rejected without PHP warnings');
