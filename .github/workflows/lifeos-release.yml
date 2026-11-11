@@ -8,6 +8,9 @@ on:
     branches: [main]
     paths: ['LifeOS/**', '.github/workflows/lifeos-release.yml']
   workflow_dispatch:
+  # Audit production readiness daily without publishing an unchanged release.
+  schedule:
+    - cron: '25 4 * * *'
 
 permissions:
   contents: read
@@ -77,7 +80,7 @@ jobs:
 
   release:
     needs: verify
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: windows-2022
     timeout-minutes: 30
     permissions:
